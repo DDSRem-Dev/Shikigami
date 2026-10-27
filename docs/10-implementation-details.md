@@ -61,7 +61,7 @@ CLI 使用本地终端 raw mode，不创建无用途的本地 PTY，也不自行
 
 ### 传输与提交
 
-[09](./09-protocol-definition.md) 定义清单分页、ReadFile 服务端流、WriteFile 客户端流。每块最多 256 KiB，RPC 消息上限至少 1 MiB，自动同步文件上限默认 10 MiB。先限制大小再分块读取，不用完整 ReadFile 把未知大小文件装入内存。
+[09](./09-protocol-definition.md) 定义清单分页、ReadFile 服务端流、WriteFile 客户端流。每块最多 256 KiB，RPC 单条消息收发上限均为 1 MiB，自动同步文件上限默认 10 MiB。先限制大小再分块读取，不用完整 ReadFile 把未知大小文件装入内存。
 
 首版同步普通文件及其必要父目录；不承诺复制空目录、符号链接或特殊文件。服务端创建父目录仍通过受根限制的路径操作，并保留已有目录内容。
 
@@ -83,7 +83,7 @@ ignore matcher 在无配置文件时也用默认规则初始化；检查 Scanner
 
 扫描器使用结构化信息或健壮解析 `ss`，保留绑定地址、IPv4/IPv6、端口、协议。`strings.Split(addr, ":")` 无法解析 IPv6；解析错误不把上次全部端口标关闭。端口号只能作为服务类型猜测，UI 标注推测。
 
-每次流首帧 CONNECT 固定 endpoint/connection_id，鉴权和 allowlist 后使用带 context 的 Dial。成功返回 CONNECTED，失败返回 gRPC 错误，禁止把一个流中途重用给其他目标。
+每次流首帧 CONNECT 固定 endpoint/connection_id，鉴权和 allowlist 后使用带 context 的 Dial。成功返回 CONNECTED，失败返回 Connect 错误，禁止把一个流中途重用给其他目标。
 
 - 数据块先检查上限；Read n>0 先发送再处理 err。
 - 每方向只有一个发送者。TCP EOF 转成 HALF_CLOSE；接收方 CloseWrite，继续另一方向直到结束。
@@ -108,12 +108,15 @@ tmux 的 session/window/pane ID 用于定位，PID 加启动标识验证；进�
 
 使用 jwt/v5 显式限制 HS256、验证 issuer/audience/exp/iat/jti 和撤销集合。要求 exp 存在，不能允许没有期限的 Token 悄悄通过默认解析；密钥长度和熵在初始化时检查。nonce/jti 不宣称防重放。
 
-统一认证函数供 UnaryServerInterceptor 与 StreamServerInterceptor 使用，context 用私有类型键。metadata 必须只有一个规范 Bearer 值；Token 无效用 Unauthenticated，有效但权限不足用 PermissionDenied。
+Connect-Go v2 用统一 connect.ServerInterceptor 包装所有 unary/stream，在读取业务消息前认证；按 connect.Spec.Procedure 查权限表，context 用私有类型键。通过 connect.CallInfoForServerContext 读取请求头并检查存在标志；Authorization 必须只有一个规范 Bearer 值；Token 无效用 Unauthenticated，有效但权限不足用 PermissionDenied。
 
 方法映射采用显式表，举例：
 
 | RPC | 权限 |
 |---|---|
+| NegotiateProtocol | 只要求有效 Token，不要求业务权限 |
+| ListPlugins / ManagePlugin / WatchPluginLogs | plugin.manage |
+| GetStats / WatchStats | system.stats |
 | ListProjects / GetProject | project.list |
 | CreateProject / DeleteProject | project.create / project.delete |
 | ListSessions / ListProjectSessions / GetSession | session.list |
@@ -128,10 +131,18 @@ tmux 的 session/window/pane ID 用于定位，PID 加启动标识验证；进�
 | GetSystemInfo / GetClaudeVersion / HealthCheck | system.info |
 | CreateSnapshot / RestoreSnapshot / ListSnapshots / DeleteSnapshot | session.create / session.create / session.list / session.delete |
 
+本地 Agent 与 NodeControl 的权限边界见 [13](./13-local-ipc-protocol.md)，插件 CoreAPI 的能力白名单见 [09](./09-protocol-definition.md)。
+
 新增 RPC 未进映射则拒绝，不能从 CamelCase 推导反序权限字符串。公网不匿名暴露完整健康详情；安装器可通过同用户本地管理通道检查 ready。
 
 流建立时验证权限、资源归属，绑定 Token jti；到期定时取消，撤销主动取消该 jti 的全部流。TakeControl 等跨 attachment 操作验证同一会话及目标资格。实现不能只给 unary RPC 加拦截器。
 
-## 6. 具体技术验证清单
+## 6. ConnectRPC 实现边界
+
+具体 transport、v2 API、错误重建与验收见 [14](./14-connectrpc-transport.md)。HTTP middleware 负责协议/方法/HTTP 版本准入；Connect interceptor 负责身份及方法权限；handler 负责资源/首帧/每帧授权。每层均不得把 HTTP 200 当作流成功。go-plugin 原生 gRPC adapter 单独配置 unary/stream 拦截器、1 MiB 收发限制及 status/Connect 错误转换；Connect 配置不自动覆盖它。
+
+宿主转发每一跳独立创建客户端 context/header，deadline 只收紧；不透传 Authorization、Connect-*、Grpc-* 或下游全部 trailers。取消时同时唤醒阻塞的 Send/Receive；正常文件提交必须读到 Connect CloseAndReceive / gRPC CloseAndRecv 成功，端口半关闭保留另一方向直到最终 RPC 状态。
+
+## 7. 具体技术验证清单
 
 实现后需编译生成的 protobuf，运行真实进程级 go-plugin 测试和 tsnet/直连 TLS 测试；仅通过伪代码或 mock 不算端到端验收。重点覆盖：终端重绘/慢消费者/退出回收、双向文件冲突/竞态恢复/路径逃逸、TCP 半关闭/残余数据、Token 撤销流、systemd 重启保活、多 CLI 的单 agent 归属。

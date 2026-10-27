@@ -2,7 +2,7 @@
 
 ## 传输和节点归属
 
-应用数据使用原生 gRPC（HTTP/2），不通过 SSH。性能是否优于 SSH 需要测量，不作为选型事实。
+应用数据统一使用 **Connect 协议 + protobuf 二进制编码 + HTTP/2**，Go 实现基线为 Connect-Go v2.0.2（Go ≥ 1.26.0）。保留 protobuf 的 service/message 定义，替换 RPC 运行库、生成器与 HTTP 传输。所有业务链路的具体约束见 [14 ConnectRPC 传输契约](./14-connectrpc-transport.md)，不通过 SSH。性能是否优于 SSH 需要测量，不作为选型事实。
 
 采用内嵌 **tsnet**：本地 agent 和远端 daemon 各持有一个长生命周期 `tsnet.Server`，使用私有持久化目录保存节点身份。同一目录只能由一个进程打开；CLI 不自行创建节点。多台设备需不同节点名/身份。
 
@@ -14,7 +14,7 @@ node := &tsnet.Server{Hostname: hostname, Dir: stateDir}
 // node.Close() 由 agent/daemon 的 shutdown 调用，不能在单次 Dial 返回前 defer。
 ```
 
-tsnet 的首次认证可能产生登录 URL 或使用一次性 auth key；登录完成并确认节点 online 后才显示可连接地址。地址必须来自内嵌节点，不能调用系统 `tailscale ip` 代替。用户可使用官方控制面或兼容的自建控制面，兼容性单独验收。
+tsnet 的首次认证通过 13 的本地 NodeControl 引导，具体 SDK 行为须先通过 11 的 Phase 0 原型。首次认证可能产生登录 URL 或使用一次性 auth key；登录完成并确认节点 online 后才显示可连接地址。地址必须来自内嵌节点，不能调用系统 `tailscale ip` 代替。用户可使用官方控制面或兼容的自建控制面，兼容性单独验收。
 
 ## 连接优先级
 
@@ -22,7 +22,7 @@ tsnet 的首次认证可能产生登录 URL 或使用一次性 auth key；登录
 2. 可选公网/私网直连：用户显式配置独立 TLS listener 和可信服务器身份后启用。
 3. WebSocket 隧道：后续版本提案，首版不得显示为可用回退。
 
-每个策略必须完成有 deadline 的连接与已认证探测，不能把惰性的 `grpc.NewClient`/`Dial` 返回当作连接成功。只有可恢复的网络失败触发回退；`Unauthenticated`、`PermissionDenied`、证书错误应停止并报告。
+每个策略必须完成有 deadline 的连接与已认证探测，不能把 `connect.NewClient` 或生成客户端构造成功当作已建立网络连接。只有可恢复的网络失败触发回退；`Unauthenticated`、`PermissionDenied`、证书错误应停止并报告。
 
 状态显示 `tailscale-direct / tailscale-relay / direct-tls / unknown`，无法取得路径信息时显示 unknown，不能一律打印 P2P。单次延迟高不主动切换线路；连续失败、冷却时间和用户配置共同决定重连，防止抖动。
 
@@ -67,11 +67,11 @@ servers:
 
 ## 加密与认证
 
-仅当 TCP 字节明确经过受控 tsnet 连接时，可依赖 WireGuard 加密省略应用 TLS。该连接构造器必须封装 dialer，不能把 `insecure.NewCredentials()` 泛化到普通网卡连接。公网直连强制 TLS，验证 CA 和服务端名称或显式受信 pin；证书错误不回退为明文。
+仅当 TCP 字节明确经过受控 tsnet 连接时，可依赖 WireGuard 加密，在其内部使用 HTTP/2 prior knowledge（h2c）。该连接构造器必须固定目标、封装 tsnet dialer、禁用环境代理和重定向，不得把明文 HTTP transport 用于普通网卡连接。公网直连强制 TLS，验证 CA 和服务端名称或显式受信 pin；证书错误不回退为明文。
 
-Go gRPC 的 `PerRPCCredentials.RequireTransportSecurity()` 只识别 gRPC transport credentials，不会自动识别 WireGuard。tsnet 构造器使用仅限该路径的 metadata 注入；TLS 构造器可使用要求 TLS 的 PerRPCCredentials，不能因这一冲突把所有路径的安全要求关闭。
+Connect 的 HTTP header 本身不证明传输安全。凭据仅由受控 tsnet/TLS transport 所绑定的客户端拦截器注入；公网路径验证 TLS/ALPN h2，tsnet 路径只允许 node.Dial。IPC、插件和远端分别建客户端，不能跨目标复用带凭据的 transport，也不提供接受任意 URL 的带 Token 客户端。
 
-Token 格式为 `shiki_<JWT>`，metadata 为 `authorization: Bearer shiki_<JWT>`。JWT 使用 HS256、持久化随机 256 位密钥、标准 `iat/exp/iss/aud/jti` 与应用 `user/permissions`；`aud` 绑定稳定 daemon ID。验证签名算法、签发者、受众、过期、未来签发时间及撤销状态。
+Token 格式为 `shiki_<JWT>`，HTTP 请求头为 `Authorization: Bearer shiki_<JWT>`。JWT 使用 HS256、持久化随机 256 位密钥、标准 `iat/exp/iss/aud/jti` 与应用 `user/permissions`；`aud` 绑定稳定 daemon ID。验证签名算法、签发者、受众、过期、未来签发时间及撤销状态。
 
 `jti` 用于撤销和设备追踪，不让 Bearer Token 自动具备防重放能力。传输加密、限制有效期和撤销才是当前防护。生成 Token 的本地管理命令必须读取 daemon 的同一配置和密钥；服务重启不能换密钥。
 
@@ -100,8 +100,8 @@ shiki-daemon token refresh <token-id> --expires 720h
 
 - 短 RPC 默认 5 秒；文件传输按大小设 deadline；终端流使用可取消 context 与 Token 有效期，不用永久 Background。
 - 默认最多 5 次重连：1 秒起、倍增、最大 30 秒，加抖动。等待可由用户取消；只有网络类错误重试。
-- 客户端与服务端 keepalive/enforcement 配套配置。建议先使用 gRPC 默认值，测量后共同调整，避免单端 10 秒 ping 被服务器拒绝。
-- 新连接仍需认证。终端重新打开 TerminalStream，发送 Open 首帧；不是调用另一条 AttachSession 输出流。
+- HTTP/2 连接健康检查、空闲连接回收与业务流存活分别配置；不沿用 grpc-go keepalive 参数。终端允许长期无输出，不能将静默当故障。禁用覆盖整条长流的 http.Client.Timeout 和 Server.ReadTimeout/WriteTimeout；短 RPC 用 context deadline，握手/请求头另设有界超时，见 14。
+- 新连接仍需认证并按 09 的 NegotiateProtocol 协商版本/能力；不匹配处理见 06。终端重新打开 TerminalStream，发送 Open 首帧；不是调用另一条 AttachSession 输出流。
 - 首版恢复同一远端会话并重绘当前屏幕，不承诺断线期间所有输出逐字节补齐。无持久化回放日志时，不接受 `resume_from` 伪承诺。
 - 不自动重放终端输入、TCP 数据或非幂等创建请求。创建操作使用 request_id 去重并持久化结果；失败未知时先查询。
 - 文件恢复按共同基线与当前清单协调，不按最后网络包续传猜测内容。
@@ -110,4 +110,4 @@ shiki-daemon token refresh <token-id> --expires 720h
 
 HTTP CONNECT 与 SOCKS5 是不同协议，配置必须明确类型；保留 TLS 端到端验证，并验证实际代理可达性。DERP 可覆盖一部分受限网络，但不能保证适用所有企业代理。
 
-原先 `grpcweb.WrapServer` + `grpc.Dial("ws://…")` 的示例不成立：原生 Go gRPC 不会自动变成 gRPC-Web；底层 WebSocket socket 也不是自动解帧后的字节流。后续若做 WSS 隧道，需要两端明确的 HTTP/2 字节封装适配、鉴权、帧大小限制、关闭语义和代理测试。没有适配实现前不声明与 9527 同端口复用，也不把此功能纳入首版验收。
+Connect 协议不自动提供 WebSocket 传输；Connect-Web/gRPC-Web 也不让浏览器获得终端所需的全双工能力。底层 WebSocket socket 不是自动解帧后的字节流。后续若做 WSS 隧道，需要两端明确的 HTTP/2 字节封装适配、鉴权、帧大小限制、关闭语义和代理测试。没有适配实现前不声明与 9527 同端口复用，也不把此功能纳入首版验收。

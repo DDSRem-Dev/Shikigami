@@ -40,9 +40,9 @@ Project 删除要求没有会话或配置快照，否则返回 FailedPreconditio
 
 - 第一位具备 `session.write` 且未请求只读的客户端成为控制者。其他 attachment 是观察者；只读 Token 即使第一个进入也不能成为控制者。
 - 控制者独占输入、resize 和终端控制字符；观察者只接收屏幕与事件。
-- 接管使用明确 RPC，要求 `session.control` 和目标 attachment 的可写资格。先检查目标存在，再在会话锁内原子转移，不能先降级旧控制者后才发现目标不存在。
-- 控制者断开时清空控制权并通知剩余 attachment；具备资格的观察者可显式接管，不静默提升只读用户。
-- 一个会话有一个 PTY 读取协程；每个 attachment 一个有界输出队列和唯一 Send 协程。多个 goroutine 不得同时 Send 同一 gRPC 流。
+- 接管使用明确 RPC，要求 `session.control` 和目标 attachment 的可写资格。先检查目标存在，再在会话锁内检查 expected_control_revision 并原子转移；同时接管只有一个请求成功，其他返回 Aborted 并刷新，不能先降级旧控制者后才发现目标不存在。
+- 控制者断开时清空控制权、更新 control_revision 并通知剩余 attachment；具备资格的观察者可显式接管，不静默提升只读用户。
+- 一个会话有一个 PTY 读取协程；每个 attachment 一个有界输出队列和唯一 Send 协程。多个 goroutine 不得同时 Send 同一 Connect 流。
 - RPC handler 等待流结束才返回，随后恰好一次 detach；不能启动 goroutine 后立即返回使流关闭。
 
 首版不提供字节历史回放。重连/新观察者加入时由桥接层在会话锁内重新建立普通 tmux attach，并在当前控制者尺寸下向所有客户端发送 RESET 后转发 tmux 重绘输出。已有客户端也需重绘；tmux 中的 Claude 继续运行。实现必须验证 alternate screen、光标、颜色与尺寸，不用 capture-pane 文本冒充完整终端状态。高频加入需限流。若该策略在验收中无法可靠恢复，需先完成终端状态快照方案再交付多客户端，不能静默降级成残缺屏幕。

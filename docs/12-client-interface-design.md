@@ -1,6 +1,8 @@
 # 客户端界面设计
 
-首版提供 CLI/TUI，GUI 后续交付。本文描述目标界面和接入约束，尚无 UI 实现；排期统一引用 [08](./08-roadmap.md)，不再独立承诺 GUI 与首版同期发布。
+**GUI 设计供后续参考，首版交付 CLI/TUI。**
+
+本文描述目标界面和接入约束，尚无 UI 实现；排期统一引用 [08](./08-roadmap.md)，不再独立承诺 GUI 与首版同期发布。
 
 ## 共享架构
 
@@ -30,6 +32,8 @@ Dashboard 查询 agent 合并后的数据：远端资源、网络路径、后台
 配色使用语义令牌、兼容浅色/深色终端、支持 NO_COLOR，不假设终端总是黑底。窄屏下减少列，不以负宽度渲染面板。
 
 ## 后续 GUI
+
+GUI 的 Go 后端通过 Connect-Go v2 调用 agent UDS，JS 前端使用 Wails 桥接。浏览器 fetch/Connect-Web 不能直接访问 Unix socket，也不能承载此设计的客户端流/双向终端流；不为迁移 ConnectRPC 增设浏览器可访问的本地 TCP/CORS 端点。独立 Web 客户端需另行设计传输和认证。
 
 规划 Wails + React/TypeScript + xterm.js；框架版本、体积、原生平台适配需要原型与实测，不承诺固定 10 MB 或自动拥有系统托盘。
 

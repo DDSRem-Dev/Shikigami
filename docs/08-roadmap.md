@@ -17,12 +17,15 @@
 ## Phase 0：初始化和可行性验证
 
 - [ ] 建立 go.mod、源码目录、LICENSE、Makefile、CI，确认实际 module/release 地址。
-- [ ] 将 09 三个 protobuf 块落成文件，锁定 protoc/生成器版本，生成后 go build。
-- [ ] 定义本地 agent IPC、插件 CoreAPI 回调/双端路由及能力协商 schema；编译真实 stub，不能停留在 Go interface。
+- [ ] 将 09 的三个 protobuf 块和 13 的 agent.proto 落成文件，锁定 protoc/生成器版本，生成后 go build。
+- [ ] 按 09/13 已定义的 IPC、CoreAPI/worker、路由和能力协商生成真实 stub，验证 UID、代理白名单、旧 instance 拒绝和取消；不能停留在 Go interface。
+- [ ] 验证 14 的 Connect-Go v2 生成、注册/客户端、HTTP/2 over UDS/tsnet/TLS 四种 RPC 形态、HTTP/1 拒绝、下游错误重建、超限/取消/半关闭/最终状态及协议准入；不以 unary 成功代替双向流验证。
 - [ ] 定义状态 schema、Token 撤销表、request_id 幂等与配置迁移。
 - [ ] 终端原型：普通 tmux attach/PTY、多观察者屏幕初始化、resize、退出回收。
 - [ ] 服务保活原型：daemon crash/restart 不杀 tmux，插件不留孤儿。
-- [ ] 插件原型：真实子进程 Init/Start/事件回调/Stop，验证 context 生命周期。
+- [ ] 插件原型：真实 go-plugin gRPC 子进程 Init/Start/Stop + 独立 Connect CoreAPI 回调；验证 AutoMTLS、实例凭据、context 生命周期、跨协议错误/半关闭适配和失败回收。
+- [ ] 完成 11 的 tsnet 登录/一次性 key/身份持久化/认证失败/NodeControl 原型，记录 SDK/OS 版本与脱敏结果。
+- [ ] 验证 06 的 agent 崩溃恢复、四层版本边界及多设备条件提交/控制权竞争。
 - [ ] 根据原型结果重估工期，登记不能满足的假设。
 
 验收：协议可编译，关键进程生命周期实测，接口没有未指定的跨进程指针传递。
@@ -32,7 +35,7 @@
 - [ ] 本地 agent 单实例、受限 IPC、状态/凭据管理，CLI 自动发现/启动。
 - [ ] daemon 普通用户运行、完整 unary/stream 认证、Token 创建/撤销、显式权限表。
 - [ ] 先建立 Project 模型及持久化，再实现依赖它的 Session 创建，避免先实现无项目会话再返工。
-- [ ] 原生 gRPC TLS 直连测试通道，证书验证、取消、deadline、重连；公网不可明文。
+- [ ] Connect/protobuf over HTTP/2 TLS 直连测试通道，证书验证、取消、deadline、重连；公网不可明文。
 - [ ] 终端 TerminalStream 首帧/控制权、PTY、屏幕重绘、只读观察者、慢消费者处理。
 - [ ] 创建/删除幂等、停止/重启 Claude、断线保活、状态恢复和错误提示。
 - [ ] CLI connect/attach/@/sessions/agent、目录映射、基本菜单。
@@ -84,7 +87,7 @@
 ## 后续迭代
 
 1. GUI：Wails + React/TypeScript + xterm.js，通过本地 agent；版本、平台打包、托盘和通知需专门验证。见 12，不计入首版工期。
-2. 企业代理/WSS 隧道：专用双端适配和代理测试，不能以 gRPC-Web wrapper 冒充原生双向流。
+2. 企业代理/WSS 隧道：专用双端适配和代理测试，不能以 Connect-Web/gRPC-Web wrapper 冒充原生双向流。
 3. 同步增量优化、三方合并、独立目录/worktree 文件快照与恢复。
 4. 终端历史录制/回放、Claude 官方对话恢复集成。
 5. 团队多租户、访客沙箱、插件市场、云配置等另行设计安全边界。

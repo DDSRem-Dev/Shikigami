@@ -6,18 +6,20 @@
 shikigami/
 ├── README.md / LICENSE / go.mod / go.sum / Makefile
 ├── .github/workflows/                 # CI / release
-├── docs/                              # 00–12 + README
+├── docs/                              # 00–14 + README
 ├── proto/
 │   ├── shiki.proto                    # 远端 RPC
 │   ├── types.proto                    # 远端共享消息
 │   ├── plugin.proto                   # 生命周期与 CoreAPI
-│   └── agent.proto                    # 本地 IPC，Phase 0 补齐
+│   └── agent.proto                    # 本地 IPC，定义见文档 13
 ├── pkg/
 │   ├── protocol/                      # shiki/types 生成包
-│   │   ├── shiki.pb.go / shiki_grpc.pb.go / types.pb.go
+│   │   ├── shiki.pb.go / types.pb.go
+│   │   ├── protocolconnect/shiki.connect.go
 │   │   ├── plugin/                    # 独立 go_package，不能混写
-│   │   │   └── plugin.pb.go / plugin_grpc.pb.go
-│   │   └── agent/                     # 本地 IPC 生成包
+│   │   │   ├── plugin.pb.go / plugin_grpc.pb.go # 仅 go-plugin 使用 gRPC
+│   │   │   └── pluginconnect/plugin.connect.go
+│   │   └── agent/                     # agent.pb.go + agentconnect/agent.connect.go
 │   ├── plugin/                        # 外部插件可导入的 SDK
 │   │   ├── interface.go / host_client.go / events.go
 │   │   └── sync.go / port.go           # 类型化 stub 与 scope
@@ -34,15 +36,15 @@ shikigami/
 │   ├── connection/                    # tsnet/TLS/重连，宿主持有
 │   ├── auth/                          # JWT、撤销、权限表
 │   ├── server/
-│   │   ├── daemon.go / grpc.go / auth.go
+│   │   ├── daemon.go / rpc.go / auth.go
 │   │   ├── project/                    # 项目管理
 │   │   ├── session/                    # 生命周期、attachment、配置快照
 │   │   ├── tmux/                       # 统一 socket / PTY / 进程控制
 │   │   ├── storage/                    # 状态快照、迁移、请求去重
 │   │   └── monitor/                    # 资源与诊断
 │   └── plugin/                        # 宿主实现，依赖 pkg/plugin
-│       ├── manager.go / loader.go / broker.go
-│       └── core_api.go / routes.go
+│       ├── manager.go / loader.go / grpc_adapter.go
+│       └── core_api.go / connect_adapter.go / routes.go
 ├── plugins/
 │   ├── sync/                          # 单一入口 + client/server 模式
 │   │   └── main.go / watcher.go / reconcile.go / transfer.go / ignore.go
@@ -80,7 +82,7 @@ agent / daemon → internal 的业务模块 → pkg/protocol、pkg/plugin
 
 GUI 位于同仓 Go module 内，合法复用 internal/client；独立外部仓库不能直接导入 internal。GUI 不直接连接远端或独立运行 tsnet，以免绕开本地 agent 的资源归属。
 
-生成代码按 go_package 输出：plugin 在 pkg/protocol/plugin，agent 在 pkg/protocol/agent。protoc 以 module 参数生成，命令见 [09](./09-protocol-definition.md)。
+grpc-go 的直接依赖限定在 go-plugin 适配层、插件服务实现及 plugin 生成包；远端 connection/agent IPC 不使用 grpc.ClientConn 或 gRPC stub。生成代码按 go_package 输出：plugin 在 pkg/protocol/plugin，agent 在 pkg/protocol/agent。protoc 以 module 参数生成，命令见 [09](./09-protocol-definition.md)。
 
 ## 模块职责
 
@@ -117,12 +119,12 @@ shiki-daemon serve|init|version
 shiki-daemon token create|list|revoke|refresh
 ```
 
-服务器参数与项目作用域需统一（`--server` / `--project`）；名称歧义时不任意选择。破坏性操作非交互需明确参数，输入不足报错，不能读取流水线数据当回答。命令到 RPC 的映射/尚待补齐协议见 09。版本可提供 `--version` 与 `version` 一致别名。
+服务器参数与项目作用域需统一（`--server` / `--project`）；名称歧义时不任意选择。破坏性操作非交互需明确参数，输入不足报错，不能读取流水线数据当回答。本地命令到 RPC 的映射见 13，远端及插件协议见 09。版本可提供 `--version` 与 `version` 一致别名。
 
 ## 构建与质量门槛
 
 拟建 Makefile 目标：generate-proto、build（client/agent/daemon/plugins）、build-embedded、test、test-integration、test-e2e、test-all、lint、fmt、vet、release、clean。每个目标只有在脚本实际存在且 CI 验证后才作为用户可运行指令。
 
-Go module 路径和发布组织尚未设置；`github.com/yourusername/shikigami` 为占位符。版本锁定依赖和生成器，避免 @latest 使结果不确定。单文件内嵌构建按平台生成插件，开发构建不依赖该目录。
+Go module 路径和发布组织尚未设置；`github.com/yourusername/shikigami` 为占位符。Connect-Go 基线为 connectrpc.com/connect/v2 v2.0.2，要求 Go ≥ 1.26.0；protoc-gen-go 基线 v1.36.11。仅插件适配层保留 go-plugin v1.8.0、grpc-go v1.85.0 和 protoc-gen-go-grpc v1.6.2；CoreAPI 回调用 Connect。运行库与 Connect 生成器锁定同版，protoc 也固定版本（见 09）。避免 @latest 使结果不确定。单文件内嵌构建按平台生成插件，开发构建不依赖该目录。
 
-日志使用统一结构化接口，context 私有类型键；错误映射统一 gRPC 状态码。测试文件与模块邻近，跨进程集成放 test/；关键恢复/安全测试属于对应阶段交付，不推迟到发布前补做。
+日志使用统一结构化接口，context 私有类型键；错误映射统一 Connect 错误码。测试文件与模块邻近，跨进程集成放 test/；关键恢复/安全测试属于对应阶段交付，不推迟到发布前补做。

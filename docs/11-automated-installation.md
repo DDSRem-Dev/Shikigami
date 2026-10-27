@@ -1,5 +1,7 @@
 # 自动化安装与运维契约
 
+**本文档是安装流程设计，安装脚本尚未实现和测试；下列命令与 service unit 均不是已验证的发布产物。**
+
 当前没有可执行安装器、发布产物或正式下载地址。本文件是安装器的实现和验收规范，替代原先会安装两套 Tailscale、以 root 运行 daemon、覆盖配置并暴露明文端口的示例脚本。
 
 ## 部署模型
@@ -7,8 +9,26 @@
 - 服务端首版：Linux + systemd，amd64/arm64；macOS/Linux/WSL 是客户端平台。原生 Windows 客户端/GUI 后续验收。
 - 内嵌 tsnet：daemon 和本地 agent 自行注册/维护节点，不安装/启停系统 tailscaled，不修改机器原有 Tailscale 配置。
 - 安装文件和 system service 可需 sudo；daemon、插件、tmux、Claude 用指定普通用户运行。禁止默认 User=root。
-- 默认仅 tsnet listener :9527，不监听普通网卡 `0.0.0.0:9527`。显式启用公网直连必须同时提供有效 TLS 配置。
+- 默认仅 tsnet listener :9527（Connect/protobuf over h2c），不监听普通网卡 `0.0.0.0:9527`。显式启用公网直连必须同时提供有效 TLS 配置并协商 HTTP/2；不为 Connect 安装额外 gRPC-Web 代理。
 - 首次加入 tailnet 仍需登录 URL 或预先提供的 auth key；“自动化安装”不等于免认证。Claude 登录也使用其官方流程，不生成或代管用户账号凭据。
+
+## Phase 0 必须验证的原型
+
+锁定 tsnet SDK 版本后，以最小宿主验证下表；完成前不把 API 名称或预期状态当成实际能力。完整发行版安装器仍在 Phase 4 实现。
+
+| 原型 | 要验证的事实 | 未通过时的门槛 |
+|---|---|---|
+| 节点启动与登录 URL | 未入网时能先启动本地 NodeControl，再通过 SDK 的实际登录/状态 API取得有效 URL；不因 Listen/Dial 等待登录而阻塞管理通道 | 禁止承诺无人值守首次安装 |
+| 一次性 key | 无效/过期/复用 key、审批拒绝的真实错误与状态；key 不写日志、状态导出或命令行 | 保留手动认证流程并阻止显示 ready |
+| 节点身份持久化 | 正常重启复用同一身份/地址；目录锁、权限错、状态损坏不制造新节点 | 禁止自动恢复后台同步/转发 |
+| 认证中断 | URL 过期、取消、节点撤销和控制面离线可区分；不能区分时报告 unknown，不猜测 | 无法确认授权时暂停任务，不绕过认证回退 |
+| 本地引导接口 | [13](./13-local-ipc-protocol.md) 的 NodeControl 在 agent/daemon 各自私有 socket 上工作，UID 校验、协商、取消正确 | 安装器不能依赖不存在的管理接口 |
+| Connect 传输 | 本地 NodeControl 使用 UDS/h2c；tsnet 上实际全双工；可选 TLS 协商 h2、证书拒绝及流式终态正确，见 14 | 禁止以 TCP 端口可达或普通 HTTP 200 显示安装成功 |
+| 服务进程保活 | systemd crash/restart 保留 tmux，同时插件/PTY attach 可回收；普通用户和真实 HOME/PATH 可用 | 保活承诺不得进入安装成功提示 |
+
+当前以上运行结果均未验证。原型应记录 SDK/OS 版本、步骤和输出，不记录 auth key 或登录 URL；只有通过后才将对应流程接入自动化安装。
+
+运行预构建产物不要求用户安装 Go/protoc；源码构建要求 Go ≥ 1.26.0，并锁定 Connect-Go 运行库与生成器 v2.0.2。安装器检查发行清单中的核心/插件应用协议能力；不能把 Connect 库版本当作 Shiki 协议 major。
 
 ## 安装流程
 
@@ -17,9 +37,9 @@
 3. 下载固定版本 manifest、daemon 与匹配服务端插件到临时目录，验证受信发布来源和校验信息后原子安装。单一未认证 checksum 不是签名信任链；发布前明确签名/校验分发方式。
 4. 初始化配置与目录：`/etc/shiki/daemon.yaml`、`/var/lib/shiki/`、插件和 tsnet 状态目录。由指定用户所有，敏感文件 0600、状态目录 0700。已有配置/密钥只验证和迁移，不覆盖或重新生成。
 5. 以运行用户身份一次性初始化 daemon ID、签名密钥、状态 schema。管理命令和 service 必须显式传同一 `--config`，否则可能生成另一把密钥导致 Token 全失效。
-6. 安装服务并启动 daemon；在有界时间内分别检查进程存活、本地管理通道 ready、tsnet online、插件和依赖状态。`systemctl is-active` 不是应用 ready 的充分条件。
-7. tsnet 未登录时从受限本地管理通道获取登录 URL，显示给用户；无浏览器的 VPS 由用户在另一台设备打开。auth key 从 0600 文件/受限环境注入启动流程，完成后清除临时材料，不留在常规配置/日志/命令行参数。
-8. 获取内嵌 tsnet 节点的真实地址，生成单独设备 Token，向当前 TTY 显示一次，或非交互写入用户指定的 0600 输出文件。不要把 Token 放进 journal。
+6. 安装服务并启动 daemon；先让本地 NodeControl 可用；在有界时间内检查进程存活、管理通道 ready 与依赖状态，若 needs_login 则执行下一步，不能在等待 tsnet online 时阻塞登录引导。`systemctl is-active` 不是应用 ready 的充分条件。
+7. tsnet 未登录时通过 NodeControl.BeginLogin/GetStatus 获取登录 URL，显示给用户；无浏览器的 VPS 由用户在另一台设备打开。auth key 从 0600 文件/受限环境注入启动流程，完成后清除临时材料，不留在常规配置/日志/命令行参数。
+8. 登录成功后再检查 tsnet online、已启用插件和应用能力；获取内嵌 tsnet 节点的真实地址，生成单独设备 Token，向当前 TTY 显示一次，或非交互写入用户指定的 0600 输出文件。不要把 Token 放进 journal。
 9. 失败时区分依赖缺失、登录待完成、应用未 ready；保留诊断与原版本，不宣称安装成功。新安装的临时资源可清理，不能误删已有项目或账号状态。
 
 ## 参数契约（尚待实现）
@@ -29,7 +49,7 @@
 | `--user=rem` | 指定已存在的非 root 运行用户；无法可靠推断时必填 |
 | `--version=<version>` | 固定发布版本，与 manifest 匹配 |
 | `--config=/etc/shiki/daemon.yaml` | 初始化和所有管理/服务命令使用同一路径 |
-| `--port=9527` | tsnet 内 gRPC 端口，范围 1–65535 |
+| `--port=9527` | tsnet 内 ConnectRPC 端口，范围 1–65535 |
 | `--tailscale-key-file=<path>` | 从受限文件读取一次性 key，非交互登录用 |
 | `--non-interactive` | 绝不读取 stdin/TTY，必要参数缺失返回非零 |
 | `--token-output=<path>` | 非交互时写入初始 Token 的私有文件，不输出到公共日志 |

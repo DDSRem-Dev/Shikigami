@@ -13,7 +13,7 @@
                                  ├─ 终端流路由（每个前端一次 attachment）
                                  └─ 插件宿主 → sync / port 子进程
                                                 ↕ 本地 CoreAPI
-                                 ↕ gRPC over tsnet（P2P / DERP）
+                                 ↕ ConnectRPC over HTTP/2 over tsnet（P2P / DERP）
 远端 VPS（指定普通 OS 用户）
   shiki-daemon
     ├─ tsnet listener + 认证 + RPC 路由
@@ -26,13 +26,13 @@
                                  └─ 每 Session 一个 pane → claude
 ```
 
-文件监听属于 sync 插件，端口扫描属于 port 插件；核心不再重复实现。go-plugin 仅解决同机宿主与插件间通信，不自动提供跨设备插件路由。
+文件监听属于 sync 插件，端口扫描属于 port 插件；核心不再重复实现。go-plugin 仅解决同机宿主与插件间通信，不自动提供跨设备插件路由。宿主→插件生命周期/worker 使用 go-plugin 原生 gRPC；插件→宿主 CoreAPI 使用独立私有 UDS 上的 ConnectRPC，远端链路和前端 IPC 也使用 ConnectRPC。宿主在两种 RPC 之间做显式流/错误转换，见 04/14。
 
 ## 本地 agent
 
 - 每个 OS 用户一个 agent，以状态目录锁防止重复启动。CLI 自动发现或启动，等待 IPC ready 后使用。
 - Unix domain socket 放在 0700 的私有目录中、socket 为 0600，并验证对端 OS 身份；WSL 使用 Linux 路径。原生 Windows IPC 属后续 GUI 平台工作。
-- agent 持有每个 tailnet 配置的 tsnet 节点、每个服务器的 gRPC 连接。多个 CLI 不单独打开相同 tsnet 状态目录。
+- agent 持有每个 tailnet 配置的 tsnet 节点、每个服务器的 Connect 客户端与 HTTP/2 连接池。多个 CLI 不单独打开相同 tsnet 状态目录。
 - 前端与远端 attachment 一一对应，身份为 `(server_id, session_id, attachment_id)`。关闭一个窗口仅取消该窗口终端流。
 - 同步按 `(server_id, project_id, canonical_local_root)` 唯一化；同一远端项目的不同本地根必须显式创建独立映射，不自动互相覆盖。
 - 转发按 `(server_id, remote_endpoint, local_bind)` 唯一化。同机多个窗口复用同一转发；跨设备各有自己的 agent。
@@ -40,7 +40,7 @@
 - `shiki agent status/start/stop` 管理后台；`shiki sync status/pause/resume` 管理映射。`shiki ports` 查询 agent 的真实监听状态，不向远端查询本地端口。
 - agent 重启恢复已启用映射，先重新认证、扫描差异，再继续同步；不恢复已断开的 TCP 连接或重放终端输入。
 
-本地 IPC 必须在 Phase 0 定义独立 schema：服务器/项目选择、终端双向流、agent 生命周期、同步与转发状态。远端 09 中的 RPC 不是可直接暴露给本地前端的完整 API；尚未定义的 IPC 是实现前置任务。
+本地 IPC 的独立 schema 见 [13](./13-local-ipc-protocol.md)：Agent 管理本地资源，复用 09 的 ShikiDaemon schema 提供带 server_id 的白名单代理，NodeControl 处理未入网时的认证引导。Phase 0 将这四份 proto 落盘生成并验证 UID、握手、取消与路由；不能把远端 RPC 单独当成完整本地 API。
 
 ## 远端 daemon 与 tmux
 
@@ -77,7 +77,7 @@ UI 的 Idle 不能作为自动杀进程条件。没有可靠 Claude 活动协议
 - 插件进程崩溃可以隔离，但插件仍有宿主 OS 用户权限；go-plugin 不是恶意代码沙箱。
 - 插件未就绪时，相关 RPC 返回 `FailedPrecondition`，不偷偷启用备用实现。
 - 不丢弃终端字节来应对慢客户端；有界队列溢出断开该 attachment，重连重新建立屏幕状态。
-- 文件/端口与终端分队列、限制并发，避免大文件占满交互链路。gRPC 会序列化和复制，不承诺“零拷贝”。
+- 文件/端口与终端分队列、限制并发，避免大文件占满交互链路。Connect/protobuf 会序列化和复制，不承诺“零拷贝”。
 
 ## 设计依据
 
