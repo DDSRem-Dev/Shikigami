@@ -262,7 +262,9 @@ func startHostsVia(t *testing.T, root, side string, binaries map[string][]byte, 
 	go func() { agentDone <- agent.RunConfigWithOptions(agentCtx, ac, buildinfo.Version, aopts) }()
 	h.await("agent IPC", func(call context.Context) error {
 		var err error
-		h.front, err = frontend.Open(call, configPath, frontend.Options{Timeout: time.Second})
+		// await already bounds this readiness attempt. Keep production RPC
+		// budgets on the persistent frontend used for the rotation workload.
+		h.front, err = frontend.Open(call, configPath, frontend.Options{})
 		return err
 	})
 	h.local = h.front.Agent()

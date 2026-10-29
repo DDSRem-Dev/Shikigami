@@ -163,11 +163,20 @@ func TestAgentHandshakeRequiresControlCapability(t *testing.T) {
 	}
 }
 func TestLifecycleTimeoutDefaultsDoNotExtendCaller(t *testing.T) {
-	c := &Client{lifetime: context.Background(), timeout: 5 * time.Second}
 	for _, test := range []struct {
-		procedure string
-		timeout   time.Duration
-	}{{arpc.AgentGetStatusProcedure, 5 * time.Second}, {arpc.AgentShutdownProcedure, 15 * time.Second}, {rpc.ShikiDaemonCreateSessionProcedure, 15 * time.Second}} {
+		procedure           string
+		configured, timeout time.Duration
+	}{
+		{arpc.AgentGetStatusProcedure, 5 * time.Second, 5 * time.Second},
+		{arpc.AgentResolveConflictProcedure, 5 * time.Second, 5 * time.Second},
+		{arpc.AgentShutdownProcedure, 5 * time.Second, 15 * time.Second},
+		{rpc.ShikiDaemonCreateSessionProcedure, 5 * time.Second, 15 * time.Second},
+		// An explicit timeout persists on the frontend for business calls;
+		// it is not a readiness-only budget.
+		{arpc.AgentResolveConflictProcedure, time.Second, time.Second},
+		{arpc.AgentShutdownProcedure, time.Second, time.Second},
+	} {
+		c := &Client{lifetime: context.Background(), timeout: test.configured}
 		next := c.identity("")(func(ctx context.Context, _ connect.Spec) (connect.ClientStream, error) {
 			deadline, ok := ctx.Deadline()
 			remaining := time.Until(deadline)
@@ -178,6 +187,7 @@ func TestLifecycleTimeoutDefaultsDoNotExtendCaller(t *testing.T) {
 		})
 		_, _ = next(context.Background(), connect.Spec{Procedure: test.procedure, StreamType: connect.StreamTypeUnary})
 	}
+	c := &Client{lifetime: context.Background(), timeout: 5 * time.Second}
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	next := c.identity("")(func(ctx context.Context, _ connect.Spec) (connect.ClientStream, error) {
