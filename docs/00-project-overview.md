@@ -2,7 +2,7 @@
 
 **项目目标：让用户在本地终端流畅使用 VPS 上运行的 Claude Code。**
 
-当前只有设计文档，尚无代码实现。本文描述目标范围，不代表功能已经交付。
+当前正在实施完整 Phase 0–5，已有核心 CLI/agent/daemon、双端插件和 TUI 的实现与专项测试，证据见 [15 实施记录](./15-implementation-status.md)。本文描述最终目标范围，不代表完整产品已经交付。
 
 ## 设计原则
 
@@ -34,7 +34,7 @@ agent 是本机唯一的连接、同步及端口转发管理者。关闭 CLI 窗
 
 ## 技术栈
 
-Go ≥ 1.26.0、Connect-Go v2.0.2/protobuf、Tailscale tsnet、HashiCorp go-plugin、tmux；CLI/TUI 使用 Cobra/Bubble Tea。远端通信、本地 IPC 和 CoreAPI 回调使用 Connect 协议；仅 go-plugin 要求的宿主→插件通道保留原生 gRPC。依赖与生成器基线见 07/09/14，GUI 框架版本后续确认。
+Go ≥ 1.26.5、Connect-Go v2.0.2/protobuf、Tailscale tsnet、HashiCorp go-plugin、tmux；CLI/TUI 使用 Cobra/Bubble Tea。远端通信、本地 IPC 和 CoreAPI 回调使用 Connect 协议；仅 go-plugin 要求的宿主→插件通道保留原生 gRPC。依赖与生成器基线见 07/09/14，GUI 框架版本后续确认。
 
 ## 功能边界
 

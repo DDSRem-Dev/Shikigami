@@ -1,6 +1,6 @@
 # Protocol 定义
 
-本文档是远端 ConnectRPC 与插件进程间接口草案的唯一来源（插件 CoreAPI 用 Connect；go-plugin 生命周期/worker 保留 gRPC），尚未生成源码或实现服务。下列三个 protobuf 块分别对应拟建的 shiki.proto、types.proto、plugin.proto；调用流程不代表已有可执行服务。
+本文档是远端 ConnectRPC 与插件进程间接口草案的唯一来源（插件 CoreAPI 用 Connect；go-plugin 生命周期/worker 保留 gRPC），已生成真实源码并实现部分原型/核心 RPC，具体证据见 [15](./15-implementation-status.md)。下列三个 protobuf 块分别对应 shiki.proto、types.proto、plugin.proto；定义和流程不代表所有服务已经实现。
 
 ## 协议行为
 
@@ -10,6 +10,9 @@
 - TerminalStream 首帧且仅首帧为 open，服务端回复 READY 后开始数据；一次流绑定一个会话和 attachment。只有控制者可发送 data/resize/control。RESET 后重绘当前屏幕；首版无 resume_from 或历史重放。
 - 接管先检查新控制者资格与 expected_control_revision 后原子更新，竞争失败返回 Aborted；同一 request_id 在该 attachment 生命周期内去重，旧控制者收到 CONTROL_CHANGED。每次控制者更换或断开都产生新 control_revision，daemon 重启重置运行 epoch，旧 attachment 请求拒绝。流取消即 detach，不需要第二条无绑定关系的 AttachSession/DetachSession RPC。
 - DeleteSession/DeleteProject 不删除项目文件；Project 有会话或配置快照时返回 FailedPrecondition。UpdateSession 使用 FieldMask 区分“不修改”和“清空”。
+- `project.directories.v1` 的 ListProjectDirectories 是核心只读目录选择器，权限为 `file.read`，不依赖或代理 sync 的 ListFiles。path 为空表示根，其余必须为规范化 `/` 项目相对路径；项目根及每个子路径均用 no-follow 目录句柄，拒绝链接/非目录路径。只返回直接子目录，忽略链接与特殊项；非法 UTF-8、含反斜线或超长且无法回传为有效path的目录名称明确失败。默认50/最大100项，单次扫描最多10000个目录项（含文件），3秒限时。cursor 最大512字节，绑定项目/path/目录identity、mtime及排序清单摘要；目录变化返回 Aborted，从第一页重查；扫描超限返回 ResourceExhausted，不递归扫描。
+- `terminal.logs.v1` 的 GetSessionLogs 使用 `session.attach`，只读 tmux 当前仍保留的滚屏与网格文本尾部，默认200/最大2000行、128KiB、3秒限时。调用前后核对已登记pane/window、tmux session、进程PID及退出状态；不改变attachment、控制权、尺寸或输入。state 为 available/not_retained/unavailable；truncated 标记本次行数/字节裁剪，不保证更早历史尚在。退出码仅来自同一已验证dead pane；alternate screen、清屏、历史上限或进程重启可能使内容缺失。本接口不是完整日志、持久历史录制或原终端字节回放；GetSessionScreen仍只读可见网格。
+- 进程观察独立于自动重启策略：同一已登记pane实际异常退出（已知非零exit status或退出signal）向已有attachment有界队列发布 CLAUDE_CRASHED，遵循该attachment的sequence。data仅在可信时含十进制 `exit_code`/`exit_signal`；正常退出、主动Stop、身份不明及暂时无输出不产生崩溃事件。已确认同一登记pane为dead但退出原因不可用时，发送CLAUDE_STOPPED且data.reason_code=EXIT_REASON_UNKNOWN，不填退出码、不自动重启；后续只读观察获得可信原因可升级为崩溃事件。每个进程身份的同类结束通知只发一次；重连查询当前状态，不重放旧事件。可选自动重启同时接受已知非零退出码或信号，仍受持久预算/退避/主动Stop抑制；tmux无-k条件respawn拒绝已经恢复为alive的pane，不把信号伪造为128+signal退出码。
 - 文件路径为 project_id 范围内的相对路径，使用 `/`，根目录清单/watch 使用空 path。FileEvent 是重扫提示，不是可靠变更日志。
 - 文件块 ≤256 KiB，消息上限 ≥1 MiB；自动同步默认文件上限 10 MiB。WriteFile 仅首帧含 header，后续仅 chunk，CloseSend 表示上传完成，校验大小/hash/revision 后返回 FileInfo；流取消不提交。
 - revision 是不透明内容版本；空 base_revision 表示预期不存在；DeleteFile 必须匹配现存 revision。外部文件写入竞态限制及版本备份见 10。ListFiles 返回分页清单，扫描期间变化需对账复核，不承诺事务快照。
@@ -29,7 +32,7 @@
 syntax = "proto3";
 package shiki.v1;
 
-option go_package = "github.com/yourusername/shikigami/pkg/protocol";
+option go_package = "github.com/DDSRem-Dev/Shikigami/pkg/protocol";
 
 import "types.proto";
 
@@ -56,6 +59,9 @@ service ShikiDaemon {
   // 获取项目信息
   rpc GetProject(GetProjectRequest) returns (Project);
 
+  // 只读有界目录选择器；独立于sync文件数据面
+  rpc ListProjectDirectories(ListProjectDirectoriesRequest) returns (ListProjectDirectoriesResponse);
+
   // 删除项目
   rpc DeleteProject(DeleteProjectRequest) returns (Empty);
 
@@ -74,6 +80,12 @@ service ShikiDaemon {
 
   // 获取会话信息
   rpc GetSession(GetSessionRequest) returns (Session);
+
+  // 有界只读当前屏幕；不读取滚屏历史或改变 attachment/controller。
+  rpc GetSessionScreen(GetSessionRequest) returns (SessionScreen);
+
+  // tmux尚保留的有界文本诊断；非持久历史/原字节回放
+  rpc GetSessionLogs(SessionLogsRequest) returns (SessionLogs);
 
   // 更新会话元数据
   rpc UpdateSession(UpdateSessionRequest) returns (Session);
@@ -118,6 +130,7 @@ service ShikiDaemon {
   // ============================================
 
   // 列出开放的端口
+  rpc CheckPort(CheckPortRequest) returns (CheckPortResponse);
   rpc ListPorts(ListPortsRequest) returns (ListPortsResponse);
 
   // 监听端口变化（服务端流）
@@ -165,7 +178,7 @@ service ShikiDaemon {
 syntax = "proto3";
 package shiki.v1;
 
-option go_package = "github.com/yourusername/shikigami/pkg/protocol";
+option go_package = "github.com/DDSRem-Dev/Shikigami/pkg/protocol";
 
 import "google/protobuf/field_mask.proto";
 import "google/protobuf/struct.proto";
@@ -186,6 +199,8 @@ message ProtocolAgreement {
   uint32 minor = 2;
   repeated string capabilities = 3; // 双方可用能力的交集
   string build_version = 4;        // 仅用于诊断，不用于代替协议版本
+  string daemon_id = 5;            // 仅远端已认证协商填写；用于固定/复核 daemon 身份
+  repeated string granted_permissions = 6; // 同一次认证的有效已知权限，展开通配符；不包含 Token/账户字段
 }
 message ListPluginsRequest {}
 message ListPluginsResponse { repeated PluginStatus plugins = 1; }
@@ -280,6 +295,19 @@ message DeleteProjectRequest {
   reserved "delete_files";            // 删除管理记录不删除项目文件
 }
 
+message ListProjectDirectoriesRequest {
+  string project_id = 1;
+  string path = 2; // 空=根；仅规范化项目相对目录，禁止符号链接
+  uint32 page_size = 3; // 0=50，最大100
+  string page_token = 4; // 绑定项目/path/目录观测版本，变化返回Aborted
+}
+message ListProjectDirectoriesResponse {
+  string project_id = 1;
+  string path = 2;
+  repeated string directories = 3; // 直接子目录，项目相对路径，字典排序
+  string next_page_token = 4;
+}
+
 // ============================================
 // 会话相关
 // ============================================
@@ -321,6 +349,9 @@ message Session {
   optional bool auto_start_claude = 21; // 期望启动配置
   string control_revision = 22;     // 当前控制权版本
   string controller_attachment_id = 23; // 无控制者时为空
+  optional int64 cleanup_warning_at = 24; // 持久预警实际发布时刻（Unix秒）
+  optional int64 cleanup_after = 25; // 最早自动清理时刻（Unix秒），执行时仍重新核验
+  string cleanup_status = 26; // disabled/live_pane/attached/not_explicitly_stopped/observing/warned/unknown
 }
 
 message ListProjectSessionsRequest {
@@ -361,7 +392,31 @@ message UpdateSessionRequest {
   string description = 2;
   repeated string tags = 3;
   map<string, string> metadata = 4;
-  google.protobuf.FieldMask update_mask = 5; // 仅允许 description/tags/metadata
+  google.protobuf.FieldMask update_mask = 5; // 仅允许 name/description/tags/metadata
+  string name = 6; // 仅改显示名；同项目内唯一，id 与 tmux 会话标识不变
+}
+
+message SessionScreen {
+  string session_id = 1;
+  string text = 2; // 当前可见屏幕的 UTF-8 纯文本，最多 128 KiB；不含滚屏历史
+  uint32 cols = 3;
+  uint32 rows = 4; // 观测到的尺寸；并发 resize 时不保证与 text 为原子快照
+  bool truncated = 5;
+  int64 captured_at = 6; // Unix 秒
+}
+
+message SessionLogsRequest {
+  string session_id = 1;
+  uint32 max_lines = 2; // 0=200，最大2000
+}
+message SessionLogs {
+  string session_id = 1;
+  string text = 2; // tmux尚保留的滚屏+当前网格的纯文本尾部，最多128KiB；非完整/持久日志
+  int64 captured_at = 3;
+  bool truncated = 4; // 行数/字节上限省略了本次仍保留的内容；不表示更早历史完整
+  string state = 5; // available/not_retained/unavailable
+  string reason_code = 6;
+  optional int32 exit_code = 7; // 仅同一已验证dead pane的已知退出码
 }
 
 message DeleteSessionRequest {
@@ -556,7 +611,18 @@ message OpenPort {
   int32 pid = 5;                    // 进程 ID
   string session_id = 6;            // 所属会话；无法验证时为空
   string bind_address = 7;          // 被观测到的监听地址
+  string source_identity = 8;       // 已验证会话/进程启动身份；unknown 为空
 }
+
+// Read-only authorization; never opens a target TCP connection.
+message CheckPortRequest {
+  string remote_address = 1;
+  int32 port = 2;
+  string session_id = 3;
+  bool automatic = 4;
+  string source_identity = 5;
+}
+message CheckPortResponse { OpenPort port = 1; }
 
 message WatchPortsRequest {
   string session_id = 1;            // 可选：只监听特定会话
@@ -584,6 +650,9 @@ message PortData {
   bytes data = 3;                   // 数据
   string connection_id = 4;         // 一条流对应一个 TCP 连接
   string remote_address = 5;        // CONNECT 时使用，必须是授权的本机地址
+  string session_id = 6; // CONNECT-only, verified by server
+  bool automatic = 7;
+  string source_identity = 8;
 }
 
 // ============================================
@@ -676,7 +745,7 @@ message DeleteSnapshotRequest {
 ```protobuf
 syntax = "proto3";
 package shiki.plugin.v1;
-option go_package = "github.com/yourusername/shikigami/pkg/protocol/plugin";
+option go_package = "github.com/DDSRem-Dev/Shikigami/pkg/protocol/plugin";
 import "types.proto";
 import "google/protobuf/struct.proto";
 
@@ -777,6 +846,7 @@ service CoreAPI {
   rpc RemoteWriteFile(stream RemoteWriteFrame) returns (shiki.v1.FileInfo);
   rpc RemoteDeleteFile(RemoteDeleteFileRequest) returns (shiki.v1.Empty);
   rpc RemoteWatchFiles(RemoteWatchFilesRequest) returns (stream shiki.v1.FileEvent);
+  rpc RemoteCheckPort(RemoteCheckPortRequest) returns (shiki.v1.CheckPortResponse);
   rpc RemoteListPorts(RemoteListPortsRequest) returns (shiki.v1.ListPortsResponse);
   rpc RemoteWatchPorts(RemoteWatchPortsRequest) returns (stream shiki.v1.PortEvent);
   rpc RemoteForwardPort(stream RemotePortFrame) returns (stream shiki.v1.PortData);
@@ -786,6 +856,7 @@ message RemoteStatFileRequest { Scope scope = 1; shiki.v1.StatFileRequest reques
 message RemoteReadFileRequest { Scope scope = 1; shiki.v1.ReadFileRequest request = 2; }
 message RemoteDeleteFileRequest { Scope scope = 1; shiki.v1.DeleteFileRequest request = 2; }
 message RemoteWatchFilesRequest { Scope scope = 1; shiki.v1.WatchFilesRequest request = 2; }
+message RemoteCheckPortRequest { Scope scope = 1; shiki.v1.CheckPortRequest request = 2; }
 message RemoteListPortsRequest { Scope scope = 1; shiki.v1.ListPortsRequest request = 2; }
 message RemoteWatchPortsRequest { Scope scope = 1; shiki.v1.WatchPortsRequest request = 2; }
 message RemoteWriteOpen { Scope scope = 1; shiki.v1.WriteFileHeader header = 2; }
@@ -807,6 +878,7 @@ service FileService {
   rpc WatchFiles(shiki.v1.WatchFilesRequest) returns (stream shiki.v1.FileEvent);
 }
 service PortService {
+  rpc CheckPort(shiki.v1.CheckPortRequest) returns (shiki.v1.CheckPortResponse);
   rpc ListPorts(shiki.v1.ListPortsRequest) returns (shiki.v1.ListPortsResponse);
   rpc WatchPorts(shiki.v1.WatchPortsRequest) returns (stream shiki.v1.PortEvent);
   rpc ForwardPort(stream shiki.v1.PortData) returns (stream shiki.v1.PortData);
@@ -865,6 +937,7 @@ message ReadConflictFileRequest {
   Side side = 4;
 }
 service PortWorker {
+  rpc DiscoverForwards(Scope) returns (ForwardCandidates);
   rpc StartForward(ForwardSpec) returns (ForwardState);
   rpc StopForward(ForwardID) returns (shiki.v1.Empty);
   rpc ListForwards(shiki.v1.Empty) returns (ForwardList);
@@ -879,7 +952,10 @@ message ForwardSpec {
   uint32 local_port = 7; // 0 表示让 OS 选空闲端口
   bool enabled = 8;
   string revision = 9;
+  bool automatic = 10; // host-assigned; explicit stop suppresses this source
+  string source_identity = 11;
 }
+message ForwardCandidates { repeated ForwardSpec specs = 1; }
 message ForwardID { string id = 1; }
 message ForwardState {
   ForwardSpec spec = 1;
@@ -896,7 +972,7 @@ message ForwardList { repeated ForwardState forwards = 1; }
 
 - Init 的短期凭据绑定 plugin_instance_id、side、插件 ID 和允许的 scopes；host_instance_id 由宿主启动时生成并通过 Init 提供。daemon Token 永不传给插件。
 - Get/ListProject、Get/ListSession 只读受限项目/会话；server FileService 通过 GetProject 获取可信项目根，不能相信请求中的绝对路径；Get/ListMapping 仅 client-side sync 可查询已授权映射。daemon 不存在本地目录映射，返回 FailedPrecondition。
-- Remote* 只接受 agent 中 client-side 的对应能力：sync 可用六个文件方法，port 可用三个端口方法。默认不授权任意其他方法；daemon CoreAPI 一律拒绝 Remote* 防止路由递归。
+- Remote* 只接受 agent 中 client-side 的对应能力：sync 可用六个文件方法，port 可用四个端口方法（含只读 CheckPort）。默认不授权任意其他方法；daemon CoreAPI 一律拒绝 Remote* 防止路由递归。
 - 文件 scope 的 server/project/mapping 必须匹配宿主持久记录，内部 request.project_id 必须相同；port scope 与连接请求的 session/目标绑定，所有路径/端点仍由服务端复核。未授权 scope 返回 PermissionDenied，不靠插件自报来源。
 - RemoteWriteFrame 首帧 open 固定 scope/header，后续只能 chunk；host 变换为 WriteFile 的 header/chunk。RemotePortFrame 首帧 open.connect 必须是 CONNECT，后续只允许 DATA/HALF_CLOSE/CLOSE；目标不得改变。
 - 宿主→server worker 的请求通过私有 go-plugin gRPC/AutoMTLS 连接，宿主转发身份/项目授权上下文；FileService/PortService 不注册到公网或 tsnet listener。worker 验证路径/目标，不把任意来源都当已授权。
@@ -953,9 +1029,15 @@ protoc -I proto \
 
 Connect 的线协议版本（Connect-Protocol-Version: 1）、Go 模块 v2 与以下应用协议版本互相独立，不得混用。协议 major=1，初始 minor=0；包名 `.v1` 标识 major。CLI→agent 用 13 的 Handshake，agent→daemon 用 NegotiateProtocol，宿主→插件先 GetInfo 后在 Init 确认协商结果。协商要求 major 相同、minor 区间有交集、双方 required_capabilities 均被交集满足；任一不满足返回 FailedPrecondition，不静默以“旧版模式”继续写数据。
 
-初始能力按边界公布：本地 agent 为 `agent.control.v1`/`agent.events.v1`，NodeControl 为 `node.login.v1`，插件回调为 `core.scope.v1`、客户端 worker 为 `sync.worker.v1`/`port.worker.v1`；远端及对应 server worker 为 `terminal.v1`、`session-config-snapshot.v1`、`sync.revision.v1`、`port.tcp-half-close.v1`、`plugin.manage.v1`、`stats.v1`。只公布已实现且满足协议语义的能力；插件 ready 与否另查 PluginStatus，capability 存在不保证运行健康。可选功能不足时禁用该功能，不阻止兼容的终端核心。
+初始能力按边界公布：本地 agent 为 `agent.control.v1`/`agent.events.v1`，NodeControl 为 `node.login.v1`，插件回调为 `core.scope.v1`、客户端 worker 为 `sync.worker.v1`/`port.worker.v1`；远端及对应 server worker 为 `terminal.v1`、`terminal.screen.v1`、`session-config-snapshot.v1`、`sync.revision.v1`、`port.tcp-half-close.v1`、`plugin.manage.v1`、`stats.v1`。只公布已实现且满足协议语义的能力；插件 ready 与否另查 PluginStatus，capability 存在不保证运行健康。可选功能不足时禁用该功能，不阻止兼容的终端核心。
 
 NegotiateProtocol 已认证但不要求业务权限，只返回版本/能力，避免只读 Token 无法协商。后续调用仍逐个授权；协商结果不是权限。双方部署新版本后重建连接并协商；不能改变既有流的消息语义。
+
+agent 在发送可选方法前检查最近有效协商的能力交集；缓存连接重新校验后更新该交集。启用同步 mapping 或建立转发时，还须核验 required-capability 协商返回的 major、minor 和必需能力，不能只以 RPC 未报错作为成功。缺失可选能力的诊断指出所选服务器的 daemon 与能力名，不能以业务调用探测不支持的方法。
+
+`session.cleanup.v1` 表示 daemon 支持自动清理配置及 Session 清理状态只读视图；不表示用户已启用。Session 字段 24/25 是实际预警与最早清理的 Unix 秒，字段 26 限于注释中的有限状态；缺失字段表示对端未提供信息，不视作 disabled。Get/List 在权限验证后从独立清理记录和当前 pane/attachment 观测生成这些字段；它们不能写入持久 Session 或由 UpdateSession 更新。重启后的截止时间可以延长，实际删除始终重新检查资格，详见 06。
+
+版本失败通过受限 `google.rpc.ErrorInfo` 保留协商双方 major/minor 区间、可用的构建标识、缺失能力和故障组件。CLI 同时显示本机构建版本及兼容组件指引；协议没有提供或未通过校验的版本信息不得推测。错误白名单和边界限制见 [14](./14-connectrpc-transport.md)。
 
 | 定义 | 文档来源 | 实现与验收 |
 |---|---|---|
@@ -963,4 +1045,21 @@ NegotiateProtocol 已认证但不要求业务权限，只返回版本/能力，�
 | 插件生命周期、CoreAPI、FileService/PortService、SyncWorker/PortWorker | 本文 plugin.proto；路由语义见 04 | Phase 0 编译/真实进程回调原型，Phase 2/3 完成功能 |
 | 本地管理 RPC + 远端代理路由 | 13 的 agent.proto + 本文远端 schema | Phase 0 握手/UID/取消原型，Phase 1 核心接入 |
 
-以上为已定义、尚未实现的协议草案，不能作为功能完成证明；Phase 0 不再以“缺少 IPC/CoreAPI schema”为待定项，而是将草案落盘生成代码并验证真实进程行为。
+以上协议已落盘并生成真实绑定，但 schema 本身不能作为全部功能完成证明；业务和真实进程验证的当前证据见 15/16。
+
+### Dashboard 当前屏幕预览
+
+`GetSessionScreen` 使用 `session.attach` 权限，并由 `terminal.screen.v1` capability 标识。仅捕获受管 tmux pane 的当前可见屏幕，不读滚屏历史、不发送输入、不改变尺寸或终端控制权，也不创建可写 attachment。文本限制 128 KiB，UTF-8 边界截断时明确设置 truncated。不存在的会话返回 NotFound；tmux/pane 不存在返回 FailedPrecondition，不能凭记录重建进程。前端切换会话/服务器时取消旧查询并丢弃过期结果；不可将结果当作持续终端流或历史恢复。
+
+认证后的远端 NegotiateProtocol 不要求任何业务权限；ProtocolAgreement.daemon_id 用于 agent 固定和复核目标身份，granted_permissions 仅返回该 Token 此次实际获得的已知权限（展开 `*` / `namespace.*`，去重排序），不得返回 JWT、签名、账户或身份声明。Agent/NodeControl/插件协商留空这两个远端专用字段。旧 daemon 未返回 daemon_id 时，agent 只能通过同一已认证连接调用 GetSystemInfo 验证；无权限或无法核实时必须明确失败，不跳过身份绑定。旧端未报告有效权限时前端隐藏权限不确定的变更/接管动作；每次 RPC 仍由服务端授权，不信任界面判断。
+
+
+## 自动转发的权限与所有权契约
+
+`CheckPort` 是只读、无拨号的权限预检，要求 `port.forward`；不因为允许 `port.list` 就授予转发。server port worker 验证 loopback endpoint、服务端 allowlist 和保护规则。manual CreateForward 在保存期望之前完成预检；真正 CONNECT 仍重新验证，防止检查后的配置/进程变化。`port.authorization.v1` 表示此预检接口；`port.auto-forward.v1` 表示 verified ownership/discovery 支持，缺能力时不能自动回退为无检查模式。
+
+server worker 从 CoreAPI 获取与持久会话及实际 tmux session/window/pane 匹配的实时根 PID；宿主不把持久 ClaudePid 当作依据。插件核对 OS UID、启动时间和进程祖先链，在前后两次观察之间变化、存在歧义或无法确认时，OpenPort 的 session_id/source_identity 为空。source_identity 是不透明的会话/进程启动身份，不是仅 PID 或端口号。
+
+自动发现同时受 client `auto_forward`（默认 false）、显式 `auto_allow_ports` 和 server `allow_ports` 控制；保护端口在自动模式永不放行，即使 manual 配置了 allow_protected。DiscoverForwards 只返回候选，不绑定监听；agent 检查、持久化 host-assigned ForwardSpec 后才能调用 StartForward。插件通过 CoreAPI CONNECT 时必须匹配该 enabled spec 的 server/session/endpoint/automatic/source_identity。发现权限不扩大数据面授权。
+
+扫描失败停止 automatic listener，但保留 desired 与诊断，不发送空列表/删除事件；manual listener 不因扫描失败被删除。成功扫描确认服务消失或会话删除才停用并移除自动记录。agent/plugin 重启后自动记录须重新确认所有权再绑定。用户显式 stop 将 endpoint/session 的 source_identity 抑制记录与 disabled 原子保存，重启不能重新创建同一进程来源；新的已验证启动身份可重新参与策略。所有恢复都只重建 listener，不重放旧 TCP 数据。

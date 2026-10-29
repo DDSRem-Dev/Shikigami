@@ -1,10 +1,10 @@
 # Shikigami 设计文档导航
 
-**状态：设计评审后，尚未开始实现。** 截至 2026-10-27，仓库只有设计文档，没有 Go 源码、`.proto`、安装脚本、Makefile 或发布产物。代码块和命令是拟议接口或示意，不能当作已可运行的实现。
+**状态：正在实施 Phase 0–5，尚未交付完整产品。** 三宿主命令、终端闭环、双端同步/端口插件、监控、配置快照、TUI 与诊断已有实现及本地测试；安装事务和产物工具已有隔离验收，原生macOS LaunchAgent及Linux容器真实systemd生命周期已通过；外部认证、原生VPS/重启登录持久化、完整平台/长稳及正式发布门槛仍未完成。逐项进度见 [08 路线图](./08-roadmap.md)，证据与待完成门槛见 [15 实施记录](./15-implementation-status.md)。00–14 保留设计契约，不能仅凭示例认定功能已经可用。
 
 ## 文档清单
 
-共 15 份设计文档（00–14），另有本索引。
+共 15 份设计文档（00–14）、实施记录（15）、一致性检查（16）、原型复盘（17）、发布准备（18）、本地验收收敛（19）及本索引。
 
 | 文档 | 主要职责 |
 |---|---|
@@ -24,6 +24,12 @@
 | [13 本地 IPC 协议](./13-local-ipc-protocol.md) | Unix socket、Agent/NodeControl、代理路由、前端生命周期 |
 | [14 ConnectRPC 传输契约](./14-connectrpc-transport.md) | Connect-Go v2、HTTP/2、流式语义、错误与迁移验收 |
 
+原型复盘与条件估算：[17 原型复盘](./17-prototype-reassessment.md)。发布说明草稿与交付门槛：[18 发布准备](./18-release-readiness.md)。
+
+当前候选的证据矩阵与待验条件：[19 本地验收收敛](./19-local-acceptance-closure.md)。
+
+实施进展：[15 实施与验收记录](./15-implementation-status.md)。每批架构检查：[16 架构与文档一致性](./16-architecture-conformance.md)。
+
 ## 建议阅读顺序
 
 快速了解：00 → 01 → 05。开始实现：00 → 01 → 07 → 08 → 09 → 13 → 14，再按模块阅读 02/03/04/10；测试设计同时参考 06。部署参考 11，界面参考 12。
@@ -31,7 +37,7 @@
 ## 已确认的设计基线
 
 - 单用户 VPS；多个设备属于同一使用者。多租户、访客权限隔离后续另行设计。
-- Go ≥ 1.26.0 + Connect-Go v2.0.2，Connect 协议/protobuf over HTTP/2；内嵌 tsnet 管理 Tailscale 节点，不安装系统 tailscaled。
+- Go ≥ 1.26.5 + Connect-Go v2.0.2，Connect 协议/protobuf over HTTP/2；内嵌 tsnet 管理 Tailscale 节点，不安装系统 tailscaled。
 - 本地 `shiki-agent` 常驻，CLI/TUI 和未来 GUI 通过受限本地 IPC 共用连接、同步和端口转发。
 - 远端 `shiki-daemon` 以指定普通用户运行；tmux 中的 Claude Code 与网络连接生命周期分离。
 - 首版 CLI/TUI，GUI 后续交付；快照只恢复会话配置，不恢复文件、进程或对话历史。
@@ -57,4 +63,4 @@
 
 09 是远端与插件消息形状的唯一来源，13 是本地 agent IPC 的来源；02/03/04/10 规定行为。修改接口时必须同步相关行为、UX 和验收。09 的代码块可用于协议语法验证，但未表示服务已经实现。待实现能力必须列在路线图，不能通过界面示例宣称完成。
 
-所有 `yourusername`、`shiki.dev`、示例版本、下载地址、Homebrew 包名和邮箱均是占位符；尚未核实或发布。MIT 是原规划，仓库尚无 LICENSE 文件，发布前须补齐。
+所有 `yourusername`、`shiki.dev`、示例版本、下载地址、Homebrew 包名和邮箱均是占位符；尚未核实或发布。实际 module 为 `github.com/DDSRem-Dev/Shikigami`，根目录已添加 MIT LICENSE；正式发行源和分发渠道仍待验证。

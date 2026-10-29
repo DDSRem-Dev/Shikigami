@@ -1,6 +1,6 @@
 # 用户体验设计
 
-**本文档展示目标用户体验，具体功能交付以 [08-roadmap.md](./08-roadmap.md) 为准；当前尚无实现。**
+**本文档展示目标用户体验，具体功能交付以 [08-roadmap.md](./08-roadmap.md) 为准；CLI/TUI 已有开发实现，但完整体验和发行验收尚未完成，当前证据见 [15](./15-implementation-status.md)。**
 
 安装地址、Homebrew 包、版本、耗时、资源数据均为示例，不是发布或性能承诺。阶段范围以 [08 路线图](./08-roadmap.md) 为准；Phase 1 不含同步/端口插件。
 
@@ -14,9 +14,14 @@ CLI 通过本地 shiki-agent 工作；关闭窗口只 detach，已启用的同�
 
 ```bash
 # 用户在 VPS 上执行
-sudo bash scripts/install.sh --user=rem  # 拟议命令，脚本尚未实现
+# 已实现的本地受信 bundle 安装入口；摘要须来自独立可信渠道。
+sudo bash scripts/install.sh --user=rem \
+  --bundle=/absolute/path/to/verified-bundle --version=VERSION \
+  --checksums-sha256=TRUSTED_64_HEX_DIGEST \
+  --token-output=/home/rem/shiki-initial-token
 
-# 输出：
+# 以下为目标交互示例；当前安装器分别报告节点与应用验收状态，
+# 不以 systemd 进程存活或节点 online 代替 application ready。
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Shiki Daemon Installer
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -70,6 +75,8 @@ bash scripts/install-client.sh
 ```
 
 ### 首次连接
+
+当前智能模式先选择/创建远端项目，明确显示本地目录、服务器与项目，再确认保存暂停的映射。随后可保持暂停，或选择审查远端→本地/本地→远端；方向只是逐项审查偏好，不是批量覆盖授权。只有有效 `file.read`/`file.write`/`file.watch` 与 `sync.revision.v1` 都具备时才提供同步入口，且本地 sync 插件须已就绪，不替用户自动启插件。用户再次确认后启用后台扫描：无共同基线的差异保留为 initial conflict，逐项展示两端存在状态与 generation，可查看 diff、明确确认 keep-local/keep-remote/keep-both、暂不处理或暂停后台。只展示真实 SyncState，不把保存 `sync_enabled=true` 或未知总量当成传输完成。
 
 ```bash
 cd ~/projects/myapp
@@ -187,6 +194,8 @@ Claude Code > (显示之前的对话历史)
 
 ### 场景 2：创建新会话（并行开发）
 
+当前 CLI 对已有 attachment 的目标会话显示编号菜单：只读观察、同项目新建、进入 dashboard 管理或退出。菜单按认证协商返回的有效权限显示；未知旧协议权限只允许尝试只读观察，不推断创建或写入权。新建收集名称、项目内工作目录和描述；具备 `file.read` 与 `project.directories.v1` 时，以每页 50 项浏览项目内子目录，支持根目录、父目录、下一页、自定义路径及取消。缺少目录枚举权限/能力时仍可手动输入工作目录，最终均由 daemon 验证包含关系。现有目录映射的默认会话不被这次选择覆盖；没有 attachment 的默认会话仍走快捷连接。
+
 ```bash
 # 在另一个终端窗口
 cd ~/projects/myapp
@@ -264,8 +273,8 @@ experiment   ○ Idle       .../myapp             Testing new idea     3d ago   
 
 Commands:
   shiki @ <session>        - Connect to session
-  shiki sessions info      - Show detailed info
-  shiki sessions delete    - Delete session
+  shiki sessions info <session>    - Show detailed info
+  shiki sessions delete <session>  - Delete session
 ```
 
 ### 场景 4：快速切换会话
@@ -298,6 +307,8 @@ Claude Code >
 
 ### 场景 5：文件同步实时演示
 
+`--verbose` 已提供独立的诊断展示：dashboard 的 Plugins 面板读取两端宿主脱敏日志，每个插件最多 10 条；终端 detach 并恢复终端模式后读取本地 sync/port 各最多 20 条。raw attachment 期间由宿主保留有界历史，CLI 不向终端字节流插入日志；尾部明确标注不是完整回放。诊断只呈现真实记录，不生成下方示例中的文件进度、字节数或延迟。`--json` 管理命令不会因该标志混入日志。
+
 ```bash
 # 用户在本地编辑器修改文件
 # 本地终端（开启 verbose 模式）
@@ -322,6 +333,8 @@ Claude Code > I'll create a new file called helper.go
 ```
 
 ### 场景 6：端口转发自动化
+
+先分别配置两端允许规则：client port 配置 `auto_forward: true` 与显式 `auto_allow_ports: [8080]`；server port 配置 `allow_ports: [8080]`。可用 `shiki plugins config port --side local --file client-port.json` 与 `shiki plugins config port --side remote --server my-vps --file server-port.json` 提交 JSON。默认不开启自动模式；需要会话进程归属已被验证，未知来源只能手动操作。`ports` 列表显示 MODE（manual/auto）与实际本地端口；显式停止 auto 记录后，同一进程启动身份在 agent 重启后仍被抑制，新进程可再次参与规则。
 
 ```bash
 # Claude Code 启动测试服务器
@@ -391,8 +404,9 @@ Project files and Claude conversation history will NOT be restored.
 mkdir ~/projects/newapp
 cd ~/projects/newapp
 
-# 使用模板初始化
-shiki init --template fullstack-dev
+# 使用已配置的模板，在显式远端目录创建项目和会话。
+# 模板引用的远端子目录须已存在；本地 mkdir 不会创建远端目录。
+shiki init --template fullstack-dev --name newapp --path /home/rem/projects/newapp
 
 ? Template: fullstack-dev
   Description: Frontend + Backend development setup
@@ -536,6 +550,12 @@ Claude Code > Here's how to optimize the function...
 
 ### Claude Code 崩溃
 
+收到带 attachment/sequence 校验的 `CLAUDE_CRASHED` 后，CLI 先停止该流并恢复终端，再读取会话当前状态；若有界自动重启已使状态回到 running/starting，则连接当前进程，不再发送重启。否则提供权限允许的重启、保留输出/当前屏幕、手动 tmux 命令和退出。重启需要 `session.control` 与再次明确确认；读取输出需要 `session.attach` 和对应能力。退出码无法确认时显示 unknown，不由普通断线推断崩溃。
+
+tmux 已确认受管 pane 结束、但退出状态/信号均不可用时，宿主发送 `CLAUDE_STOPPED` 与 `reason_code=EXIT_REASON_UNKNOWN`。CLI 同样先恢复终端，再显示“进程结束、原因未知”及显式恢复选择，不将其标成已证实崩溃，也不据此自动重启。普通停止/正常退出仍保持已有 attachment 行为。
+
+下方“View full logs”指查看 tmux **实际仍保留的** scrollback 与当前屏幕：当前请求最多 2,000 行、宿主最多 128 KiB，明确标记采样时间、截断和 available/not_retained/unavailable。它不是永久完整历史、Claude 对话恢复或原始终端字节回放；保留输出不足时不会虚构缺失内容。诊断在恢复终端之后展示，控制字符被清理。
+
 ```bash
 # Claude Code 意外退出
 
@@ -570,7 +590,7 @@ Claude Code >
 ### 服务器资源不足
 
 ```bash
-shiki sessions create test
+shiki sessions create test --project myapp
 
 ✗ Failed to create session
 
@@ -656,68 +676,110 @@ shiki dashboard
 
 ## 命令速查表
 
+`<…>` 为必填值，`[…]` 为可选值。远端命令使用 `--server` 或已配置的默认服务器；会话名称须无歧义，可加 `--project` 限定项目，显式会话命令不会从本地当前目录推断项目。破坏性操作及恢复/初始化/冲突决定在非交互模式需 `--yes`；终端连接须有交互 TTY，不支持 `--json`。
+
 ### 连接管理
 ```bash
 shiki                      # 智能连接（基于当前目录）
-shiki connect             # 首次配置服务器
+shiki connect [name]      # 配置或重新验证服务器；缺失参数在交互终端询问
 shiki @ <session>         # 快速连接到会话
-shiki attach <session>    # 连接到会话（交互式）
+shiki attach [session]    # 连接到会话；省略会话时交互选择
 ```
 
 ### 会话管理
 ```bash
-shiki sessions list       # 列出所有会话
-shiki sessions create     # 创建新会话
-shiki sessions delete     # 删除会话
-shiki sessions info       # 查看会话详情
-shiki sessions snapshot   # 创建会话配置快照
-shiki sessions restore    # 按配置创建新会话，不回滚文件
+shiki sessions list [--project <project>]                 # 列出所选服务器/项目的会话
+shiki sessions create <name> --project <project>           # 创建新会话
+shiki sessions delete <session>                           # 删除会话
+shiki sessions info <session>                             # 查看会话详情
+shiki sessions stop-claude <session> [--yes]               # 替换当前pane任务为shell
+shiki sessions restart-claude <session> [--yes]            # 替换当前pane任务并重启Claude
+shiki sessions snapshot <session>                         # 创建会话配置快照
+shiki sessions snapshots                                 # 列出配置快照
+shiki sessions restore <snapshot-id> --name <new-name>     # 按配置创建新会话，不回滚文件
+shiki sessions delete-snapshot <snapshot-id>              # 删除配置快照记录
 ```
+
+停止/重启 Claude 会实际替换目标 pane 的当前任务，保留 session 记录与项目文件。非 TTY 必须显式传 `--yes`，缺少时在连接 agent 前拒绝；TTY 使用输入 `yes` 的明确确认，不把选中会话当作操作授权。
 
 ### 服务器管理
 ```bash
 shiki servers list        # 列出服务器
-shiki servers add         # 添加服务器
-shiki servers remove      # 删除服务器
-shiki servers switch      # 切换默认服务器
+shiki servers add [name]                # 添加服务器；交互询问缺失参数
+shiki servers update <name-or-id>       # 更新服务器的显式参数
+shiki servers remove <name-or-id>       # 删除服务器
+shiki servers switch <name-or-id>       # 切换默认服务器
 ```
 
 ### 插件管理
 ```bash
-shiki plugins list        # 列出插件
-shiki plugins enable      # 启用插件
-shiki plugins disable     # 禁用插件
-shiki plugins status      # 查看插件状态
+shiki plugins list --side local                          # 列出本地插件
+shiki plugins list --side remote --server <server>        # 列出指定远端插件
+shiki plugins enable <plugin-id> --side local             # 启用本地插件
+shiki plugins disable <plugin-id> --side local            # 禁用本地插件
+shiki plugins status <plugin-id> --side local             # 查看本地插件状态
+shiki plugins config <plugin-id> --side local --file <json-file> # 提交完整插件配置
 ```
+
+所有插件操作必须明确 `--side local|remote`；远端还必须给出 `--server`，本地不接受 `--server`。enable/disable/restart/config 返回实际 worker 状态；保存期望配置不代表 worker 已就绪。
 
 ### 监控和调试
 ```bash
 shiki stats              # 性能统计
 shiki doctor             # 健康检查
-shiki logs               # 查看日志
+shiki logs <plugin-id> --side local  # 查看宿主脱敏后的插件日志；等同 plugins logs
 shiki ports              # 端口转发状态
 ```
 
 ### 配置
 ```bash
-shiki config get         # 查看配置
-shiki config set         # 修改配置
-shiki config edit        # 编辑配置文件
+shiki config get                     # 查看有类型偏好快照；--server 指定服务器快照
+shiki config set <field> <value>     # 通过 agent 修改一个字段并校验 revision
+shiki config edit                    # 用 VISUAL/EDITOR 编辑私有 JSON 快照
+shiki config edit --file <json-file> # 应用当前用户所有、0600 的 JSON 快照；保留 revision
 ```
 
 
 ### 本地后台与控制权
 
 ```bash
-shiki agent status        # 查看本地后台和节点状态
+shiki agent status        # 查看本地后台状态
+shiki node status         # 查看内嵌节点状态
 shiki agent stop          # 停止本地同步/监听，远端会话保留
-shiki sync status         # 查看映射、积压和冲突
-shiki sync pause          # 暂停当前映射
-shiki sync resume         # 重新对账后继续
-shiki sync resolve        # 处理积压冲突
+shiki agent start --recover-crash-loop  # 检查日志并修复原因后，明确解除崩溃熔断
+shiki sync status [mapping-id]    # 查看映射、积压和冲突
+shiki sync pause [mapping-id]     # 暂停映射
+shiki sync resume [mapping-id]    # 重新对账后继续
+shiki sync conflicts [mapping-id] # 获取冲突 ID 和当前 generation
+shiki sync resolve <conflict-id> --mapping <mapping-id> --generation <generation> --choice <keep-local|keep-remote|keep-both>
 shiki ports stop <id>     # 停止本地转发监听
 ```
 
+`sync` 省略映射 ID/`--mapping` 时采用包含当前目录的最具体映射；脚本应显式指定映射。冲突决定只应用到观测到的 generation，过期决定会被拒绝，不自动覆盖另一版本。配置读/编辑接口不导出凭据；`logs` 只读所选宿主的插件日志，不表示完整 Claude 会话历史。
+
 观察者可查看输出；若具备权限，界面提供“接管输入”操作并通知旧控制者。只读 Token 不显示该操作，服务端也必须拒绝。控制者断开不自动提升只读观察者。
 
+同一版本在五分钟内连续异常结束三次后，agent 保留诊断 IPC，状态为 `degraded / AGENT_CRASH_LOOP`，不启动节点和后台 worker；普通自动启动不能显示 ready 或解除熔断。用户先查看 `agent status`、私有 `agent.log` 或服务日志并修复原因，再显式执行上述恢复命令。正常停止诊断进程不清除熔断；有效的显式恢复或切换构建版本才重新建立启动预算。若启动记录损坏或系统时间回拨，则保留证据并提示修复，不能通过恢复参数覆盖无效记录。通过 CLI 恢复服务安装后，先停止手动启动的 agent，再由原用户服务/LaunchAgent 启动，以恢复服务管理归属。
+
 删除会话提示结束哪些进程/连接，不询问是否删除项目文件；文件清理由独立操作完成。用户进入无窗口后台运行模式后，可通过上述命令查看和暂停任务。
+
+### 停止会话的清理提醒
+
+默认不会自动删除会话。启用 daemon `auto_cleanup` 后，只有明确 stop、真实 pane 已死亡且无 attachment 的会话才进入观察；StopClaude 留下的 shell 仍运行时，doctor/TUI 明确显示“pane 仍运行，未安排自动清理”，用户退出 shell 后才可能进入预警。
+
+`shiki doctor --server <server-id>` 在拥有 `session.list` 权限时独立读取清理提醒，不依赖 `system.info`；JSON 的 `cleanup` 映射按 session ID 提供提醒。TUI 每五秒刷新会话列表，在选中会话详情优先显示最早清理时间；不足视口仍以明确截止时间开头，完整说明可用 doctor 查看。预警不写入正在附着的终端字节流；离线用户下次查询可见当前持久计划，不承诺离线推送。重新附着或重启 Claude 可取消计划；重启 daemon 会延后观察期限，不等同于重启 Claude。
+
+默认关闭时，对超过七天未有已记录用户活动的 stopped 且未连接会话仅给出人工复核建议，明确要求检查活任务，不能由“无人连接”推断 Claude 空闲或直接删除。实际清理仅删除会话记录和已确认死亡的 tmux 资源，保留项目文件。
+
+### 路由尝试诊断
+
+`shiki servers list`、`shiki doctor` 与 Dashboard 诊断面板均显示最近一次路由选择的实际尝试顺序；doctor 和 Dashboard 另显示当前网络路径，servers list 的 JSON 也保留独立路径字段。列表只可能包含 `tsnet`、`direct-tls`，不带地址、Token 或原始错误；空值显示 `Latest route selection: not reported`。它不代表已连通，不累计全部重试，也不把 tsnet 内部 P2P/DERP 当两个候选。旧 agent 未报告该字段时不根据已配置地址猜测尝试；认证或信任拒绝后未执行的回退不会显示。
+
+`shiki connect` 等待验证时，若观察到鉴权失败、协议不兼容或重连耗尽，终态错误同时显示该次观测中的尝试列表与恢复建议。调用者取消或等待超时立即结束，不为了补充诊断追加查询或延长连接预算。
+
+
+## 本地节点诊断与不可用清单
+
+`shiki node status`（包括不带子命令的 `shiki node`）、doctor 和 Dashboard 从运行中的 NodeControl 读取状态，不用前端当前磁盘配置推断节点是否启用。关闭 tsnet 时显示 `offline / NODE_DISABLED`；身份状态不可用时显示实际 `NODE_STATE_UNAVAILABLE`，保留原状态供修复。只读查询不要求登录能力，也不触发登录；登录与取消仍需对应能力。
+
+agent 业务资源不可用时，doctor 继续报告独立节点诊断。服务器清单失败在 JSON `errors.servers` 保留错误且 `servers` 为 null，文本明确显示 `Registered servers: unavailable`，不把未知清单写成零台。成功输出诊断报告不代表 agent 或远端已 ready；真实协议不兼容、实例变化和权限错误仍须如实呈现。

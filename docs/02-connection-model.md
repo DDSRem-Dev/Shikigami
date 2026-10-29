@@ -2,7 +2,7 @@
 
 ## 传输和节点归属
 
-应用数据统一使用 **Connect 协议 + protobuf 二进制编码 + HTTP/2**，Go 实现基线为 Connect-Go v2.0.2（Go ≥ 1.26.0）。保留 protobuf 的 service/message 定义，替换 RPC 运行库、生成器与 HTTP 传输。所有业务链路的具体约束见 [14 ConnectRPC 传输契约](./14-connectrpc-transport.md)，不通过 SSH。性能是否优于 SSH 需要测量，不作为选型事实。
+应用数据统一使用 **Connect 协议 + protobuf 二进制编码 + HTTP/2**，Go 实现基线为 Connect-Go v2.0.2（库要求 Go ≥ 1.26.0；项目固定 tsnet v1.98.10 后要求 Go ≥ 1.26.5，工具链为 1.26.10）。保留 protobuf 的 service/message 定义，替换 RPC 运行库、生成器与 HTTP 传输。所有业务链路的具体约束见 [14 ConnectRPC 传输契约](./14-connectrpc-transport.md)，不通过 SSH。性能是否优于 SSH 需要测量，不作为选型事实。
 
 采用内嵌 **tsnet**：本地 agent 和远端 daemon 各持有一个长生命周期 `tsnet.Server`，使用私有持久化目录保存节点身份。同一目录只能由一个进程打开；CLI 不自行创建节点。多台设备需不同节点名/身份。
 
@@ -23,6 +23,11 @@ tsnet 的首次认证通过 13 的本地 NodeControl 引导，具体 SDK 行为�
 3. WebSocket 隧道：后续版本提案，首版不得显示为可用回退。
 
 每个策略必须完成有 deadline 的连接与已认证探测，不能把 `connect.NewClient` 或生成客户端构造成功当作已建立网络连接。只有可恢复的网络失败触发回退；`Unauthenticated`、`PermissionDenied`、证书错误应停止并报告。
+
+agent 通过 `ServerRecord.connection_attempts` 报告最近一次已发布路由选择真正进入构造器的顺序，值仅为 `tsnet` / `direct-tls`、最多两项。进入构造器后即使因节点未授权或信任配置错误在拨号前失败，也属于该策略的尝试；这不是成功连接证明、实际 TCP 拨号次数、重连累计历史，也不把 P2P/DERP 分成独立策略。认证拒绝仍立即停止回退，未执行的候选不会出现。无凭据/未选择或旧 agent 缺字段时为空，界面显示未报告，不能推断从未尝试。
+
+该列表仅在连接配置和凭据代际复核通过后发布到运行态；过期结果不能污染新代，重新选择时不累积历史。已有路线的认证复核不改变最近一次选择诊断。当前实际路径仍独立读取 `connection_path`，不能从最后一项推断；列表不含地址、原始错误或凭据，不写入服务器配置或去重结果。
+
 
 状态显示 `tailscale-direct / tailscale-relay / direct-tls / unknown`，无法取得路径信息时显示 unknown，不能一律打印 P2P。单次延迟高不主动切换线路；连续失败、冷却时间和用户配置共同决定重连，防止抖动。
 
@@ -68,6 +73,8 @@ servers:
 ## 加密与认证
 
 仅当 TCP 字节明确经过受控 tsnet 连接时，可依赖 WireGuard 加密，在其内部使用 HTTP/2 prior knowledge（h2c）。该连接构造器必须固定目标、封装 tsnet dialer、禁用环境代理和重定向，不得把明文 HTTP transport 用于普通网卡连接。公网直连强制 TLS，验证 CA 和服务端名称或显式受信 pin；证书错误不回退为明文。
+
+显式配置的 TLS CA、证书和私钥分别限制为非空、最多 1 MiB 的普通文件；打开和读取必须有界，FIFO/设备不能阻塞连接管理。证书路径允许显式 symlink（如系统 CA 或证书轮换目录），验证已打开文件的类型与大小；这不放宽项目文件同步的 no-follow 边界。
 
 Connect 的 HTTP header 本身不证明传输安全。凭据仅由受控 tsnet/TLS transport 所绑定的客户端拦截器注入；公网路径验证 TLS/ALPN h2，tsnet 路径只允许 node.Dial。IPC、插件和远端分别建客户端，不能跨目标复用带凭据的 transport，也不提供接受任意 URL 的带 Token 客户端。
 

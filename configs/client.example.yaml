@@ -1,0 +1,47 @@
+# Install at ~/.shiki/config.yaml with mode 0600 in a 0700 directory.
+# Tokens are stored separately by the agent. token_ref is an identifier only.
+schema_version: 1
+plugins_dir: ~/.shiki/plugins
+agent:
+  socket: ~/.shiki/run/agent.sock
+  state_dir: ~/.shiki/agent
+  auto_start: true
+tailscale:
+  enabled: true
+  hostname: shiki-laptop
+  state_dir: ~/.shiki/tailscale
+  control_url: https://controlplane.tailscale.com
+servers: {}
+projects: {}
+# Add servers through the CLI/agent. Example schema:
+# servers:
+#   my-vps:
+#     tailscale_address: shiki-vps:9527
+#     token_ref: my-vps-laptop
+#     direct_tls_address: ""
+#     tls_server_name: ""
+#     tls_ca_file: ""
+#     daemon_id: ""
+# projects:
+#   ~/projects/myapp:
+#     server: my-vps
+#     project_id: proj_REPLACE_WITH_SERVER_ID
+#     default_session: main
+#     session_hints:
+#       frontend: frontend
+#     background_sync: false
+# Templates contain launch settings only. working_dir is remote-project-relative;
+# each referenced subdirectory must already exist. Omitted auto_start means true.
+# templates:
+#   fullstack-dev:
+#     description: Frontend and backend sessions
+#     sessions:
+#       - name: frontend
+#         working_dir: frontend
+#         tags: [web]
+#         metadata: {language: typescript, role: frontend}
+#       - name: backend
+#         working_dir: backend
+#       - name: database
+#         working_dir: .
+#         auto_start: false

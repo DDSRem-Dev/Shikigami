@@ -2,7 +2,7 @@
 
 **GUI 设计供后续参考，首版交付 CLI/TUI。**
 
-本文描述目标界面和接入约束，尚无 UI 实现；排期统一引用 [08](./08-roadmap.md)，不再独立承诺 GUI 与首版同期发布。
+本文描述目标界面和接入约束；CLI/TUI 开发实现与验收证据见 [15](./15-implementation-status.md)，GUI 尚未交付；排期统一引用 [08](./08-roadmap.md)，不再独立承诺 GUI 与首版同期发布。
 
 ## 共享架构
 
@@ -14,20 +14,33 @@ CLI/TUI/GUI → internal/client → 本地 agent IPC → 远端 daemon。前端�
 
 采用 Cobra（命令）、Bubble Tea（交互）、Lipgloss（样式），配置 schema 由共享模块管理；是否使用 Viper 属实现选择。完整命令树以 [07](./07-project-structure.md) 为准。
 
-- 无参数：按目录映射智能连接；明确命令不依赖隐藏当前目录状态。
+- 无参数：按目录映射智能连接。显式项目/会话命令不从当前目录推断项目，创建会话须给出 `--project`；其他会话操作可用该参数消除同名歧义。`sync` 明确支持当前目录映射：省略映射 ID/`--mapping` 时选择包含当前目录的最具体映射，自动化建议显式传入映射 ID。
 - attach 快捷形式是 `shiki @ <session>`，不是未实现的 `shiki @session`。
-- 模板语法是 `shiki init --template <name>`。
-- 支持 --server/--project、--no-color、非交互错误；列表命令后续可提供结构化输出。
+- 模板语法是 `shiki init --template <name> --project <project>`，或以 `--name <name> --path <remote-path>` 新建项目；交互时可提示输入新项目名称/远端路径，不从本地目录推断。非交互必须给全项目范围并加 `--yes`。
+- `sessions stop-claude/restart-claude <session> [--yes]` 会替换当前 pane 任务，保留 session 记录和项目文件；非 TTY 无 `--yes` 在连接 agent 前拒绝，TTY 使用明确输入 `yes` 确认。
+- 支持 --server/--project、--no-color、非交互错误与管理命令 --json；--verbose 不向 JSON 或 raw 终端流插入日志。
+- `shiki config startup` 通过本地 agent 只读展示启动策略：区分 agent 加载的 CLI 按需配置、受管服务登录启动和开机启动，并显示配置来源。无法核验服务绑定、覆盖配置或管理器状态时显示未知；只检查标准 Shiki 服务，不据此推断其他登录项或自定义自动化。实际启动/重启验收仍见 08/15。
 - 空菜单、取消、无服务器、无会话都必须有独立状态，不能索引空数组。
 - Bubble Tea model 的接收者/构造返回类型一致；`Program.Run()` 的最终 model 类型不能在无按键退出时断言成另一种值/指针类型。
 - 控制终端时停止 TUI 对同一 stdin/stdout 的竞争。插件通知进入独立面板/积压，不在 Claude ANSI 字节流中插入日志和菜单。
+- Dashboard 拥有可取消输入 reader；上下文取消或异常退出也须先唤醒并等待正在进行的读取完成，再关闭取消管道/epoll/kqueue。返回调用者前恢复终端并释放输入所有权，确保下一次 attachment 不被旧 reader 抢读。Bubble Tea 的 kill 路径不能代替该生命周期保证。
 - raw 模式退出、SIGWINCH、Ctrl+Q 与粘贴行为遵循 10。进度只反映真实传输；未知总量使用不定进度，不用定时器模拟完成。
 
 ### 状态展示
 
 会话连接状态与 Claude 进程状态分别显示；观察者明确标注只读。同步按项目映射展示，端口按真实 listener 展示，不伪装成当前终端私有资源。
 
-Dashboard 查询 agent 合并后的数据：远端资源、网络路径、后台同步、监听和冲突。前端退出后已启用的后台任务继续；关闭 agent 的动作必须与“关闭窗口/Detach”分开。
+Dashboard 查询 agent 合并后的数据：远端资源、网络路径、后台同步、监听和冲突。诊断面板与 CLI doctor/servers 同时展示最近一次已发布路由选择的实际策略顺序（tsnet/direct-tls），它不是当前实时路径或完整重试历史，不区分 tsnet 内部 P2P/DERP。未报告或不符合有限有序词汇时明确未报告，不从地址/路径推断。前端退出后已启用的后台任务继续；关闭 agent 的动作必须与“关闭窗口/Detach”分开。节点状态由运行中的 NodeControl 独立只读查询，缺少登录能力不等于协议不兼容；offline/NODE_DISABLED 应说明配置与重启步骤，NODE_STATE_UNAVAILABLE 应说明保留身份、检查路径/权限，不能统一提示登录。只有实际 needs_login/expired/denied 状态提示登录。
+
+agent 崩溃熔断时展示 `degraded / AGENT_CRASH_LOOP`，不把诊断 IPC 可达视为后台任务已就绪。提示查看本地/服务日志、修复原因后明确运行 `shiki agent start --recover-crash-loop`；普通启动或停止不解除熔断。启动记录损坏与时钟回拨使用各自的修复提示，不提供无效的一键覆盖。
+
+智能首次使用先确认项目/目录关联并保存 paused 映射，启用后台扫描须再次确认。初始差异由宿主/worker 保存为版本化冲突，前端通过已有 PutMapping、GetSyncState、ListConflicts、ReadConflictFile、ResolveConflict 展示和提交选择，不自行读写同步树、不选择隐含覆盖方向、不自动启插件。每项决定使用观测 generation；取消、跳过、暂停及权限不足都有显式状态。
+
+目录选择通过 agent 代理的 ListProjectDirectories 获取项目内目录分页，须有 `file.read` 与 `project.directories.v1`；不开放插件专用 ListFiles。客户端每次请求绑定 server/project/path，检查响应范围，防止旧页/错误项目进入选择。手动路径仍由 daemon 做最终包含关系检查。
+
+Claude 崩溃事件先结束当前 raw attachment；CLI 和 dashboard 的终端返回路径共用恢复菜单。菜单前重取会话状态，避免在已自动恢复后再次重启；重启动作需 `session.control` 与确认，观察者不显示该项。保留输出由 GetSessionLogs 在 `session.attach`/`terminal.logs.v1` 下读取，显示真实保留范围、截断与不可用原因，不当作完整持久日志。所有诊断/菜单在恢复终端之后显示；网络重连仍使用独立的有界策略。
+
+已确认 pane 结束但原因不可用的 `CLAUDE_STOPPED/EXIT_REASON_UNKNOWN` 也退出 raw 后进入显式恢复，文案区分“原因未知”和已证实崩溃。其他 STOPPED 不被客户端推断成异常；未知状态不触发自动重启。
 
 配色使用语义令牌、兼容浅色/深色终端、支持 NO_COLOR，不假设终端总是黑底。窄屏下减少列，不以负宽度渲染面板。
 
@@ -182,4 +195,4 @@ GUI 托盘可以展示后台 agent 状态并提供显式停止入口；不能把
 | OS 托盘/桌面通知 | 不在首版范围 | 单独验证 |
 | 拖放文件 | 不在首版范围 | 后续提案 |
 
-表内是计划，所有功能尚待实现。GUI 接入前先完成本地 IPC 版本兼容与终端订阅/销毁原型，再实现页面；不另建与 08 冲突的 Week/Phase 时间线。
+表内描述目标范围，不表示验收已经通过。CLI/TUI 已有开发实现，逐项完成情况和证据以 08/15 为准；GUI 仍为后续实施范围。GUI 接入前先完成本地 IPC 版本兼容与终端订阅/销毁原型，再实现页面；不另建与 08 冲突的 Week/Phase 时间线。

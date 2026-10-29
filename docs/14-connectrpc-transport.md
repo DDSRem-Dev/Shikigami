@@ -1,6 +1,6 @@
 # ConnectRPC 传输契约
 
-本文规定远端 RPC、本地 agent IPC 和插件 RPC 的传输实现；消息与方法分别以 [09](./09-protocol-definition.md)、[13](./13-local-ipc-protocol.md) 为准。当前仍是设计，尚无项目实现。资料核对日期：2026-10-27；实现基线为 **connectrpc.com/connect/v2 v2.0.2**，要求 **Go ≥ 1.26.0**，不能照搬 Connect-Go v1 示例。
+本文规定远端 RPC、本地 agent IPC 和插件 RPC 的传输实现；消息与方法分别以 [09](./09-protocol-definition.md)、[13](./13-local-ipc-protocol.md) 为准。当前已有传输实现与部分跨进程测试，完整验收状态见 [15](./15-implementation-status.md)。资料核对日期：2026-10-27；实现基线为 **connectrpc.com/connect/v2 v2.0.2**，库自身要求 Go ≥ 1.26.0；项目为满足固定 tsnet SDK 使用 **Go ≥ 1.26.5、工具链 1.26.10**，不能照搬 Connect-Go v1 示例。
 
 ## 1. 选型与协议范围
 
@@ -112,6 +112,8 @@ Connect 错误代码与 gRPC 同名同义，所以现有 FailedPrecondition、Ab
 4. 结构化详情只透传白名单类型及字段；可使用 google.rpc.ErrorInfo 的 reason/domain 和受限故障层字段，通过 connectproto.NewErrorDetail + WithDetail（返回新对象）构造。未识别的详情不转发。
 5. 日志记录安全的 procedure、故障层和 code；Token、auth key、终端内容、文件内容及登录 URL 不进入通用访问日志。指标以 RPC 终态统计。
 
+当前版本诊断白名单限于 FailedPrecondition 下 `google.rpc.ErrorInfo` 的 `shiki.protocol` domain。`PROTOCOL_INCOMPATIBLE` 只接收六个规范 uint32 版本区间字段、最多 64 字节构建标识、最多八个各 96 字节能力名及 agent/daemon/plugin/node 组件名；`REMOTE_CAPABILITY_UNAVAILABLE` 使用独立 schema，仅允许 daemon 组件与一个能力名。只检查前八个详情、单个编码不超过 2048 字节；未知字段、原因、domain、非法字符和超限值不转发，重建时丢弃 protobuf 未知字段和 debug。Connect 与 go-plugin gRPC 共用同一校验，绝不把任意 metadata 转为可显示诊断。
+
 远端 Authorization 由 agent 从 server_id 凭据存储注入；前端的身份/路由 header 不转发到 daemon。daemon 到插件使用 go-plugin AutoMTLS 的受信实例通道及已验证 scope，不传用户 Token；插件回调 CoreAPI 使用独立短期实例凭据。每一跳新建 header 集合，deadline 继承但不得延长，取消向下传播；不可把整份 HTTP header 透明复制。
 
 RPC 建立后持续追踪 jti 的撤销/过期；取消关联上下文并终止读写。仅修改未来请求的客户端 header 不会使既有流重新认证；凭据变更需要取消旧流并重新协商。连接复用不允许跳过每次 RPC 的认证。
@@ -121,7 +123,10 @@ RPC 建立后持续追踪 jti 的撤销/过期；取消关联上下文并终止�
 - 客户端 NewTransport 和服务端 Mount 都显式设置 WithReadMaxBytes/WithSendMaxBytes 为 **1 MiB/消息**；按解压后消息限制验收，不依赖库默认值。文件/端口 DATA 块上限 **256 KiB**，自动同步文件累计默认上限 **10 MiB**；限制是三个不同层次。
 - 首版客户端和服务端均用 WithCompressors() 显式禁用压缩（库默认支持 gzip），压缩请求由 SDK 拒绝。以后启用压缩需测试解压后大小限制，并测量 CPU 与交互延迟；不能仅关闭请求压缩却误以为响应也不会自动压缩。
 - 不给整个终端/转发流套固定 http.MaxBytesHandler 或短 ReadTimeout/WriteTimeout；分别控制消息、并发流、每身份资源、文件累计大小和有界队列。请求头大小/读取时间、TLS 握手和连接建立使用有限上限。
+  - 当前文件准入策略：同一daemon单OS用户共享metadata32（List/Stat/Delete）、transfer16（Read/Write）、watch32三类独立计数，不按Token/连接/handler重新分配。授权后、读取首帧前占用，超限立即ResourceExhausted，不排无限队列；worker另设相同限额。宿主文件RPC首个完整请求消息、worker上传首header默认5秒，保留更早父截止，收到后清除该首帧限制，不给Watch整流设5秒超时。这些数值是实现策略，不把消息/文件大小上限当并发限制。
+  - 当前端口元数据准入策略：同一daemon单OS用户共享metadata32（ListPorts/CheckPort）、watch32两类独立计数，授权后、首个完整请求消息前占用，跨Token/连接/handler不重置；超限立即ResourceExhausted。首请求默认5秒并保留更早父截止，成功接收后清除，不限制正常Watch整流时长。port worker分别限制短查询32、Watch32，ForwardPort另按max_connections准入并等待有界CONNECT；这些默认值为实现策略，短查询不会被长Watch占满。私有AutoMTLS gRPC首message解码并非此远端HTTP2预算的保护点；远端typed请求完整接收后才调用worker。
 - http.Client.Timeout 与 Server.ReadTimeout/WriteTimeout 覆盖整个流，长流路径保持 0；短 unary 默认 5 秒，启停按 13，文件按大小设 deadline，所有长期流都绑定可取消任务 context。
+  - 当前后台同步实现的文件预算为 `30秒 + ceil(size / 64KiB)秒`（默认10MiB为190秒），覆盖打开流、首帧、传输及最终ACK，保留更早父截止；这是整次操作预算，收到进度不重置。下载先用默认5秒StatFile取得当前大小并核验revision；上传从本地阶段文件首header取大小。WatchFiles/终端/端口长期流不套此文件预算。预算超时后提交结果未知的写入仍按10的日志恢复规则重观测，不盲目重放。
 - HTTP/2 PING 与 IdleTimeout 是连接级机制，不代表业务输出心跳。闲置终端仍合法；HTTP/2 流控不能代替应用队列上限或取消逻辑。具体 HTTP2Config 参数须在锁定 Go 版本上通过丢包/休眠/DERP 测试后设定，不复制 grpc-go keepalive 配置。
 - 优雅退出先阻止新任务、取消长期流与 worker，再对 http.Server.Shutdown 设有限 deadline，超时 Close 并 Wait 回收；只调用 Shutdown 会等待长期流而无法退出。关闭空闲连接池不能终止所有活跃 RPC，仍需取消其 context。tmux 保活规则不变。
 

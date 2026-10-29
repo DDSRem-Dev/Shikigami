@@ -55,6 +55,7 @@ CoreAPI 固定使用宿主提供的独立 Unix socket 上 Connect/h2c，不使�
 - CoreAPI 独立注册为 Connect service，仅插件进程可按当前实例 scope 调用；不把生成的 gRPC CoreAPI 服务注册到 go-plugin，也不向 worker 注册 Connect 的同名服务。plugin.proto 因此生成两套绑定，实际开放端点由服务白名单决定。
 - 基线 go-plugin v1.8.0，AllowedProtocols 仅允许 ProtocolGRPC，启用 AutoMTLS，将 UnixSocketConfig.TempDir 指向宿主私有运行目录（0700）；首版拒绝意外 TCP/跨用户端点。magic cookie 用于启动协议识别，不能替代 mTLS 或能力授权。AutoMTLS 不支持 Reattach，恢复按启动新实例处理。
 - CoreAPI 的独立 UDS 使用 0700 目录/0600 socket、双向 peer UID 校验与实例 Bearer 凭据。凭据通过 Init 提供，不放命令行/日志；插件退出、宿主重启或实例替换即失效，凭据到期取消相关回调流，由宿主按后台恢复流程受控重启实例并签发新凭据；现有协议没有在线刷新 RPC，不能假设 Init 可在运行中重复调用，也不能静默变成永久凭据。
+- 插件的 ready 状态与协议能力必须同时依据当前实例和有效凭据。凭据已失效、实例结束或停止中，即使监管循环尚在等待进程退出，也不能继续广告 ready/能力或接纳新调用；该等待窗口报告 `failed / PLUGIN_INSTANCE_ENDED`，不改持久化 enabled/revision，后续状态由监管恢复流程更新。
 - CoreAPI listener 必须在 Init 前 ready，调用 worker 时不得持有 host 状态锁，避免“Init/Start 等回调、回调等宿主锁”的死锁。go-plugin 管理的父子进程监管仍负责崩溃清理，不能把 Connect 池某条空闲连接的关闭当作父进程死亡。
 - go-plugin gRPC 的 server/client 分别设置 1 MiB 的消息收发限制（MaxRecvMsgSize/MaxSendMsgSize 与 MaxCallRecvMsgSize/MaxCallSendMsgSize），不依赖 Connect 的配置自动作用到 gRPC。同样要求每方向单 sender、有界队列和 context 取消。协议适配详见 14。
 
@@ -98,6 +99,7 @@ plugins:
     enabled: true
     config:
       auto_forward: false         # 配置允许规则后才启用
+      auto_allow_ports: []          # client 自动策略显式允许端口；server 另配 allow_ports
       bind_address: 127.0.0.1
 ```
 
@@ -169,4 +171,10 @@ server sync 发现变化
 
 本地 Agent 接口见 [13](./13-local-ipc-protocol.md)。host 持久化期望配置，worker 执行并回报实际状态；停止/重启按 [06](./06-edge-cases.md) 的顺序完成。插件进程死亡先取消路由，再启动兼容实例并下发当前配置；旧实例的 PublishEvent 因 instance 不匹配拒绝。
 
-内置插件 capability 必须与 side 匹配。client sync 需要 scoped CoreAPI 和 sync.revision；server sync 实现 FileService；port 两端分别实现 PortWorker 和 PortService。缺少其中一端不能显示“同步/转发可用”，即使插件可执行文件已经存在。
+内置插件 capability 必须与 side 匹配。client sync 需要 `core.scope.v1` 和 `sync.worker.v1`；server sync 实现 FileService 并声明 `sync.revision.v1`；port 两端分别实现 PortWorker 和 PortService。缺少其中一端不能显示“同步/转发可用”，即使插件可执行文件已经存在。
+
+### SDK 文件接收与停止完成
+
+Go SDK 的 `FileWorkerService` 用于宿主到插件的传输实现，`Services.Files` 要求 `WriteFile` 的接收回调显式接受 `context.Context`。本地/客户端同步协调所用 `FileService` 保留同步本地reader形状；两者共享读操作契约。第三方worker源码在重建到当前尚未发行的SDK时须适配此接口，protobuf/原生gRPC方法和capability未变，不提供不支持取消的传输回退。
+
+SDK每次上传只有一个transport reader，取消或终态后不再次读取。真正的gRPC阻塞Recv在handler返回终止该流后退出；不能先在handler内等待Recv结束而形成死锁。worker在接收首帧前登记活动及并发名额，停止取消并等待实际活动完成；Stop超时不表示已经停止，SDK及worker重试均继续等待原清理完成，只有实现成功后才记录stopped。准入默认值与首帧预算见14，行为证据见[文件准入验收](15-implementation-status.md#evidence-file-admission-validation)。

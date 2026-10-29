@@ -1,0 +1,139 @@
+syntax = "proto3";
+package shiki.v1;
+
+option go_package = "github.com/DDSRem-Dev/Shikigami/pkg/protocol";
+
+import "types.proto";
+
+// ShikiDaemon 是核心服务接口
+service ShikiDaemon {
+  // 经应用 Token 认证后协商，不能用构建版本字符串推断兼容性。
+  rpc NegotiateProtocol(ProtocolOffer) returns (ProtocolAgreement);
+  rpc ListPlugins(ListPluginsRequest) returns (ListPluginsResponse);
+  rpc ManagePlugin(ManagePluginRequest) returns (PluginStatus);
+  rpc WatchPluginLogs(PluginLogsRequest) returns (stream LogRecord);
+  rpc GetStats(StatsRequest) returns (StatsSnapshot);
+  rpc WatchStats(StatsRequest) returns (stream StatsSnapshot);
+
+  // ============================================
+  // 项目管理
+  // ============================================
+
+  // 列出所有项目
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
+
+  // 创建新项目
+  rpc CreateProject(CreateProjectRequest) returns (Project);
+
+  // 获取项目信息
+  rpc GetProject(GetProjectRequest) returns (Project);
+
+  // 只读有界目录选择器；独立于sync文件数据面
+  rpc ListProjectDirectories(ListProjectDirectoriesRequest) returns (ListProjectDirectoriesResponse);
+
+  // 删除项目
+  rpc DeleteProject(DeleteProjectRequest) returns (Empty);
+
+  // ============================================
+  // 会话管理
+  // ============================================
+
+  // 列出项目的所有会话
+  rpc ListProjectSessions(ListProjectSessionsRequest) returns (ListProjectSessionsResponse);
+
+  // 列出所有会话（跨项目）
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+
+  // 创建新会话
+  rpc CreateSession(CreateSessionRequest) returns (Session);
+
+  // 获取会话信息
+  rpc GetSession(GetSessionRequest) returns (Session);
+
+  // 有界只读当前屏幕；不读取滚屏历史或改变 attachment/controller。
+  rpc GetSessionScreen(GetSessionRequest) returns (SessionScreen);
+
+  // tmux尚保留的有界文本诊断；非持久历史/原字节回放
+  rpc GetSessionLogs(SessionLogsRequest) returns (SessionLogs);
+
+  // 更新会话元数据
+  rpc UpdateSession(UpdateSessionRequest) returns (Session);
+
+  // 删除会话
+  rpc DeleteSession(DeleteSessionRequest) returns (Empty);
+
+  // 原子转移终端控制权
+  rpc TakeControl(TakeControlRequest) returns (Empty);
+  rpc StopClaude(SessionActionRequest) returns (Session);
+  rpc RestartClaude(SessionActionRequest) returns (Session);
+
+  // ============================================
+  // 终端 I/O（双向流）
+  // ============================================
+
+  // 终端数据流（双向）
+  rpc TerminalStream(stream TerminalInput) returns (stream TerminalOutput);
+
+  // ============================================
+  // 文件操作
+  // ============================================
+
+  // 读取文件
+  rpc ReadFile(ReadFileRequest) returns (stream FileData);
+
+  // 写入文件
+  rpc WriteFile(stream WriteFileRequest) returns (FileInfo);
+  rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
+
+  // 删除文件
+  rpc DeleteFile(DeleteFileRequest) returns (Empty);
+
+  // 监听文件变化（服务端流）
+  rpc WatchFiles(WatchFilesRequest) returns (stream FileEvent);
+
+  // 获取文件状态
+  rpc StatFile(StatFileRequest) returns (FileInfo);
+
+  // ============================================
+  // 端口管理
+  // ============================================
+
+  // 列出开放的端口
+  rpc CheckPort(CheckPortRequest) returns (CheckPortResponse);
+  rpc ListPorts(ListPortsRequest) returns (ListPortsResponse);
+
+  // 监听端口变化（服务端流）
+  rpc WatchPorts(WatchPortsRequest) returns (stream PortEvent);
+
+  // 转发端口数据（双向流）
+  rpc ForwardPort(stream PortData) returns (stream PortData);
+
+  // ============================================
+  // 系统信息
+  // ============================================
+
+  // 获取系统信息
+  rpc GetSystemInfo(Empty) returns (SystemInfo);
+
+  // 获取 Claude Code 版本
+  rpc GetClaudeVersion(Empty) returns (ClaudeVersion);
+
+  // 健康检查
+  rpc HealthCheck(Empty) returns (HealthStatus);
+
+  // ============================================
+  // 会话快照
+  // ============================================
+
+  // 创建会话快照
+  rpc CreateSnapshot(CreateSnapshotRequest) returns (Snapshot);
+
+  // 列出快照
+  rpc ListSnapshots(ListSnapshotsRequest) returns (ListSnapshotsResponse);
+
+  // 从快照恢复
+  rpc RestoreSnapshot(RestoreSnapshotRequest) returns (Session);
+
+  // 删除快照
+  rpc DeleteSnapshot(DeleteSnapshotRequest) returns (Empty);
+}

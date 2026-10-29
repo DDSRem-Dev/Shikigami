@@ -1,0 +1,72 @@
+package node
+
+import (
+	"context"
+	"sync"
+
+	"connectrpc.com/connect/v2"
+)
+
+// authorizeRPC runs even when HTTP/2 reuses a live TCP connection. Each RPC
+// belongs to the current online authorization lifetime, which is canceled on
+// an explicit SDK identity/state loss. A later online transition creates a new
+// lifetime; it never revives streams from the previous one.
+func (n *Node) authorizeRPC(next connect.ClientFunc) connect.ClientFunc {
+	return func(ctx context.Context, spec connect.Spec) (connect.ClientStream, error) {
+		n.mu.Lock()
+		lease := n.authorization
+		online := n.status.State == "online" && lease != nil && n.ctx.Err() == nil
+		n.mu.Unlock()
+		if !online || lease.Err() != nil {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, "NODE_AUTH_REQUIRED")
+		}
+		callCtx, cancel := context.WithCancel(ctx)
+		stopLease := context.AfterFunc(lease, cancel)
+		// The authorization epoch outlives individual calls. A caller may
+		// cancel and abandon a stream without another Receive or Close; remove
+		// its lease hook even in that case, including during construction.
+		stopCall := context.AfterFunc(callCtx, func() { stopLease() })
+		stop := func() { stopCall(); stopLease() }
+		stream, err := next(callCtx, spec)
+		if err != nil {
+			stop()
+			cancel()
+			return nil, err
+		}
+		return &authorizedStream{ClientStream: stream, cancel: cancel, stop: stop, lease: lease, singleResponse: spec.StreamType == connect.StreamTypeClient}, nil
+	}
+}
+
+type authorizedStream struct {
+	connect.ClientStream
+	cancel context.CancelFunc
+	lease  context.Context
+	stop   func()
+	// A successful client-stream Receive includes the final response/status.
+	// Server/bidi messages and request half-close do not end the RPC lifetime.
+	singleResponse bool
+	once           sync.Once
+	err            error
+}
+
+func (s *authorizedStream) Close() error {
+	s.once.Do(func() { s.stop(); s.cancel(); s.err = s.ClientStream.Close() })
+	return s.err
+}
+func (s *authorizedStream) Receive(message any) error {
+	err := s.ClientStream.Receive(message)
+	if s.lease.Err() != nil {
+		err = connect.NewError(connect.CodeCanceled, "NODE_AUTH_REQUIRED")
+	}
+	if err != nil || s.singleResponse {
+		_ = s.Close()
+	}
+	return err
+}
+
+func (s *authorizedStream) Send(message any) error {
+	if s.lease.Err() != nil {
+		return connect.NewError(connect.CodeCanceled, "NODE_AUTH_REQUIRED")
+	}
+	return s.ClientStream.Send(message)
+}

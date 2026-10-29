@@ -1,0 +1,86 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: true
+      - name: Install runtime test dependencies
+        run: |
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            sudo apt-get update
+            sudo apt-get install -y tmux unzip iproute2
+          elif ! command -v tmux; then
+            brew install tmux
+          fi
+      - run: make tools generate-proto
+      - name: Check generated protocol drift
+        run: git diff --exit-code -- pkg/protocol
+      - run: go mod verify
+      - name: Scan dependencies across all packages
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 -scan=package ./...
+      - name: Scan independent terminal analyzer dependencies
+        env:
+          GOMAXPROCS: '2'
+          GOFLAGS: '-p=1 -mod=readonly -buildvcs=false'
+          GOTOOLCHAIN: local
+        run: go -C test/diagnostics/terminalstate/analyzer run golang.org/x/vuln/cmd/govulncheck@v1.1.4 -scan=package ./...
+      - run: make build lint test test-e2e
+      - name: Verify terminal screen semantics
+        shell: bash
+        env:
+          GOMAXPROCS: '2'
+          GOFLAGS: '-p=1 -mod=readonly -buildvcs=false'
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          test "$(id -u)" -ne 0
+          shiki_terminal_evidence="$(mktemp -d "$RUNNER_TEMP/shiki-terminal-state.XXXXXX")"
+          printf 'Terminal evidence: %s\n' "$shiki_terminal_evidence"
+          SHIKI_RUN_EVIDENCE_DIR="$shiki_terminal_evidence" ./scripts/test-terminal-state.sh
+  compile:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        goos: [linux, darwin]
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: true
+      - name: Build and verify unsigned release bundle
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+          SHIKI_VERSION: v0.0.0-ci
+          SHIKI_SIGNING_KEY: ''
+          GOMAXPROCS: '2'
+          GOFLAGS: '-p=1 -mod=readonly -buildvcs=false'
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          env -u SHIKI_SIGNING_KEY make release
+          shiki_archive="shikigami-${SHIKI_VERSION}-${GOOS}-${GOARCH}.tar.gz"
+          (
+            cd dist
+            sha256sum --check "${shiki_archive}.sha256"
+            shiki_archived_pin="$(tar -xOf "$shiki_archive" SHA256SUMS | sha256sum | cut -d ' ' -f 1)"
+            test "$shiki_archived_pin" = "$(cat "${shiki_archive}.checksums-pin")"
+            test ! -e "${shiki_archive}.sig.json"
+          )

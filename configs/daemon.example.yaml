@@ -1,0 +1,37 @@
+# Replace shiki with the existing ordinary OS account that owns this daemon.
+# Install as mode 0600, owned by that account. Pass this same config to serve,
+# init, and token commands. Authentication keys are supplied via NodeControl.
+schema_version: 1
+run_user: shiki
+state_dir: /var/lib/shiki
+projects_dir: /home/shiki/projects
+plugins_dir: /var/lib/shiki/plugins
+server:
+  port: 9527
+  direct_tls:
+    enabled: false
+    address: ""
+    cert_file: ""
+    key_file: ""
+tailscale:
+  enabled: true
+  hostname: shiki-vps
+  state_dir: /var/lib/shiki/tailscale
+  control_url: https://controlplane.tailscale.com
+resource_limits:
+  max_sessions: 10
+  max_concurrent_claude: 5
+auto_cleanup:
+  # Requires an explicit stop, no attachments and a verified dead tmux pane.
+  # A live shell is retained. Project files are never removed.
+  enabled: false
+  idle_threshold: 168h
+  warn_before_cleanup: 24h
+claude:
+  executable: claude
+  args: []
+  auto_restart:
+    enabled: false
+    max_attempts: 3
+    backoff: 1s
+    stable_window: 1m

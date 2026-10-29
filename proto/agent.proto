@@ -1,0 +1,205 @@
+syntax = "proto3";
+package shiki.agent.v1;
+option go_package = "github.com/DDSRem-Dev/Shikigami/pkg/protocol/agent";
+import "types.proto";
+import "plugin.proto";
+
+service Agent {
+  rpc Handshake(HandshakeRequest) returns (HandshakeResponse);
+  rpc GetStatus(shiki.v1.Empty) returns (AgentStatus);
+  rpc ReleaseFrontend(shiki.v1.Empty) returns (shiki.v1.Empty);
+  rpc Shutdown(ShutdownRequest) returns (AgentStatus);
+  rpc ListServers(shiki.v1.Empty) returns (ServerList);
+  rpc UpsertServer(UpsertServerRequest) returns (ServerRecord);
+  rpc RemoveServer(RemoveServerRequest) returns (shiki.v1.Empty);
+  rpc SetServerCredential(SetServerCredentialRequest) returns (ServerRecord);
+  rpc GetStartupPolicy(shiki.v1.Empty) returns (StartupPolicy);
+  rpc GetPreferences(shiki.v1.Empty) returns (Preferences);
+  rpc SetPreferences(SetPreferencesRequest) returns (Preferences);
+  rpc ListMappings(ListMappingsRequest) returns (shiki.plugin.v1.MappingList);
+  rpc PutMapping(PutMappingRequest) returns (shiki.plugin.v1.Mapping);
+  rpc RemoveMapping(RemoveMappingRequest) returns (shiki.v1.Empty);
+  rpc GetSyncState(shiki.plugin.v1.Scope) returns (shiki.plugin.v1.SyncState);
+  rpc ListConflicts(shiki.plugin.v1.Scope) returns (shiki.plugin.v1.ConflictList);
+  rpc ResolveConflict(shiki.plugin.v1.ResolveConflictRequest) returns (shiki.plugin.v1.SyncState);
+  rpc ReadConflictFile(shiki.plugin.v1.ReadConflictFileRequest) returns (stream shiki.v1.FileData);
+  rpc ListForwards(shiki.v1.Empty) returns (shiki.plugin.v1.ForwardList);
+  rpc CreateForward(CreateForwardRequest) returns (shiki.plugin.v1.ForwardState);
+  rpc StopForward(StopForwardRequest) returns (shiki.v1.Empty);
+  rpc ListPlugins(PluginTarget) returns (shiki.v1.ListPluginsResponse);
+  rpc ManagePlugin(ManagePluginRequest) returns (shiki.v1.PluginStatus);
+  rpc WatchPluginLogs(PluginLogsRequest) returns (stream shiki.v1.LogRecord);
+  rpc WatchEvents(shiki.v1.Empty) returns (stream AgentEvent);
+}
+message HandshakeRequest {
+  shiki.v1.ProtocolOffer protocol = 1;
+  string client_build = 2;
+  string device_name = 3;
+}
+message HandshakeResponse {
+  shiki.v1.ProtocolAgreement protocol = 1;
+  string instance_id = 2;
+  string frontend_id = 3;
+  AgentStatus status = 4;
+}
+message AgentStatus {
+  string instance_id = 1;
+  string state = 2; // starting/ready/degraded/stopping
+  string reason_code = 3;
+  uint32 active_terminals = 4;
+  uint32 active_sync_tasks = 5;
+  uint32 active_forwards = 6;
+}
+message StartupPolicy {
+  string cli_auto_start = 1; // enabled/disabled/unknown; agent启动时加载的CLI按需配置，不是当前磁盘或登录启动
+  string manager = 2; // launchd/systemd-user/unknown
+  string managed_service = 3; // present/absent/unknown; 仅本产品标准受管服务
+  string login_start = 4; // enabled/disabled/unknown
+  string boot_start = 5; // enabled/disabled/unknown/not_applicable
+  string reason_code = 6; // 有限诊断，不返回服务命令、环境或原始输出
+  int64 observed_at = 7; // Unix ms；配置观察时间，不是实际重启验收
+  string config_path = 8; // agent启动时加载的配置来源；无文件来源时为空
+}
+message ShutdownRequest {
+  string expected_instance_id = 1;
+  string request_id = 2;
+}
+message ServerConfig {
+  string id = 1;
+  string name = 2;
+  string tailscale_address = 3;
+  string direct_tls_address = 4;
+  string tls_server_name = 5;
+  string tls_ca_file = 6;
+  string daemon_id = 7; // 首次验证后固定目标身份；变更须重新确认关联
+}
+message ServerRecord {
+  ServerConfig config = 1;
+  string revision = 2;
+  bool credential_present = 3;
+  string credential_revision = 4;
+  string connection_state = 5; // offline/connecting/ready/auth_required/incompatible
+  string reason_code = 6;
+  shiki.v1.ProtocolAgreement remote_protocol = 7;
+  string connection_path = 8; // 仅运行态：tailscale-direct/tailscale-relay/direct-tls/unknown
+  repeated string connection_attempts = 9; // 最近一次路由选择实际factory顺序：tsnet/direct-tls，最多2；仅运行态，空表示未报告
+}
+message ServerList { repeated ServerRecord servers = 1; }
+message UpsertServerRequest {
+  ServerConfig config = 1; // 新建 id 为空，agent 分配
+  string expected_revision = 2; // 新建为空
+  string request_id = 3;
+}
+message RemoveServerRequest {
+  string server_id = 1;
+  string expected_revision = 2;
+  string request_id = 3;
+}
+message SetServerCredentialRequest {
+  string server_id = 1;
+  bytes token = 2; // write-only；禁止日志、事件或响应返回
+  string expected_credential_revision = 3;
+  string request_id = 4;
+}
+message Preferences {
+  string default_server_id = 1;
+  bool no_color = 2;
+  string detach_key = 3;
+  string revision = 4;
+}
+message SetPreferencesRequest {
+  Preferences values = 1; // 完整替换上述非敏感字段，revision 必须匹配
+  string request_id = 2;
+}
+message ListMappingsRequest { string server_id = 1; }
+message PutMappingRequest {
+  shiki.plugin.v1.Mapping mapping = 1;
+  string expected_revision = 2; // 创建为空；mapping.revision 由 agent 分配
+  string request_id = 3;
+}
+message RemoveMappingRequest {
+  string mapping_id = 1;
+  string expected_revision = 2;
+  string request_id = 3;
+  bool archive_pending = 4; // 显式放弃继续同步并归档未处理状态，不删除源文件
+}
+message CreateForwardRequest {
+  shiki.plugin.v1.ForwardSpec spec = 1; // id/revision 由 agent 分配
+  string request_id = 2;
+}
+message StopForwardRequest {
+  string forward_id = 1;
+  string expected_revision = 2;
+  string request_id = 3;
+}
+message PluginTarget {
+  enum Side { SIDE_UNSPECIFIED = 0; LOCAL = 1; REMOTE = 2; }
+  Side side = 1;
+  string server_id = 2; // REMOTE 必填，LOCAL 为空
+}
+message ManagePluginRequest {
+  PluginTarget target = 1;
+  shiki.v1.ManagePluginRequest request = 2;
+}
+message PluginLogsRequest {
+  PluginTarget target = 1;
+  shiki.v1.PluginLogsRequest request = 2;
+}
+message AgentEvent {
+  string instance_id = 1;
+  uint64 sequence = 2;
+  string type = 3; // rescan_required/server/mapping/sync/conflict/forward/plugin/node
+  string resource_id = 4;
+  string server_id = 5;
+  string revision = 6; // 状态提示，具体内容经 Get/List 查询
+}
+
+// 同机认证引导：agent 和 daemon 各在自己的本地 socket 实现。
+service NodeControl {
+  rpc Negotiate(shiki.v1.ProtocolOffer) returns (NodeNegotiation);
+  rpc GetStatus(shiki.v1.Empty) returns (NodeStatus);
+  rpc BeginLogin(BeginLoginRequest) returns (NodeStatus);
+  rpc CancelLogin(CancelLoginRequest) returns (NodeStatus);
+}
+message NodeNegotiation {
+  shiki.v1.ProtocolAgreement protocol = 1;
+  string instance_id = 2;
+}
+message NodeStatus {
+  string state = 1; // uninitialized/needs_login/authenticating/online/expired/denied/offline
+  string reason_code = 2;
+  string login_id = 3;
+  string login_url = 4; // 仅同 UID 本地管理响应；不进入日志/远端诊断
+  int64 login_expires_at = 5;
+  repeated string addresses = 6; // 当前内嵌节点地址，不是系统 Tailscale 地址
+}
+message BeginLoginRequest {
+  oneof method {
+    bool interactive = 1; // 必须 true
+    bytes auth_key = 2; // 从受限文件读取后仅在本机传入，不持久化
+  }
+  string request_id = 3;
+}
+message CancelLoginRequest { string login_id = 1; }
+
+// 同 UID、只读 daemon 安装诊断；仅注册在 daemon admin.sock。
+service DaemonReadiness {
+  rpc Negotiate(shiki.v1.ProtocolOffer) returns (ReadinessNegotiation);
+  rpc GetStatus(shiki.v1.Empty) returns (DaemonReadinessStatus);
+}
+message ReadinessNegotiation {
+  shiki.v1.ProtocolAgreement protocol = 1;
+  string instance_id = 2;
+}
+message DaemonReadinessStatus {
+  string instance_id = 1;
+  string state = 2; // local_application_ready/degraded/stopping
+  string reason_code = 3;
+  shiki.v1.SystemInfo system = 4;
+  shiki.v1.HealthStatus health = 5;
+  repeated shiki.v1.PluginStatus plugins = 6;
+  bool remote_listener_ready = 7;
+  shiki.v1.ClaudeVersion claude_version = 8;
+  string claude_login_state = 9; // reported_logged_in/reported_logged_out/unknown；仅 CLI 报告
+  string external_peer_acceptance = 10; // pending；本地诊断不证明外部 peer 可达
+}

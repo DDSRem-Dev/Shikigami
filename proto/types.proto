@@ -1,0 +1,561 @@
+syntax = "proto3";
+package shiki.v1;
+
+option go_package = "github.com/DDSRem-Dev/Shikigami/pkg/protocol";
+
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/struct.proto";
+
+// Empty 表示空消息
+message Empty {}
+
+// 版本协商：相同 major、minor 区间交集，选择交集最大值。
+message ProtocolOffer {
+  uint32 major = 1;
+  uint32 min_minor = 2;
+  uint32 max_minor = 3;
+  repeated string capabilities = 4;
+  repeated string required_capabilities = 5;
+}
+message ProtocolAgreement {
+  uint32 major = 1;
+  uint32 minor = 2;
+  repeated string capabilities = 3; // 双方可用能力的交集
+  string build_version = 4;        // 仅用于诊断，不用于代替协议版本
+  string daemon_id = 5;            // 仅远端已认证协商填写；用于固定/复核 daemon 身份
+  repeated string granted_permissions = 6; // 同一次认证的有效已知权限，展开通配符；不包含 Token/账户字段
+}
+message ListPluginsRequest {}
+message ListPluginsResponse { repeated PluginStatus plugins = 1; }
+message PluginStatus {
+  string plugin_id = 1;
+  string build_version = 2;
+  bool enabled = 3;        // 已持久化的期望状态
+  string state = 4;        // stopped/starting/ready/failed/incompatible
+  string revision = 5;     // 配置和期望状态 revision
+  string reason_code = 6;
+  ProtocolAgreement protocol = 7;
+}
+message ManagePluginRequest {
+  enum Action {
+    ACTION_UNSPECIFIED = 0;
+    ENABLE = 1;
+    DISABLE = 2;
+    RESTART = 3;
+    SET_CONFIG = 4;
+  }
+  string plugin_id = 1;
+  Action action = 2;
+  google.protobuf.Struct config = 3; // 仅 SET_CONFIG，按插件 schema 验证
+  string expected_revision = 4;
+  string request_id = 5; // 包括 restart 的去重，不能重复重启
+}
+message PluginLogsRequest {
+  string plugin_id = 1;
+  uint32 tail = 2; // 0=仅后续，最大 1000 行
+  bool follow = 3;
+}
+message LogRecord {
+  int64 timestamp = 1;
+  string level = 2;
+  string message = 3; // 宿主脱敏后的有界内容
+  map<string, string> fields = 4;
+}
+message StatsRequest {
+  string session_id = 1; // 空=系统与全部有权查看的会话
+  uint32 interval_seconds = 2; // WatchStats 默认 5，允许 1–60
+}
+message SessionStats {
+  string session_id = 1;
+  optional double cpu_percent = 2;
+  optional int64 memory_bytes = 3;
+}
+message StatsSnapshot {
+  int64 timestamp = 1;
+  optional double cpu_percent = 2; // 一个逻辑核为 100%
+  optional int64 memory_used_bytes = 3;
+  optional int64 disk_free_bytes = 4;
+  repeated SessionStats sessions = 5;
+}
+
+
+// ============================================
+// 项目相关
+// ============================================
+
+message Project {
+  string id = 1;                    // 项目 ID (proj_abc123)
+  string name = 2;                  // 项目名称
+  string path = 3;                  // 远端路径
+  string user = 4;                  // 所属用户
+  int64 created_at = 5;             // 创建时间（Unix 时间戳）
+  repeated string session_ids = 6;  // 会话 ID 列表
+  map<string, string> metadata = 7; // 元数据
+}
+
+message ListProjectsRequest {
+  string user = 1;                  // 可选：按用户过滤
+}
+
+message ListProjectsResponse {
+  repeated Project projects = 1;
+}
+
+message CreateProjectRequest {
+  string name = 1;                  // 项目名称
+  string path = 2;                  // 远端路径
+  map<string, string> metadata = 3;
+  string request_id = 4;
+}
+
+message GetProjectRequest {
+  string id = 1;                    // 项目 ID
+}
+
+message DeleteProjectRequest {
+  string id = 1;                    // 项目 ID
+  reserved 2;
+  reserved "delete_files";            // 删除管理记录不删除项目文件
+}
+
+message ListProjectDirectoriesRequest {
+  string project_id = 1;
+  string path = 2; // 空=根；仅规范化项目相对目录，禁止符号链接
+  uint32 page_size = 3; // 0=50，最大100
+  string page_token = 4; // 绑定项目/path/目录观测版本，变化返回Aborted
+}
+message ListProjectDirectoriesResponse {
+  string project_id = 1;
+  string path = 2;
+  repeated string directories = 3; // 直接子目录，项目相对路径，字典排序
+  string next_page_token = 4;
+}
+
+// ============================================
+// 会话相关
+// ============================================
+
+message Session {
+  // 基本信息
+  string id = 1;                    // 会话 ID (sess_main_001)
+  string project_id = 2;            // 所属项目 ID
+  string name = 3;                  // 会话名称 (main, frontend, backend)
+  string working_dir = 4;           // 工作目录
+
+  // 时间信息
+  int64 created_at = 5;             // 创建时间
+  int64 last_active = 6;            // 最后活跃时间
+
+  // tmux 信息
+  string tmux_session = 7;          // tmux 会话名称
+  string tmux_window = 8;           // tmux 窗口
+  string tmux_pane = 9;             // tmux 窗格
+
+  // Claude Code 状态
+  string claude_status = 10;        // starting, running, crashed, stopped, unknown
+  int32 claude_pid = 11;            // Claude Code 进程 ID
+  string claude_context = 12;       // 用户备注，不推断 Claude 内部状态
+
+  // 连接信息
+  int32 client_count = 13;          // 当前连接的客户端数量
+  bool is_connected = 14;           // 派生值：client_count > 0
+
+  // 元数据
+  string description = 15;          // 描述
+  repeated string tags = 16;        // 标签
+  map<string, string> metadata = 17;
+
+  // 资源使用
+  double cpu_usage = 18;            // CPU 使用率
+  int64 memory_usage = 19;          // 内存使用（字节）
+  string lifecycle = 20;            // creating, ready, failed, deleting
+  optional bool auto_start_claude = 21; // 期望启动配置
+  string control_revision = 22;     // 当前控制权版本
+  string controller_attachment_id = 23; // 无控制者时为空
+  optional int64 cleanup_warning_at = 24; // 持久预警实际发布时刻（Unix秒）
+  optional int64 cleanup_after = 25; // 最早自动清理时刻（Unix秒），执行时仍重新核验
+  string cleanup_status = 26; // disabled/live_pane/attached/not_explicitly_stopped/observing/warned/unknown
+}
+
+message ListProjectSessionsRequest {
+  string project_id = 1;            // 项目 ID
+}
+
+message ListProjectSessionsResponse {
+  repeated Session sessions = 1;
+}
+
+message ListSessionsRequest {
+  string user = 1;                  // 可选：按用户过滤
+  string status = 2;                // 可选：按状态过滤
+  repeated string tags = 3;         // 可选：按标签过滤
+}
+
+message ListSessionsResponse {
+  repeated Session sessions = 1;
+}
+
+message CreateSessionRequest {
+  string project_id = 1;            // 必须：所属项目
+  string name = 2;                  // 会话名称
+  string working_dir = 3;           // 工作目录
+  string description = 4;           // 描述
+  repeated string tags = 5;         // 标签
+  map<string, string> metadata = 6;
+  optional bool auto_start_claude = 7; // 省略默认 true，显式 false 不启动
+  string request_id = 8;
+}
+
+message GetSessionRequest {
+  string id = 1;                    // 会话 ID
+}
+
+message UpdateSessionRequest {
+  string id = 1;
+  string description = 2;
+  repeated string tags = 3;
+  map<string, string> metadata = 4;
+  google.protobuf.FieldMask update_mask = 5; // 仅允许 name/description/tags/metadata
+  string name = 6; // 仅改显示名；同项目内唯一，id 与 tmux 会话标识不变
+}
+
+message SessionScreen {
+  string session_id = 1;
+  string text = 2; // 当前可见屏幕的 UTF-8 纯文本，最多 128 KiB；不含滚屏历史
+  uint32 cols = 3;
+  uint32 rows = 4; // 观测到的尺寸；并发 resize 时不保证与 text 为原子快照
+  bool truncated = 5;
+  int64 captured_at = 6; // Unix 秒
+}
+
+message SessionLogsRequest {
+  string session_id = 1;
+  uint32 max_lines = 2; // 0=200，最大2000
+}
+message SessionLogs {
+  string session_id = 1;
+  string text = 2; // tmux尚保留的滚屏+当前网格的纯文本尾部，最多128KiB；非完整/持久日志
+  int64 captured_at = 3;
+  bool truncated = 4; // 行数/字节上限省略了本次仍保留的内容；不表示更早历史完整
+  string state = 5; // available/not_retained/unavailable
+  string reason_code = 6;
+  optional int32 exit_code = 7; // 仅同一已验证dead pane的已知退出码
+}
+
+message DeleteSessionRequest {
+  string id = 1;                    // 会话 ID
+  reserved 2;
+  reserved "delete_files";            // 删除管理记录不删除项目文件
+}
+
+message TakeControlRequest {
+  string session_id = 1;
+  string attachment_id = 2; // 已连接、非只读且具备 write 权限的目标
+  string expected_control_revision = 3; // READY/CONTROL_CHANGED 返回的水位
+  string request_id = 4;
+}
+
+message SessionActionRequest {
+  string session_id = 1;
+}
+
+// ============================================
+// 终端 I/O
+// ============================================
+
+message TerminalOpen {
+  string session_id = 1;
+  bool read_only = 2;
+  ResizeEvent size = 3;
+  string device_name = 4;
+}
+
+message TerminalInput {
+  reserved 1;
+  reserved "session_id";
+  oneof payload {
+    bytes data = 2;
+    ResizeEvent resize = 3;
+    ControlCommand control = 4;
+    TerminalOpen open = 5;
+  }
+}
+
+message TerminalOutput {
+  string session_id = 1;
+  oneof payload {
+    bytes data = 2;
+    SessionEvent event = 5;
+  }
+  uint64 sequence = 3; // 仅本次 attachment 内单调递增；不用于重放
+  int64 timestamp = 4;
+  string attachment_id = 6; // 服务端 READY 首帧分配
+}
+
+message ResizeEvent {
+  uint32 rows = 1;                  // 行数
+  uint32 cols = 2;                  // 列数
+}
+
+message ControlCommand {
+  enum Type {
+    INTERRUPT = 0;                  // Ctrl+C
+    QUIT = 1;                       // Ctrl+\
+    SUSPEND = 2;                    // Ctrl+Z
+  }
+  Type type = 1;
+}
+
+message SessionEvent {
+  enum Type {
+    CLIENT_CONNECTED = 0;           // 客户端连接
+    CLIENT_DISCONNECTED = 1;        // 客户端断开
+    CLAUDE_STARTED = 2;             // Claude Code 启动
+    CLAUDE_STOPPED = 3;             // Claude Code 停止
+    CLAUDE_CRASHED = 4;             // Claude Code 崩溃
+    SESSION_DELETING = 5;           // 会话正在删除
+    READY = 6;                      // data 含 mode/controller_attachment_id/control_revision
+    RESET = 7;                      // 清空终端状态，后续为当前屏幕重绘
+    CONTROL_CHANGED = 8;            // data 含 controller_attachment_id/control_revision
+  }
+  Type type = 1;
+  string message = 2;
+  map<string, string> data = 3;
+}
+
+// ============================================
+// 文件操作
+// ============================================
+
+message ReadFileRequest {
+  string path = 1;
+  string project_id = 2;
+  string expected_revision = 3; // 必须匹配清单/stat 的版本
+}
+
+message FileData {
+  oneof payload {
+    bytes chunk = 1;
+    FileInfo info = 2; // 仅首帧
+  }
+}
+
+message WriteFileHeader {
+  string project_id = 1;
+  string path = 2;
+  string base_revision = 3; // 空表示预期不存在
+  string content_hash = 4;  // SHA-256 十六进制
+  int64 size = 5;
+  uint32 mode = 6;
+}
+
+message WriteFileRequest {
+  oneof payload {
+    WriteFileHeader header = 1;
+    bytes chunk = 2;
+  }
+}
+
+message DeleteFileRequest {
+  string path = 1;
+  string project_id = 2;
+  string expected_revision = 3;
+}
+
+message ListFilesRequest {
+  string project_id = 1;
+  string path = 2;
+  uint32 page_size = 3; // 服务端有最大值
+  string page_token = 4;
+}
+
+message ListFilesResponse {
+  repeated FileInfo files = 1;
+  string next_page_token = 2;
+}
+
+message WatchFilesRequest {
+  string path = 1;
+  repeated string patterns = 2;
+  repeated string ignore = 3;
+  string project_id = 4;
+}
+
+message FileEvent {
+  enum EventType {
+    CREATED = 0;
+    MODIFIED = 1;
+    DELETED = 2;
+    RENAMED = 3;
+    RESCAN_REQUIRED = 4;
+  }
+  EventType type = 1;
+  string path = 2;
+  string old_path = 3;
+  int64 timestamp = 4;
+  int64 size = 5;
+  string project_id = 6;
+  string revision = 7;
+}
+
+message StatFileRequest {
+  string path = 1;
+  string project_id = 2;
+}
+
+message FileInfo {
+  string name = 1;
+  int64 size = 2;
+  uint32 mode = 3;
+  int64 mod_time = 4;
+  bool is_dir = 5;
+  string path = 6; // 项目相对路径
+  string content_hash = 7;
+  string revision = 8;
+}
+
+// ============================================
+// 端口管理
+// ============================================
+
+message ListPortsRequest {
+  string session_id = 1;            // 可选：按会话过滤
+}
+
+message ListPortsResponse {
+  repeated OpenPort ports = 1;
+}
+
+message OpenPort {
+  int32 port = 1;                   // 端口号
+  string protocol = 2;              // 首版仅 tcp
+  string service = 3;               // 服务类型（http, postgres, redis）
+  string process_name = 4;          // 进程名称
+  int32 pid = 5;                    // 进程 ID
+  string session_id = 6;            // 所属会话；无法验证时为空
+  string bind_address = 7;          // 被观测到的监听地址
+  string source_identity = 8;       // 已验证会话/进程启动身份；unknown 为空
+}
+
+// Read-only authorization; never opens a target TCP connection.
+message CheckPortRequest {
+  string remote_address = 1;
+  int32 port = 2;
+  string session_id = 3;
+  bool automatic = 4;
+  string source_identity = 5;
+}
+message CheckPortResponse { OpenPort port = 1; }
+
+message WatchPortsRequest {
+  string session_id = 1;            // 可选：只监听特定会话
+}
+
+message PortEvent {
+  enum EventType {
+    OPENED = 0;                     // 端口开启
+    CLOSED = 1;                     // 端口关闭
+  }
+  EventType type = 1;
+  OpenPort port = 2;
+}
+
+message PortData {
+  enum Type {
+    CONNECT = 0;                    // 建立连接
+    DATA = 1;                       // 数据传输
+    CLOSE = 2;                      // 关闭连接
+    CONNECTED = 3;                  // 目标连接已建立
+    HALF_CLOSE = 4;                 // 本方向 EOF，另一方向仍可读
+  }
+  Type type = 1;
+  int32 port = 2;                   // 端口号
+  bytes data = 3;                   // 数据
+  string connection_id = 4;         // 一条流对应一个 TCP 连接
+  string remote_address = 5;        // CONNECT 时使用，必须是授权的本机地址
+  string session_id = 6; // CONNECT-only, verified by server
+  bool automatic = 7;
+  string source_identity = 8;
+}
+
+// ============================================
+// 系统信息
+// ============================================
+
+message SystemInfo {
+  string os = 1;                    // 操作系统
+  string arch = 2;                  // 架构
+  int32 cpu_cores = 3;              // CPU 核心数
+  int64 total_memory = 4;           // 总内存（字节）
+  int64 free_memory = 5;            // 可用内存
+  int64 total_disk = 6;             // 总磁盘空间
+  int64 free_disk = 7;              // 可用磁盘空间
+  string daemon_version = 8;        // Daemon 版本
+  int64 uptime = 9;                 // 运行时间（秒）
+  string protocol_version = 10;
+  repeated string capabilities = 11;
+  string daemon_id = 12;
+}
+
+message ClaudeVersion {
+  string version = 1;               // Claude Code 版本
+  string path = 2;                  // Claude Code 路径
+}
+
+message HealthStatus {
+  enum Status {
+    HEALTHY = 0;                    // 健康
+    DEGRADED = 1;                   // 降级
+    UNHEALTHY = 2;                  // 不健康
+  }
+  Status status = 1;
+  string message = 2;
+  map<string, string> details = 3;
+}
+
+// ============================================
+// 会话快照
+// ============================================
+
+message Snapshot {
+  string id = 1;
+  string session_id = 2;
+  string session_name = 3;
+  int64 created_at = 4;
+  string description = 5; // 快照说明
+  string working_dir = 6; // 项目相对目录，恢复时重新验证
+  reserved 7, 8, 9;
+  reserved "claude_context_path", "files", "environment";
+  string project_id = 10;
+  repeated string tags = 11;
+  map<string, string> metadata = 12; // 仅允许的非敏感配置
+  optional bool auto_start_claude = 13;
+  uint32 schema_version = 14;
+  string session_description = 15;
+}
+
+message CreateSnapshotRequest {
+  string session_id = 1;
+  string description = 2;
+  reserved 3;
+  reserved "include_files"; // 首版只做配置快照
+}
+
+message ListSnapshotsRequest {
+  string project_id = 1;            // 可选：按项目过滤
+  string session_id = 2;            // 可选：按会话过滤
+}
+
+message ListSnapshotsResponse {
+  repeated Snapshot snapshots = 1;
+}
+
+message RestoreSnapshotRequest {
+  string snapshot_id = 1;           // 快照 ID
+  string new_session_name = 2;      // 新会话名称
+  string request_id = 3;
+}
+
+message DeleteSnapshotRequest {
+  string snapshot_id = 1;           // 快照 ID
+}

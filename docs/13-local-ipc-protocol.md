@@ -1,10 +1,11 @@
 # 本地 agent IPC 协议
 
-本文定义 CLI/TUI/后续 GUI 与 shiki-agent 的进程边界，以及拟建 `proto/agent.proto`。这是协议设计，尚无服务实现；远端与插件消息复用 [09](./09-protocol-definition.md)，不另造一套 Session/FileInfo。
+本文定义 CLI/TUI/后续 GUI 与 shiki-agent 的进程边界及 `proto/agent.proto`。握手、代理、事件和本地资源 API 已有实现与本地测试，逐项验收和剩余门槛见 [08](./08-roadmap.md)/[15](./15-implementation-status.md)；远端与插件消息复用 [09](./09-protocol-definition.md)，不另造一套 Session/FileInfo。协议定义不替代实际业务和部署验收。
 
 ## 1. 传输、身份与启动
 
 - 使用Connect 协议/protobuf over HTTP/2 prior knowledge（h2c）over Unix domain socket；默认 `~/.shiki/run/agent.sock`。目录 0700、socket 0600，Unix socket 路径长度在启动前检查。
+- 公共 socket 名必须在 0600 权限和所有者确认后原子发布，不能让并发前端观察到 bind 后 chmod 前的中间权限。当前 Darwin/Linux 在同一私有目录以短随机名 bind，设定权限后用不覆盖目标的 hard link 发布，随后移除临时名；不修改进程全局 umask，发布/临时名清理失败即报错。Close 在宿主生命周期锁范围内检查 inode，仅移除本实例仍拥有的公共名字；不是抵御任意同 UID rename 的通用原子 CAS。
 - 服务端每次接受连接验证 OS peer UID（Linux SO_PEERCRED、macOS getpeereid 或等价方式）等于运行用户；客户端校验目录/socket 所有者、权限及 peer UID。不接受 TCP 回退、浏览器跨域或仅凭路径名建立信任。
 - socket 内不另加 TLS，安全依赖同用户 IPC。它不是同一 UID 下恶意进程之间的隔离；frontend_id 只是窗口资源归属，不能作为认证凭据。
 - `shiki agent start` 由 CLI 调用用户服务管理器或启动后台进程，不是向尚不存在的进程发送 RPC。所有竞争启动者使用同一个状态目录锁，最多一个实例可创建 tsnet 节点。
@@ -20,7 +21,7 @@ UDS transport 固定拨号该 socket，使用合成 base URL `http://shiki-agent
 1. `shiki.agent.v1.Agent`：本地后台、服务器配置、映射、冲突、监听和插件管理。
 2. `shiki.v1.ShikiDaemon`：**受限代理**，复用 09 的项目/会话/终端消息；agent 负责注入远端 Token 和连接管理。
 
-此外注册 `NodeControl`，用于内嵌 tsnet 的本地引导。daemon 在自己的 `/var/lib/shiki/run/admin.sock` 上仅注册 NodeControl，安装器以 daemon 用户访问；不在该 socket 暴露 agent 业务或远端文件 RPC。NodeControl 独立协商，登录尚未完成也必须可调用。
+此外注册 `NodeControl`，用于内嵌 tsnet 的本地引导。daemon 在自己的 `/var/lib/shiki/run/admin.sock` 上注册 NodeControl 与独立只读 DaemonReadiness，安装器以 daemon 用户访问；不在该 socket 暴露 agent 业务或远端文件 RPC。NodeControl 独立协商，登录尚未完成也必须可调用。GetStatus 属于基础只读诊断，不要求 node.login.v1；关闭节点或身份状态不可用的端点仍以兼容协议与自己的 instance_id 提供实际状态。BeginLogin/CancelLogin 及需要登录的连接流程继续要求 node.login.v1，不能因诊断可读而开放登录。前端读取状态仍须校验同 UID socket、协议 major/minor、实例与截止，不能根据当前磁盘配置猜运行中节点状态。DaemonReadiness 不增加 NodeControl 方法，不注册在远端 listener 或 agent 代理。
 
 前端先调用 Agent.Handshake，发送协议范围、所需能力和设备显示名称。响应包括协议交集、instance_id、frontend_id。其后 Agent 业务调用和代理调用必须携带：
 
@@ -34,11 +35,34 @@ Agent 业务操作的 server_id 来自请求自身；若还携带路由 header�
 
 前端退出调用 ReleaseFrontend，关闭该 frontend 的终端流/订阅；后台 sync/listener 继续。崩溃时以流取消清理 attachment；不持有活动流、10 分钟无调用的 frontend 登记可回收，客户端重新 Handshake。
 
+### daemon 本地安装就绪诊断
+
+`DaemonReadiness.Negotiate/GetStatus` 只在 daemon 的私有 admin.sock 上工作。
+每次调用校验同 UID、拒绝 Authorization；独立协商 `daemon.readiness.v1`，
+后续调用必须携带唯一 `shiki-daemon-readiness-instance-id`。Negotiate 返回
+当前 build、daemon_id 与每次进程启动生成的 instance_id；安装器验证当前选中
+build，并校验 GetStatus 的 instance_id/daemon_id 与协商一致。此服务不提供
+Token、登录 URL、会话、项目、文件或插件管理操作，也不扩大任何代理白名单。
+
+GetStatus 总耗时有界，读取真实宿主/listener 状态，对已启用插件通过当前实例
+执行有界 Health 调用，再复核当前状态；manifest 存在不代表启动成功。返回当前
+能力、插件状态与实际探测的 Claude 版本。Claude 登录以当前运行用户的 HOME/PATH
+执行固定 `auth status --json`，限制 3 秒和 4 KiB 输出，仅接受严格布尔 loggedIn，
+丢弃其他字段和原始 stderr；成功退出返回 reported_logged_in/reported_logged_out，
+已知 exit 1 加严格 false 也表示 reported_logged_out；其他失败、超时、
+不支持或非规范响应保持 unknown。缺依赖、登录未报告成功或启用插件未 ready 返回 degraded。
+`local_application_ready` 仅证明这些本地条件；CLI 报告登录不证明远端账号端到端
+可用，`external_peer_acceptance=pending` 仍独立保留。
+诊断不创建会话、不改业务文件、不初始化身份、不发行 Token，不允许把这个状态
+重命名为整套部署已验收。协议新增运行态消息，不修改持久配置或认证状态 schema。
+
 ## 3. 代理白名单与终端
 
-允许代理：项目四个 RPC；会话 ListProjectSessions/ListSessions/Create/Get/Update/Delete/TakeControl/StopClaude/RestartClaude；TerminalStream；四个配置快照 RPC；ListPorts/WatchPorts；GetSystemInfo/GetClaudeVersion/HealthCheck/GetStats/WatchStats。
+允许代理：项目 CreateProject/GetProject/ListProjects/DeleteProject/ListProjectDirectories；会话 ListProjectSessions/ListSessions/Create/Get/Update/Delete/TakeControl/StopClaude/RestartClaude/GetSessionScreen/GetSessionLogs；TerminalStream；四个配置快照 RPC；ListPorts/WatchPorts；GetSystemInfo/GetClaudeVersion/HealthCheck/GetStats/WatchStats。
 
 不向前端开放代理 Read/Write/Delete/List/Stat/WatchFiles、ForwardPort、远端插件管理或 NegotiateProtocol。前端用本地冲突/转发/插件接口；agent 自行完成 daemon 协商，数据面由插件 CoreAPI 访问。未列方法返回 PermissionDenied。这个白名单是路由分工，同 UID 的前端本身不是沙箱。
+
+`ListProjectDirectories` 仅为项目内工作目录选择提供受根限制、有界分页的目录名，要求 `file.read` 和 `project.directories.v1`；不是同步文件清单接口，不读取文件内容、不允许符号链接遍历。`GetSessionLogs` 要求 `session.attach` 和 `terminal.logs.v1`，仅返回已验证 pane 尚保留的有界纯文本尾部、截断/可用状态和已知退出码；不是持久日志或终端字节回放。消息、限制及行为详见09；两者均不扩大插件CoreAPI文件能力或开放任意tmux命令。
 
 agent 剥离本地 header，不接受前端提供的远端 Authorization；使用该 server_id 关联的凭据。deadline/cancel 传递到子调用，业务 Connect 错误码经显式重建保留（v2 不能直接返回远端 error，见 14）；增加已脱敏的故障所在层，不无限重试非幂等请求。
 
@@ -48,10 +72,12 @@ TerminalStream 首帧/输出完全使用 09 的 TerminalInput/Output。agent 记
 
 ## 4. proto/agent.proto
 
+`ServerRecord.connection_path` 仅为运行态诊断：认证后的 TLS 路径为 `direct-tls`，tsnet 路径仅在 SDK 提供证据时为 `tailscale-direct` 或 `tailscale-relay`，其余为 `unknown`。它不写入服务器配置/资源快照，不携带凭据，也不表示已测得 RTT。连接选择、冷却和重连上限遵循 [02](./02-connection-model.md)；耗尽以 `RECONNECT_EXHAUSTED` 报告，后台定时器不能自动重置次数。
+
 ```protobuf
 syntax = "proto3";
 package shiki.agent.v1;
-option go_package = "github.com/yourusername/shikigami/pkg/protocol/agent";
+option go_package = "github.com/DDSRem-Dev/Shikigami/pkg/protocol/agent";
 import "types.proto";
 import "plugin.proto";
 
@@ -64,6 +90,7 @@ service Agent {
   rpc UpsertServer(UpsertServerRequest) returns (ServerRecord);
   rpc RemoveServer(RemoveServerRequest) returns (shiki.v1.Empty);
   rpc SetServerCredential(SetServerCredentialRequest) returns (ServerRecord);
+  rpc GetStartupPolicy(shiki.v1.Empty) returns (StartupPolicy);
   rpc GetPreferences(shiki.v1.Empty) returns (Preferences);
   rpc SetPreferences(SetPreferencesRequest) returns (Preferences);
   rpc ListMappings(ListMappingsRequest) returns (shiki.plugin.v1.MappingList);
@@ -100,6 +127,16 @@ message AgentStatus {
   uint32 active_sync_tasks = 5;
   uint32 active_forwards = 6;
 }
+message StartupPolicy {
+  string cli_auto_start = 1; // enabled/disabled/unknown; agent启动时加载的CLI按需配置，不是当前磁盘或登录启动
+  string manager = 2; // launchd/systemd-user/unknown
+  string managed_service = 3; // present/absent/unknown; 仅本产品标准受管服务
+  string login_start = 4; // enabled/disabled/unknown
+  string boot_start = 5; // enabled/disabled/unknown/not_applicable
+  string reason_code = 6; // 有限诊断，不返回服务命令、环境或原始输出
+  int64 observed_at = 7; // Unix ms；配置观察时间，不是实际重启验收
+  string config_path = 8; // agent启动时加载的配置来源；无文件来源时为空
+}
 message ShutdownRequest {
   string expected_instance_id = 1;
   string request_id = 2;
@@ -121,6 +158,8 @@ message ServerRecord {
   string connection_state = 5; // offline/connecting/ready/auth_required/incompatible
   string reason_code = 6;
   shiki.v1.ProtocolAgreement remote_protocol = 7;
+  string connection_path = 8; // 仅运行态：tailscale-direct/tailscale-relay/direct-tls/unknown
+  repeated string connection_attempts = 9; // 最近一次路由选择实际factory顺序：tsnet/direct-tls，最多2；仅运行态，空表示未报告
 }
 message ServerList { repeated ServerRecord servers = 1; }
 message UpsertServerRequest {
@@ -219,6 +258,28 @@ message BeginLoginRequest {
   string request_id = 3;
 }
 message CancelLoginRequest { string login_id = 1; }
+
+// 同 UID、只读 daemon 安装诊断；仅注册在 daemon admin.sock。
+service DaemonReadiness {
+  rpc Negotiate(shiki.v1.ProtocolOffer) returns (ReadinessNegotiation);
+  rpc GetStatus(shiki.v1.Empty) returns (DaemonReadinessStatus);
+}
+message ReadinessNegotiation {
+  shiki.v1.ProtocolAgreement protocol = 1;
+  string instance_id = 2;
+}
+message DaemonReadinessStatus {
+  string instance_id = 1;
+  string state = 2; // local_application_ready/degraded/stopping
+  string reason_code = 3;
+  shiki.v1.SystemInfo system = 4;
+  shiki.v1.HealthStatus health = 5;
+  repeated shiki.v1.PluginStatus plugins = 6;
+  bool remote_listener_ready = 7;
+  shiki.v1.ClaudeVersion claude_version = 8;
+  string claude_login_state = 9; // reported_logged_in/reported_logged_out/unknown；仅 CLI 报告
+  string external_peer_acceptance = 10; // pending；本地诊断不证明外部 peer 可达
+}
 ```
 
 ## 5. 操作与持久化语义
@@ -263,11 +324,11 @@ WatchEvents 首帧发送 rescan_required，随后发送有序状态提示；客�
 | agent status/stop | Handshake → GetStatus/Shutdown |
 | connect / servers add/update | UpsertServer + write-only SetServerCredential；必要时 NodeControl 登录 |
 | servers switch | Get/SetPreferences，显式服务器参数仍优先 |
-| sessions / attach / @ / snapshot | 带 server header 的 ShikiDaemon 白名单代理 |
+| sessions / sessions snapshot / attach / @ | 带 server header 的 ShikiDaemon 白名单代理 |
 | init --template | 前端加载模板并调用项目/会话代理；不绕过 agent |
 | sync status/pause/resume/resolve | GetSyncState / PutMapping / ResolveConflict |
 | ports list/forward/stop | ListForwards / CreateForward / StopForward |
-| plugins list/enable/disable/status/logs/restart | Agent 插件接口，明确 LOCAL/REMOTE |
+| plugins list/enable/disable/status/config/logs/restart | Agent 插件接口，明确 LOCAL/REMOTE |
 | config get/set/edit | 仅上述有类型的配置接口；编辑后校验 revision；凭据永不通过读接口导出 |
 | doctor / stats / dashboard | Agent/NodeControl 状态 + 远端 SystemInfo/Stats 代理 + WatchEvents |
 
@@ -280,3 +341,21 @@ WatchEvents 首帧发送 rescan_required，随后发送有序状态提示；客�
 - 验证 major/minor/capability 不兼容失败、NodeControl 未登录仍可读状态，以及 [11](./11-automated-installation.md) 的 tsnet 引导原型。
 
 通过 schema 编译不等于通过这些运行场景；故障恢复顺序见 [06](./06-edge-cases.md)。
+
+Dashboard 的当前屏幕预览通过显式白名单 `GetSessionScreen` 代理，消息和权限见 09。该接口只读当前屏幕，沿用终端查看权限，不允许任意 tmux 命令、滚屏历史或输入注入。
+
+ServerRecord.remote_protocol 中远端已认证协商返回的 daemon_id 与 granted_permissions 是运行期元数据；不把它们写入资源配置或当作前端可修改的授权。Agent 用协商中的 daemon_id 固定/复核目标身份；旧端无该字段时保留同连接 GetSystemInfo 的明确验证回退，不能因缺少 system.info 而对新端拒绝本来授权的 API。前端使用展开后的确切权限隐藏未授权变更/接管；旧端权限未知时仅保留可由服务端授权的只读观察请求，不推定写权限。服务端始终逐方法和逐流授权。普通业务 PermissionDenied 不表示连接失效，不取消其他已授权流。
+
+## 最近一次路由选择诊断
+
+`ServerRecord.connection_attempts = 9` 是 additive 运行态字段，不增加旧客户端连接必需能力。agent 仅在实际调用 route factory 前记录 `tsnet` 或 `direct-tls`，保留执行顺序且最多两项；失败策略、成功策略和取消前已经执行的策略均可出现。P2P/DERP 由 tsnet 自行选择，不能据此细分或声称实际拨号数量。无凭据读取成功前不记录策略，未尝试或旧端缺字段为空。
+
+列表表示当前服务器代际最近一次发布的路由选择，不是完整重试历史或当前实际路径。代际验证失败的迟到结果丢弃；返回值使用独立切片，前端不可修改宿主观测。服务器持久记录及 request 去重结果剔除运行字段，持久校验拒绝这类运行元数据。CLI doctor/servers 与 TUI 诊断仅接受有限有序词汇，旧端空值或异常内容显示“未报告”，不从配置地址或 connection_path 补造尝试列表。当前路径和有界重连/信任拒绝规则保持独立，详见 02/06。
+
+## 只读启动策略
+
+`GetStartupPolicy` 是 additive 的本地 agent RPC，能力 `agent.startup.v1` 须在 Handshake 双方协商；绑定的 frontend 未取得该能力时拒绝。沿用同 UID、instance/frontend 生命周期、取消与无远端 server scope 的准入，不注册到 daemon 代理。旧 agent 未协商此能力时前端直接报告不支持，不盲调新 RPC；新增字段不改变 Preferences 可编辑 JSON。
+
+`shiki config startup` 仅连接已经运行的 agent。`cli_auto_start` 与 `config_path` 来自该 agent 启动时加载的配置快照；它不是外部改写后的磁盘当前值。无文件来源时不能确认与服务绑定。服务状态实时只读观察，属于运行态，不写配置、receipt 或状态库。仅标准 Shiki 受管服务属于查询范围；absent 不排除自定义 OS 自动化，enabled 仅表示已确认的配置策略，不能当作实际重启/登录验证。systemd-user 的持久启用和 Linger 分开判断；LaunchAgent 的 boot 为 not_applicable。未知/drop-in/绑定不明/读取失败维持 unknown。具体来源与限制见 11。每个 agent 共享一个只读查询 permit，身份/能力检查先于准入；并发请求立即 ResourceExhausted/STARTUP_OBSERVATION_BUSY，不排队、不缓存，取消和所有终态释放。
+
+诊断 reason_code 为有限集合：STARTUP_CONFIGURATION_UNAVAILABLE、STARTUP_MANAGER_UNAVAILABLE、STARTUP_MANAGER_OUTPUT_UNKNOWN、STARTUP_SERVICE_CONFIGURATION_UNKNOWN、STARTUP_MANAGED_SERVICE_ABSENT、STARTUP_MANAGED_SERVICE_DISABLED、STARTUP_LINGER_UNKNOWN、STARTUP_CONFIGURED_POLICY_OBSERVED、STARTUP_OBSERVATION_TIMEOUT。不会转发原始服务命令、环境或错误输出；调用者取消/截止仍作为 RPC 错误返回。

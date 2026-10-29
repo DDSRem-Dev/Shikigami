@@ -1,0 +1,11 @@
+.tools/
+bin/
+dist/
+coverage.out
+*.test
+.DS_Store
+
+internal/plugin/embedded-assets/
+
+__pycache__/
+*.pyc

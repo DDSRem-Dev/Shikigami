@@ -1,6 +1,6 @@
 # 边界情况和错误处理
 
-本文件定义异常行为和验收场景，配合 [10 实现约束](./10-implementation-details.md)。所有功能尚待实现；表内是要求，不是测试结果。
+本文件定义异常行为和验收场景，配合 [10 实现约束](./10-implementation-details.md)。功能正在逐项实现；表内是要求，不是测试结果，当前证据见 [15](./15-implementation-status.md)。
 
 ## 1. 资源与清理
 
@@ -24,6 +24,12 @@ auto_cleanup:
 ```
 
 时长使用统一解析规则（本设计示例用 Go duration 支持的 h/m/s，不能把 `7d` 直接交给 time.ParseDuration）。
+
+自动清理默认关闭，要求 `1s <= warn_before_cleanup < idle_threshold`。daemon 仅对明确 `StopClaude` 的 stopped 会话建立计划；还必须确认同一 tmux session/window/pane 已死亡、没有 attachment。StopClaude 保留一个 shell 的既有行为不变：shell 仍运行时报告 `live_pane`，不安排清理；用户退出 shell 后才开始连续观察。正常退出但未显式 stop、crashed/unknown、孤儿、多 pane/window 或无法确认身份的会话不能据此自动删除。
+
+连续观察到 `idle_threshold - warn_before_cleanup` 后，先持久化预警实际发布时间和最早清理时刻，最早时刻同时不早于完整 idle 阈值及实际预警后的完整窗口。首次观察已经晚于理论预警时间时，仍从本次预警起留足窗口。警告通过 Session 的只读字段、doctor 和 TUI 会话详情展示；离线窗口没有收到推送不冒充已经送达，不把提醒文本注入终端流。删除时仍重新核验，绝不删除项目文件。
+
+daemon 重启不把离线时间记作连续观察：保留已持久化预警，重新开始 idle 观察并延后最早删除时刻；不能缩短旧窗口。重新连接、重启 Claude、活 pane/身份变化、观测失败或时钟倒退取消旧计划。删除意图独立持久化；恢复只允许原 dead pane 或原资源已不存在，不能进入显式手动删除的无条件清理分支。tmux 服务端队列检查精确身份、单窗口/单 pane 和死亡状态后删除；不宣称对任意外部 OS 操作拥有通用 CAS。
 
 ## 2. 网络与长连接
 
