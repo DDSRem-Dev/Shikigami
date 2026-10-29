@@ -121,7 +121,7 @@ e21f6dd671ea5042c43c492b759b933dda73985f89a823b43c651ff7c787c17d
 
 2026-10-29宿主清理修复已完成限定范围的双平台验收：692基础源中仅host/supervisor两份生产文件变化，补齐CoreAPI处理器实际join、并发Stop独立截止、失败Launch锁归属及晚启动进程回收；增加一个诊断脚本后的693源验证真实同步、转发、worker/host轮换、在途文件恢复与架构边界。原生及Linux相关race/vet通过，Linux应用/collector退出0、精确容器/快照清理完成。详见[修复](15-implementation-status.md#evidence-host-handler-ownership)与[受影响验收](15-implementation-status.md#evidence-host-cleanup-affected-validation)。
 
-这不是当前全部平台的完整发行验收。原macOS默认12小时成功仅覆盖原495文件，原Linux578文件运行已失败；独立观察夹具修复与637文件预检不能替代默认时长验收。资源稳定、真实账号/物理平台及其余分发门槛仍待；专用公钥、公开发行源和Issues入口已验证，路线图当前31/42。新697源Linux默认12小时运行已于10:40启动，仍未验收，见[独立运行](15-implementation-status.md#evidence-default-rotation-linux-current)。11要求的登录/开机启动策略配置展示已完成双平台相关验证和真实systemd四态查询；仅报告受管配置，不是实际重启/登录验收，见[启动策略](15-implementation-status.md#evidence-startup-policy-validation)。该后续实现不进入已运行697快照。
+这不是当前全部平台的完整发行验收。原macOS默认12小时成功仅覆盖原495文件，原Linux578文件运行已失败；独立观察夹具修复与637文件预检不能替代默认时长验收。资源稳定、真实账号/物理平台及其余分发门槛仍待；专用公钥、公开发行源和Issues入口已验证，路线图当前31/42。697源Linux默认12小时已完成12h30m3.603s/4368轮，四角色自然轮换、30分钟恢复尾部和清理经独立终态核验通过，见[最终核验](15-implementation-status.md#evidence-default-linux-final-20261029)；不等于当前alpha长稳或资源无泄漏。11要求的登录/开机启动策略配置展示已完成双平台相关验证和真实systemd四态查询；仅报告受管配置，不是实际重启/登录验收，见[启动策略](15-implementation-status.md#evidence-startup-policy-validation)。该后续实现不进入已运行697快照。
 
 ## 发布说明草稿
 
