@@ -1,6 +1,6 @@
 # 首版发布说明草稿与交付门槛
 
-更新：2026-10-29。本文件是发布准备材料，不是发行公告。首个预发布版本已确定为 `v0.0.1-alpha.1`；发布 tag 尚未创建，最终发行提交尚未确定；签名公钥及受保护的Actions环境已配置；当前没有可供用户下载的正式签名发行版。范围仍由 [08 路线图](./08-roadmap.md) 决定，本文件不另设较小的“完成”标准。
+更新：2026-10-29。本文件是发布准备材料，不是发行公告。首个预发布版本已确定为 `v0.0.1-alpha.1`；发布 tag 尚未创建，最终发行提交尚未确定；签名公钥及受保护的Actions环境已配置，四目标签名预发布产物已生成并本机复验；当前尚无公开Release。范围仍由 [08 路线图](./08-roadmap.md) 决定，本文件不另设较小的“完成”标准。
 
 ## 首发兼容基线
 
@@ -31,7 +31,7 @@ CI采用 `v0.0.0-ci`，后续预发布应从通过验收的固定提交显式构
 
 ## GitHub Actions 自动签名
 
-**当前操作进度（2026-10-29）：** [运行40877214329](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40877214329)已为`v0.0.1-alpha.1`完成来源gate及四目标构建/上传，使用成功CI `40872062129`的提交`92cafaf88d834e84678186aa4e083e35e0439d88`。四个unsigned artifact可审阅；sign任务正在等待`release-signing`环境审批。由DDSRem打开该运行，选择 **Review deployments → release-signing → Approve and deploy**。审批后才执行归档校验、签名、独立验签和签名产物上传；当前没有签名成功或发布完成结论。
+**当前操作进度（2026-10-29）：** [运行40877214329](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40877214329)已成功。DDSRem已批准release-signing；`v0.0.1-alpha.1`四目标完成构建、签名、独立验签和上传，来源为成功CI `40872062129`的提交`92cafaf88d834e84678186aa4e083e35e0439d88`。`signed-v0.0.1-alpha.1`包含22文件，已下载至`dist/v0.0.1-alpha.1/`；本机使用可信仓库verifier和仓库公钥再次验证四份签名、14成员及全部payload hash、pin、版本/目标/来源与远端回执，全部通过。尚未公开发布或执行这些签名包的安装/运行验收。
 
 用户已选择Actions自动签名，并授权生成专用Ed25519密钥和本机私有备份。
 正式公钥为 [configs/release-signing.pub](../configs/release-signing.pub)，其规范SPKI DER的SHA-256指纹为：
@@ -72,9 +72,9 @@ GitHub环境 `release-signing` 已配置必需审批人 `DDSRem`，仅允许 `ma
 
 ## 当前候选与验收边界
 
-文档提交`9fe8e22`的后续CI `40867762758`暴露了Ubuntu凭据轮换夹具中持久客户端误用1秒业务预算，显式冲突解决超时；macOS及四目标打包通过。当前修正夹具以使用文档默认预算，客户端deadline及真实hostrotation双角色定向race通过；随后提交`8f4e4fac83fac5ad73fcafe2ccc53a3f3ff6bb4c`的[CI 40870240722](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40870240722)六项job全部成功，Ubuntu/macOS的hostrotation整包race与完整CI通过。签名建议使用该新成功运行作为`ci_run_id`并固定其来源；远端签名尚未执行，审批和发布门槛保留。`40865903512`历史成功与`40867762758`失败均保留。
+文档提交`9fe8e22`的后续CI `40867762758`暴露了Ubuntu凭据轮换夹具中持久客户端误用1秒业务预算，显式冲突解决超时；macOS及四目标打包通过。当前修正夹具以使用文档默认预算，客户端deadline及真实hostrotation双角色定向race通过；随后提交`8f4e4fac83fac5ad73fcafe2ccc53a3f3ff6bb4c`的[CI 40870240722](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40870240722)六项job全部成功，Ubuntu/macOS的hostrotation整包race与完整CI通过。随后签名实际选用了文档收尾后的成功CI `40872062129`，当前结果见上文；公开发布门槛保留。`40865903512`历史成功与`40867762758`失败均保留。
 
-提交`68f93b0bfb6f09743bb17f3e43f57561276fc785`的[CI 40865903512](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40865903512)已完整成功，六项job全部通过，包括Ubuntu/macOS测试、独立终端语义与四目标未签名打包。该成功运行可作为上述签名工作流的`ci_run_id`，构建来源固定为此SHA；文档后续提交不改变此来源。远端签名尚未执行，仍需受保护环境审批；CI通过不代表已创建tag/Release或满足外部、平台与长期资源门槛。
+提交`68f93b0bfb6f09743bb17f3e43f57561276fc785`的[CI 40865903512](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40865903512)已完整成功，六项job全部通过，包括Ubuntu/macOS测试、独立终端语义与四目标未签名打包。该成功运行可作为上述签名工作流的`ci_run_id`，构建来源固定为此SHA；文档后续提交不改变此来源。后续签名已由受保护环境审批并成功，实际来源见上文；CI通过不代表已创建tag/Release或满足外部、平台与长期资源门槛。
 
 第二轮CI `40862770945` 已确认端口修复通过，但Ubuntu出现探测deadline/transport取消顺序竞态；macOS和四目标打包成功。共享探测分类已补确定性红绿、保持原预算与信任拒绝边界，后由CI `40865903512`完整复验通过；原失败运行仍不可用于签名。
 
@@ -145,7 +145,7 @@ Shikigami 通过本地 CLI/TUI 和常驻 agent 使用远端普通用户的 tmux/
 
 目前使用可信源码构建或已经独立验证的本地 bundle。`SHIKI_VERSION=<固定版本> make release` 产生本机目标 tarball、release.json、SHA256SUMS、archive digest 和 checksums pin；默认不签名；显式配置 `SHIKI_SIGNING_KEY` 时追加本地 Ed25519 签名。它不会上传、创建 tag 或建立下载渠道。不同目标必须独立构建，不在同一工作树并行生成内嵌产物。
 
-安装前验证整个归档和来源，之后再解包/运行脚本或 helper。对刚下载文件自行计算摘要只能发现后续变化，不能证明发布者身份。调用 helper 时仍必须传入独立可信的 `--checksums-sha256`；不能从未认证的同一归档读出一个值就称完成发布者验证。可信源码 verifier 配合独立公钥、固定 version/OS/arch 认证归档，再生成新私有副本与认证 pin；新增显式HTTPS下载入口先验签再取归档，安装仍使用本地认证副本，当前验收范围见15/16。操作说明见[固定版本发布认证](11-automated-installation.md#本地离线签名与验签)。专用公钥与受保护Actions签名身份现已配置，见本页自动签名章节；实际远端签名运行、可信公开分发和轮换/撤销演练仍待验。
+安装前验证整个归档和来源，之后再解包/运行脚本或 helper。对刚下载文件自行计算摘要只能发现后续变化，不能证明发布者身份。调用 helper 时仍必须传入独立可信的 `--checksums-sha256`；不能从未认证的同一归档读出一个值就称完成发布者验证。可信源码 verifier 配合独立公钥、固定 version/OS/arch 认证归档，再生成新私有副本与认证 pin；新增显式HTTPS下载入口先验签再取归档，安装仍使用本地认证副本，当前验收范围见15/16。操作说明见[固定版本发布认证](11-automated-installation.md#本地离线签名与验签)。专用公钥与受保护Actions签名身份已完成真实运行及本机再次验签，见本页自动签名章节；真实签名包安装/运行、可信公开分发和轮换/撤销演练仍待验。
 
 此前608文件冻结源码的实际完整`make release`已在macOS arm64和普通用户Linux arm64容器通过：一次性测试密钥签名、可信源码verifier配合独立公钥验签、认证私有副本解包、六二进制版本核对、真实helper暂存（macOS client；Linux client/daemon）。仅生成可审查服务文件，未激活或发布；详见[完整签名构建](15-implementation-status.md#evidence-current-release-validation)。此证据补齐先前旧developer归档的构建来源范围，不建立正式发布者身份。
 
@@ -179,7 +179,7 @@ Shikigami 通过本地 CLI/TUI 和常驻 agent 使用远端普通用户的 tmux/
 
 ## 发布前仍必须取得的结果
 
-正式发行时，应以一个冻结源码候选重新填写版本、不可变提交/tag、实际通过的 CI 运行、平台/服务/外部账号矩阵、所有归档及其摘要、签名身份与验证方式、升级限制和真实支持入口。当前这些元数据未确定，不能用本地测试版本名或占位 URL 冒充。
+正式发行时，应以一个冻结源码候选重新填写版本、不可变提交/tag、实际通过的 CI 运行、平台/服务/外部账号矩阵、所有归档及其摘要、签名身份与验证方式、升级限制和真实支持入口。当前已确定v0.0.1-alpha.1、92cafaf源码、CI40872062129、签名运行40877214329、四目标归档及专用公钥；公开tag/下载URL、完整平台/服务/外部账号验收与支持入口尚未确定，不能用占位URL冒充。
 
 必须补齐 [08](./08-roadmap.md) 的剩余门槛，再从本草稿删去不适用的草稿描述；不能仅因文档已写完就把发布条目勾选。持续负载要记录真实完成时长、尾部恢复与清理，性能结论需给工作负载和资源预算。隔离磁盘满、精确fsync错误及新进程恢复已有[故障专项证据](15-implementation-status.md#evidence-fault-validation)，不等同真实硬件掉电或全部提交点覆盖。当前依赖扫描没有受影响的已导入包，仍有未导入 OpenPGP 的模块级公告；见 [安全报告](15-implementation-status.md#evidence-security-validation)，不能写成“没有任何漏洞”。
 
