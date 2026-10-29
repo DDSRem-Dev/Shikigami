@@ -31,6 +31,8 @@ CI采用 `v0.0.0-ci`，后续预发布应从通过验收的固定提交显式构
 
 ## GitHub Actions 自动签名
 
+**当前操作进度（2026-10-29）：** [运行40877214329](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40877214329)已为`v0.0.1-alpha.1`完成来源gate及四目标构建/上传，使用成功CI `40872062129`的提交`92cafaf88d834e84678186aa4e083e35e0439d88`。四个unsigned artifact可审阅；sign任务正在等待`release-signing`环境审批。由DDSRem打开该运行，选择 **Review deployments → release-signing → Approve and deploy**。审批后才执行归档校验、签名、独立验签和签名产物上传；当前没有签名成功或发布完成结论。
+
 用户已选择Actions自动签名，并授权生成专用Ed25519密钥和本机私有备份。
 正式公钥为 [configs/release-signing.pub](../configs/release-signing.pub)，其规范SPKI DER的SHA-256指纹为：
 
