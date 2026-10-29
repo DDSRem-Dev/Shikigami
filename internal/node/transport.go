@@ -8,7 +8,6 @@ import (
 	"net/netip"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"connectrpc.com/connect/v2"
@@ -40,7 +39,7 @@ func (n *Node) Dial(ctx context.Context, network, address string) (net.Conn, err
 	if server == nil || lc == nil || state != "online" || lease == nil || lease.Err() != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, "NODE_AUTH_REQUIRED")
 	}
-	status, err := lc.Status(ctx)
+	status, err := n.queryStatus(ctx, lc, generation)
 	if err != nil {
 		if cause := ctx.Err(); cause != nil {
 			return nil, connection.RebuildError(cause)
@@ -57,6 +56,12 @@ func (n *Node) Dial(ctx context.Context, network, address string) (net.Conn, err
 	if peer.Expired {
 		return nil, connect.NewError(connect.CodePermissionDenied, "PEER_KEY_EXPIRED")
 	}
+	n.mu.Lock()
+	identity := n.peers[ip]
+	n.mu.Unlock()
+	if identity.key != peer.PublicKey {
+		return nil, connect.NewError(connect.CodePermissionDenied, "UNKNOWN_TAILNET_PEER")
+	}
 	conn, err := dialUserspaceTCP(ctx, server, netip.AddrPortFrom(ip, uint16(number)), peer.PublicKey)
 	if err != nil {
 		return nil, err
@@ -68,22 +73,9 @@ func (n *Node) Dial(ctx context.Context, network, address string) (net.Conn, err
 		_ = conn.Close()
 		return nil, connect.NewError(connect.CodeFailedPrecondition, "NODE_AUTH_REQUIRED")
 	}
-	wrapped := &authorizedConn{Conn: conn}
-	wrapped.stop = context.AfterFunc(lease, wrapped.close)
-	return wrapped, nil
+	return n.bindPeerConn(conn, generation, ip, identity)
 }
 
-// A revoked node lifetime also closes underlying pooled TCP connections, so
-// transport reuse cannot retain sockets from the previous authorization epoch.
-type authorizedConn struct {
-	net.Conn
-	stop func() bool
-	once sync.Once
-	err  error
-}
-
-func (c *authorizedConn) close()       { c.once.Do(func() { c.err = c.Conn.Close() }) }
-func (c *authorizedConn) Close() error { c.stop(); c.close(); return c.err }
 func resolvePeer(status *ipnstate.Status, host string) (*ipnstate.PeerStatus, netip.Addr, error) {
 	normalized := strings.TrimSuffix(strings.ToLower(host), ".")
 	literal, parseErr := netip.ParseAddr(normalized)
@@ -131,11 +123,12 @@ func (n *Node) Listen(port uint16) (net.Listener, error) {
 	}
 	n.mu.Lock()
 	server, state := n.server, n.status.State
+	generation := n.generation
 	n.mu.Unlock()
 	if server == nil || state != "online" {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, "NODE_AUTH_REQUIRED")
 	}
-	return server.Listen("tcp", ":"+strconv.Itoa(int(port)))
+	return n.listenPeerTCP(server, generation, port)
 }
 
 // RPCPool owns a fixed peer's HTTP/2 connections. It never follows redirects or

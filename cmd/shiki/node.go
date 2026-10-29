@@ -79,7 +79,7 @@ func (a *app) nodeCommands() *cobra.Command {
 			defer cancel()
 			ticker := time.NewTicker(100 * time.Millisecond)
 			defer ticker.Stop()
-			for result.State == "authenticating" && result.LoginUrl == "" {
+			for nodeLoginActive(result) && result.LoginUrl == "" {
 				select {
 				case <-ctx.Done():
 					if e = a.print(result); e != nil {
@@ -116,6 +116,16 @@ func (a *app) nodeCommands() *cobra.Command {
 	}})
 	return root
 }
+
+// NeedsLogin may be published while an accepted asynchronous login is still
+// obtaining its URL or authenticating an auth key. Only the active, unexpired
+// attempt is pending; cancellation, expiry and explicit rejection stay terminal.
+func nodeLoginActive(status *apb.NodeStatus) bool {
+	return status.State == "authenticating" ||
+		(status.State == "needs_login" && status.ReasonCode == "NODE_AUTH_REQUIRED" &&
+			status.LoginId != "" && status.LoginExpiresAt > time.Now().Unix())
+}
+
 func readPrivateSecret(path string, limit int64) ([]byte, error) {
 	path, e := client.ConfigPath(path)
 	if e != nil {

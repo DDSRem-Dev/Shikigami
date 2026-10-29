@@ -41,6 +41,7 @@ type Options struct {
 type Node struct {
 	mu                  sync.Mutex
 	opMu                sync.Mutex
+	statusPermit        chan struct{}
 	ctx                 context.Context
 	cancel              context.CancelFunc
 	options             Options
@@ -52,6 +53,10 @@ type Node struct {
 	watchCancel         context.CancelFunc
 	authorization       context.Context
 	authorizationCancel context.CancelFunc
+	peers               peerMap
+	peerRevision        uint64
+	peerConnections     map[*peerConn]struct{}
+	peerListeners       map[uint16]*sdkPeerListener
 	status              *agentpb.NodeStatus
 	attempt             *loginAttempt
 	requests            map[string]*loginAttempt
@@ -174,6 +179,8 @@ func (n *Node) startLocked(attempt *loginAttempt) error {
 	n.mu.Unlock()
 	n.wg.Add(1)
 	go n.watch(watchCtx, lc, generation)
+	n.wg.Add(1)
+	go n.pollStatus(watchCtx, lc, generation)
 	return nil
 }
 func (n *Node) setGenerationFailure(generation uint64, reason string) {
@@ -198,7 +205,9 @@ func (n *Node) Status() *agentpb.NodeStatus {
 }
 func (n *Node) watch(ctx context.Context, lc *local.Client, generation uint64) {
 	defer n.wg.Done()
-	watcher, err := lc.WatchIPNBus(ctx, ipn.NotifyInitialState)
+	// Login errors can arrive before this goroutine subscribes. The SDK keeps
+	// the last error in health state even when the transient ErrMessage is lost.
+	watcher, err := lc.WatchIPNBus(ctx, ipn.NotifyInitialState|ipn.NotifyInitialHealthState)
 	if err != nil {
 		if ctx.Err() == nil {
 			n.setGenerationFailure(generation, "NODE_STATUS_UNAVAILABLE")
@@ -211,30 +220,68 @@ func (n *Node) watch(ctx context.Context, lc *local.Client, generation uint64) {
 		if err != nil {
 			return
 		}
-		if notification.ErrMessage != nil {
-			// Only classify the SDK's explicit control rejection, never dial errors.
-			text := strings.ToLower(*notification.ErrMessage)
-			if strings.Contains(text, "invalid authkey") || strings.Contains(text, "invalid auth key") {
-				if n.rejectAuthKey(generation) {
-					go n.stopGeneration(generation)
-				}
-				continue
+		if authKeyRejected(notification) {
+			if n.rejectAuthKey(generation) {
+				go n.stopGeneration(generation)
 			}
-		}
-		statusCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		status, err := lc.StatusWithoutPeers(statusCtx)
-		cancel()
-		if err != nil {
 			continue
 		}
-		n.applyStatus(generation, status)
+		n.refreshStatus(ctx, lc, generation)
 	}
+}
+
+// SDK bus notifications are lossy. Periodic reconciliation prevents the final
+// peer removal from being missed forever after its notification is dropped.
+func (n *Node) pollStatus(ctx context.Context, lc *local.Client, generation uint64) {
+	defer n.wg.Done()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			n.refreshStatus(ctx, lc, generation)
+		}
+	}
+}
+
+func (n *Node) refreshStatus(ctx context.Context, lc *local.Client, generation uint64) {
+	_, _ = n.queryStatus(ctx, lc, generation)
+}
+
+func (n *Node) queryStatus(ctx context.Context, lc *local.Client, generation uint64) (*ipnstate.Status, error) {
+	// Serialize observation and publication, including Dial, so a slower old
+	// query cannot restore a removed identity. Permit waiting obeys cancellation.
+	// Bound every caller, including a Dial with no outer deadline, so one stalled
+	// LocalAPI request cannot indefinitely block peer-revocation observations.
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	n.mu.Lock()
+	if n.statusPermit == nil {
+		n.statusPermit = make(chan struct{}, 1)
+	}
+	permit := n.statusPermit
+	n.mu.Unlock()
+	select {
+	case permit <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	defer func() { <-permit }()
+	status, err := lc.Status(ctx)
+	if err != nil {
+		return nil, err // Failed observations are not evidence of revocation.
+	}
+	n.applyPeerStatus(generation, status)
+	n.applyStatus(generation, status)
+	return status, nil
 }
 func (n *Node) rejectAuthKey(generation uint64) bool {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	active := n.attempt
-	if generation != n.generation || active == nil || active.finished {
+	if generation != n.generation || active == nil || active.finished || active.interactive {
 		return false
 	}
 	n.status = &agentpb.NodeStatus{State: "denied", ReasonCode: "INVALID_AUTH_KEY", LoginId: active.id}
@@ -319,6 +366,14 @@ func (n *Node) stopLocked() {
 	n.mu.Lock()
 	server := n.server
 	cancel := n.watchCancel
+	connections := make([]*peerConn, 0, len(n.peerConnections))
+	for conn := range n.peerConnections {
+		connections = append(connections, conn)
+	}
+	listeners := make([]*sdkPeerListener, 0, len(n.peerListeners))
+	for _, listener := range n.peerListeners {
+		listeners = append(listeners, listener)
+	}
 	if n.authorizationCancel != nil {
 		n.authorizationCancel()
 		n.authorization = nil
@@ -326,10 +381,17 @@ func (n *Node) stopLocked() {
 	}
 	n.server = nil
 	n.local = nil
+	n.peers = nil
 	n.generation++
 	n.mu.Unlock()
 	if cancel != nil {
 		cancel()
+	}
+	for _, listener := range listeners {
+		_ = listener.Close()
+	}
+	for _, conn := range connections {
+		_ = conn.Close()
 	}
 	if server != nil {
 		_ = server.Close()

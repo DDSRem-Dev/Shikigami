@@ -326,7 +326,7 @@ func (a *app) prepareTailnetLogin(ctx context.Context, c *client.Client) error {
 	if !a.interactive() {
 		return errors.New("server saved; embedded node is not online: run shiki node login, then retry connect")
 	}
-	if status.State != "authenticating" {
+	if !nodeLoginActive(status) {
 		status, err = node.API().BeginLogin(ctx, &apb.BeginLoginRequest{Method: &apb.BeginLoginRequest_Interactive{Interactive: true}, RequestId: a.id() + "-login"})
 		if err != nil {
 			return err
@@ -336,7 +336,7 @@ func (a *app) prepareTailnetLogin(ctx context.Context, c *client.Client) error {
 	defer cancel()
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
-	for status.State == "authenticating" && status.LoginUrl == "" {
+	for nodeLoginActive(status) && status.LoginUrl == "" {
 		select {
 		case <-deadline.Done():
 			return errors.New("server saved; login is pending: inspect shiki node status")

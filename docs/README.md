@@ -1,6 +1,6 @@
 # Shikigami 设计文档导航
 
-**状态：当前公开预发布 v0.0.1-alpha.2 已通过 tag 全自动构建、签名、发布并更新 Homebrew Formula；Phase 0–5 尚未完整交付。** 三宿主命令、终端闭环、双端同步/端口插件、监控、配置快照、TUI 与诊断已有实现及本地测试；安装事务和产物工具已有隔离验收，原生macOS LaunchAgent及Linux容器真实systemd生命周期已通过；外部认证、原生VPS/重启登录持久化、完整平台/长稳及其余分发门槛仍未完成。逐项进度见 [08 路线图](./08-roadmap.md)，证据与待完成门槛见 [15 实施记录](./15-implementation-status.md)。00–14 保留设计契约，不能仅凭示例认定功能已经可用。
+**状态：当前公开预发布 v0.0.1-alpha.2 已通过 tag 全自动构建、签名、发布并更新 Homebrew Formula；Phase 0–5 尚未完整交付。** 三宿主命令、终端闭环、双端同步/端口插件、监控、配置快照、TUI 与诊断已有实现及本地测试；安装事务和产物工具已有隔离验收，原生macOS LaunchAgent及Linux容器真实systemd生命周期已通过；官方tsnet登录、进程身份保持与真实P2P/DERP业务流已通过（32/42）；完整认证生命周期、主机重启登录、Claude、完整平台/长稳及其余分发门槛仍未完成。逐项进度见 [08 路线图](./08-roadmap.md)，证据与待完成门槛见 [15 实施记录](./15-implementation-status.md)。00–14 保留设计契约，不能仅凭示例认定功能已经可用。
 
 ## 文档清单
 
@@ -26,7 +26,7 @@
 
 原型复盘与条件估算：[17 原型复盘](./17-prototype-reassessment.md)。公开预发布、自动发布流程与交付门槛：[18 发布准备](./18-release-readiness.md)。
 
-当前候选的证据矩阵与待验条件：[19 本地验收收敛](./19-local-acceptance-closure.md)。完整长跑记录分析：[20 资源审查](./20-long-run-resource-review.md)。隔离签名演练：[21 密钥轮换与撤信](./21-release-key-rotation.md)。Homebrew渠道：[22 分发与安装](./22-homebrew-distribution.md)。
+当前候选的证据矩阵与待验条件：[19 本地验收收敛](./19-local-acceptance-closure.md)。完整长跑记录分析：[20 资源审查](./20-long-run-resource-review.md)。隔离签名演练：[21 密钥轮换与撤信](./21-release-key-rotation.md)。Homebrew渠道：[22 分发与安装](./22-homebrew-distribution.md)。官方网络与认证矩阵：[23 外部tsnet验收](./23-tsnet-external-acceptance.md)。
 
 实施进展：[15 实施与验收记录](./15-implementation-status.md)。每批架构检查：[16 架构与文档一致性](./16-architecture-conformance.md)。
 
