@@ -70,7 +70,7 @@ GitHub环境 `release-signing` 已配置必需审批人 `DDSRem`，仅允许 `ma
 
 ## 当前候选与验收边界
 
-文档提交`9fe8e22`的后续CI `40867762758`暴露了Ubuntu凭据轮换夹具中持久客户端误用1秒业务预算，显式冲突解决超时；macOS及四目标打包通过。当前修正夹具以使用文档默认预算，客户端deadline及真实hostrotation双角色定向race通过，远端复验仍待；`40865903512`作为精确来源的历史成功保留，当前CI稳定性不能仅据旧成功判断。暂不启动签名，待本轮修正完成。
+文档提交`9fe8e22`的后续CI `40867762758`暴露了Ubuntu凭据轮换夹具中持久客户端误用1秒业务预算，显式冲突解决超时；macOS及四目标打包通过。当前修正夹具以使用文档默认预算，客户端deadline及真实hostrotation双角色定向race通过；随后提交`8f4e4fac83fac5ad73fcafe2ccc53a3f3ff6bb4c`的[CI 40870240722](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40870240722)六项job全部成功，Ubuntu/macOS的hostrotation整包race与完整CI通过。签名建议使用该新成功运行作为`ci_run_id`并固定其来源；远端签名尚未执行，审批和发布门槛保留。`40865903512`历史成功与`40867762758`失败均保留。
 
 提交`68f93b0bfb6f09743bb17f3e43f57561276fc785`的[CI 40865903512](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40865903512)已完整成功，六项job全部通过，包括Ubuntu/macOS测试、独立终端语义与四目标未签名打包。该成功运行可作为上述签名工作流的`ci_run_id`，构建来源固定为此SHA；文档后续提交不改变此来源。远端签名尚未执行，仍需受保护环境审批；CI通过不代表已创建tag/Release或满足外部、平台与长期资源门槛。
 
