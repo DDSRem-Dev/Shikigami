@@ -1,5 +1,7 @@
 # 实施与验收记录
 
+**真实签名包验收与tag自动发布准备（2026-10-29）：** 用户授权首个v0.0.1-alpha.1及后续版本均由tag自动构建/签名/公开Release。92cafaf源实际签名候选已完成本机macOS arm64和Linux arm64容器验收，未重建产品：原生LaunchAgent用目标包自身helper完成开发.5→alpha→.5升级回滚69.72秒，另完成私有新prefix/state的新装、双插件、重复安装和卸载；真实systemd252.39完成13生命周期及4活动升级回滚边界、8MiB文件/终端/TCP与身份/状态保留，另完成签名alpha的全新daemon/user-agent安装、四插件、重复安装及卸载。正常服务/PID/容器清理与认证payload后置hash通过；旧native69.17秒只用A-helper的较窄结果、Linuxfresh重复安装把正确unchanged误期望ready的夹具失败及正常清理均保留，修正后通过。生产Go/proto/module及安装/构建包装输入与92cafaf一致，测试夹具支持预构建包；新tag仍会重建，旧验收不冒充新归档字节或构建元数据。已实现release.yml的tag精确来源/master校验、同源完整CI、无密钥四目标构建、隔离签名/验签、22文件及远端digest核验后从草稿公开；保留CI并删除/禁用旧手动sign-release工作流，历史记录保留。38项工具测试、actionlint、真实verifier四目标临时密钥签名及归档/签名篡改拒绝通过。GitHub环境已读回确认仅v*tag、无人工审批、禁止管理员绕过；规则集26129256禁止版本tag更新/删除，无绕过主体，既有私钥不变。七类复核无生产边界/RPC/状态/生命周期/I/O/安装语义偏差；首发说明和真实Issues反馈入口已准备，原42条/29勾选保持，实际tag工作流及公开下载待验证。既有账号、物理/原生平台、长稳/资源、Homebrew及密钥轮换撤销门槛保留；原697长测未改动。
+
 **预发布签名完成（2026-10-29）：** 最新master当时提交`92cafaf88d834e84678186aa4e083e35e0439d88`的[CI 40872062129](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40872062129)最终六项全部成功；首次macOS任务因托管runner容量不足、未执行步骤而取消，只重新调度该任务后成功。[签名运行40877214329](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40877214329)固定`v0.0.1-alpha.1`及上述源码/签名工作流SHA，来源gate、四目标构建上传全部成功；GitHub审批记录确认DDSRem批准release-signing，签名和独立验签及signed artifact上传成功。22文件已下载至`dist/v0.0.1-alpha.1/`，包含四目标归档/hash/pin/签名/回执、公钥与PROVENANCE。本机从可信仓库编译verifier，用仓库公钥逐包验签，再核对14成员与全部payload hash、pin、版本/OS/arch、22文件精确集合、来源CI/签名run/SHA及远端回执，四目标全部通过；不以包内公钥作为唯一信任来源。七类复核确认本批仅执行既有发布流程，生产目录/依赖、RPC/授权、持久状态、生命周期、I/O、CLI/安装契约无变更；审批与分阶段持钥边界保持。原42条/29勾选不变，尚未创建tag/Release或激活部署；真实签名包安装/运行、公开分发、轮换/撤销演练及既有外部/平台/长期资源门槛仍待，旧`.5`和697长测范围不追认。后续文档提交不改变此固定产物来源。
 
 **凭据轮换验收预算修正与远端通过（2026-10-29）：** 仅文档提交`9fe8e22`的[CI 40867762758](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40867762758)中macOS与四目标打包成功，Ubuntu的`TestRealHostCredentialRotation/client`在旧worker回收、端口恢复成功后，显式解决冲突RPC报DeadlineExceeded；共享探测与端口扫描均通过。独立源码复核发现hostrotation把启动探测用的显式1秒Timeout保留到整场业务客户端，覆盖了文档13的短RPC默认5秒、启停15秒；恢复默认Options，启动await原2秒单次/20秒整体、100秒场景与30秒凭据生命周期均不变。增加既有客户端deadline表对ResolveConflict默认/显式预算的验证，保留父截止优先；无生产逻辑、重试或业务断言修改。旧配置本机单次未复现失败，不把远端日志未提供的精确耗时或磁盘争用当作已证实原因。修后定向race组通过：客户端deadline测试1.530秒，真实hostrotation双角色78.115秒，client/server分别36.01/39.42秒；冲突代际保留后显式解决、双向hash、TCP无重放/半关闭尾部、暂停/停止意图、旧PID回收和socket替换全部通过。七类复核确认目录/依赖、RPC/授权、持久状态、进程生命周期、I/O语义和CLI/安装契约未改，验收夹具恢复默认契约。默认12小时夹具的1秒客户端仅用于临时探测、业务客户端本已5秒，现有实验保持原样；原42条/29勾选、外部与长期资源/签名发布门槛保持。CI 40865903512的历史成功保留，但不抵消本轮新失败。远端复验已完成：提交`8f4e4fac83fac5ad73fcafe2ccc53a3f3ff6bb4c`的[CI 40870240722](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40870240722)六项job全部success；Ubuntu/macOS的hostrotation整包race分别217.851/225.350秒通过，agent/client、生成漂移、依赖扫描、构建/vet/race/E2E与独立终端语义均通过，四目标未签名归档/hash/pin校验通过。此记录只属于该精确提交及CI实际配置，条件跳过不计验收；后续文档提交需按自身CI结果判断。
@@ -12,7 +14,7 @@
 
 扫描修复证据：`/var/folders/1n/q373cln10fqb0gl9z1ds5d8m0000gn/T/shiki-scanner-ipv4-device-20261029-1e5si8x0/summary.json`；原Ubuntu失败日志：`/var/folders/1n/q373cln10fqb0gl9z1ds5d8m0000gn/T/shiki-ci-40859588149-3chdt4cn/ubuntu.log`。
 
-**Actions自动签名配置（2026-10-29）：** 用户选择Actions签名并授权新建专用Ed25519密钥与本机私有备份。公钥`configs/release-signing.pub`及SPKI SHA-256指纹`e21f6dd671ea5042c43c492b759b933dda73985f89a823b43c651ff7c787c17d`已确定；GitHub `release-signing`环境已实际配置并读回复核：DDSRem必需审批、仅master、禁管理员绕过，私钥Secret与公钥Variable均已设置。备份目录0700/私钥0600，密钥对已本机验证。手动工作流严格选择同仓库成功CI push/master的精确commit，四目标无密钥构建，可信workflow提交预编译verifier，审批后才单步持钥签名、公钥匹配和逐包验签；仅上传Actions artifact，不创建tag/Release。实际CI运行40859588149在未完整成功时被新gate拒绝且未写来源输出；5项Python行为测试、actionlint、实际签名shell的四目标微型归档/临时测试密钥/真实Go verifier通过，产出22文件；公钥及私钥不匹配两负例均失败；另只读验证旧.5两真实归档通过，不追改旧源码范围。七类独立架构复核无新增确定性偏差；新增逻辑均属发布工具，产品边界/RPC/授权/状态/生命周期/I/O/安装契约未变。远端签名流程尚未执行，审批/发布和原平台/资源门槛保持；原42条及29勾选不变。操作、备份、信任及轮换/撤销限制见[发布准备](./18-release-readiness.md#github-actions-自动签名)。
+**Actions自动签名配置（2026-10-29）：** 用户选择Actions签名并授权新建专用Ed25519密钥与本机私有备份。公钥`configs/release-signing.pub`及SPKI SHA-256指纹`e21f6dd671ea5042c43c492b759b933dda73985f89a823b43c651ff7c787c17d`已确定；GitHub `release-signing`环境已实际配置并读回复核：DDSRem必需审批、仅master、禁管理员绕过，私钥Secret与公钥Variable均已设置。备份目录0700/私钥0600，密钥对已本机验证。手动工作流严格选择同仓库成功CI push/master的精确commit，四目标无密钥构建，可信workflow提交预编译verifier，审批后才单步持钥签名、公钥匹配和逐包验签；仅上传Actions artifact，不创建tag/Release。实际CI运行40859588149在未完整成功时被新gate拒绝且未写来源输出；5项Python行为测试、actionlint、实际签名shell的四目标微型归档/临时测试密钥/真实Go verifier通过，产出22文件；公钥及私钥不匹配两负例均失败；另只读验证旧.5两真实归档通过，不追改旧源码范围。七类独立架构复核无新增确定性偏差；新增逻辑均属发布工具，产品边界/RPC/授权/状态/生命周期/I/O/安装契约未变。远端签名流程尚未执行，审批/发布和原平台/资源门槛保持；原42条及29勾选不变。操作、备份、信任及轮换/撤销限制见[发布准备](./18-release-readiness.md#github-actions-自动构建签名与发布)。
 
 本批本地签名编排证据：`/var/folders/1n/q373cln10fqb0gl9z1ds5d8m0000gn/T/shiki-sign-actions-smoke-vp5exv28/summary.json`；环境配置与公钥身份记录：`/tmp/shiki-release-signing-setup.json`（不含私钥内容）。
 
@@ -732,3 +734,26 @@ v4普通/race分阶段profile均完整通过31.73/40.40秒：16次256KiB双向�
 失败发生于真实client插件自然到期：旧PID/socket已回收，新文件/TCP/冲突/暂停/停止回执断言已成功，但要求恢复后新鲜Stats帧时无关流已返回Canceled。server场景通过。现仅增强hostrotation失败观测（父/流context状态、时间与服务器快照），不忽略Canceled或重新打开流；独立client三次race109.866秒通过仍不足以解释整套失败。正在隔离源码副本追踪共享pool首个invalidate及probe/parent期限；内部探测超时、远端取消与本地网络错误尚为候选，未认定根因或声明修复。
 
 相关Phase 2生命周期验收暂恢复待验，当前28/42、14项待完成；原42要求不变。本批尚未收尾，生产代码没有因猜测修改，实际12小时原冻结实验继续运行，不与本轮诊断共用进程或状态。
+
+<a id="evidence-signed-alpha-install-20261029"></a>
+
+## 真实签名alpha的本机与容器安装验收（2026-10-29）
+
+对象为手动签名运行40877214329的92cafaf源码候选，版本v0.0.1-alpha.1；先用独立仓库公钥验签，仅从认证私有副本解包。A为v0.0.0-local.20261029.5开发归档，B为该签名候选；没有历史正式发行升级对象。产品二进制未重建，新增的可选验收输入只编译测试驱动。
+
+| 环境 | 已实际通过 | 清理与范围 |
+|---|---|---|
+| macOS arm64 / 当前GUI LaunchAgent | 目标包自身helper的A→B→A生命周期69.72秒；插件、崩溃守卫/恢复、备份/配置/状态保留；另在私有新prefix/state中B新装、双插件、重复安装unchanged与卸载 | 标准job/plist前后均无用户已有服务；所属PID回收，配置/状态按契约保留。旧69.17秒结果复用A-helper，只保留较窄证据。 |
+| Linux arm64 / systemd252.39 PID1 | 双角色13生命周期、4活动升级回滚边界、8MiB双向文件、同一pane PID287、终端/TCP无重放及身份/凭据/冲突/暂停/转发意图保留；另全新B的daemon/user-agent安装、四插件、会话、重复安装及卸载 | 无外网、私有容器/cgroup/PID；正常poweroff退出0，精确容器删除；原543冻结输入及认证payload后置hash不变。 |
+
+原Linuxfresh夹具将合法重复安装的unchanged当ready而失败，产品无故障；只修正重复调用的明确期望后通过，原失败和正常清理证据保留。显式关闭tsnet、Claude为明确fixture，external_peer_acceptance保持pending；不证明真实账号、原生VPS、物理重启/登录、全平台或长期资源。原697长测及其它容器未改动。
+
+本地证据：`/private/tmp/shiki-signed-install-hikyjcls/`，含`artifact-provenance.json`、`native-target-helper-summary.json`、`native-fresh-summary.json`、`linux-summary.json`、`linux-fresh-summary.json`及各组完整日志/关机记录。Mac B归档SHA256为`6d171a029d0f52d6e9100cc67f5487811817c2272db0afbdf258ad851b58676b`，Linux B为`d2a2d1819a0745899de20df336d921495d8330e29dc448fabcac170ce646f026`。新tag将重新构建，必须独立认证其实际资产，不能复用这两个归档hash。
+
+<a id="evidence-tag-release-automation-20261029"></a>
+
+## tag自动发布实现与本地验证（2026-10-29）
+
+新release.yml由版本tag触发，复用同SHA CI，四目标无密钥构建，tag限定环境自动签名并验签，独立contents-write发布job验证22文件、来源和远端digest，从完整草稿公开。版本规则、不可变tag、幂等/冲突拒绝、私钥隔离及下载验签步骤见18。环境和规则配置已读回核验，旧手动工作流400508788已禁用且源码入口删除；运行证据没有删除。
+
+全部工具测试38项通过（10.354秒）；发布17项行为及actionlint通过，补充metadata上限后发布器10项通过。实际签名shell使用四份有效微型归档、临时测试密钥和真实Go verifier，产出22文件并由发布器再次验签；归档与签名篡改均拒绝，临时私钥/持钥目录已清理。证据位于`/var/folders/1n/q373cln10fqb0gl9z1ds5d8m0000gn/T/shiki-tag-release-smoke-j4qo91bb/summary.json`；环境/规则前后快照位于`/tmp/shiki-tag-release-automation-20261029/`。这些本地检查不代替首次真实tag和公开资产验证。

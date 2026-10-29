@@ -1,6 +1,5 @@
 """Release source gates and archive/sidecar consistency before secrets are exposed."""
 
-import copy
 import hashlib
 import importlib.util
 import io
@@ -9,6 +8,7 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -19,34 +19,81 @@ VERSION = "v0.0.1-alpha.1"
 
 
 class ReleaseGateTests(unittest.TestCase):
-    def test_success_requires_exact_repository_workflow_commit_and_completed_ci(self):
-        valid = {"id": 123, "repository": {"full_name": "owner/repo"},
-                 "head_repository": {"full_name": "owner/repo"},
-                 "path": ".github/workflows/ci.yml", "head_branch": "master", "event": "push",
-                 "status": "completed", "conclusion": "success", "head_sha": "a" * 40}
-        self.assertEqual(release.validate_run(valid, "owner/repo", "123"), "a" * 40)
-        invalid = {"id": [124], "repository": [{"full_name": "other/repo"}],
-                   "head_repository": [{"full_name": "fork/repo"}],
-                   "path": [".github/workflows/sign-release.yml"], "head_branch": ["topic"],
-                   "event": ["pull_request", "workflow_dispatch"], "status": ["in_progress", "queued"],
-                   "conclusion": ["failure", "cancelled", "skipped", ""],
-                   "head_sha": ["a" * 39, "G" * 40, "a" * 40 + "\ninjected=true"]}
-        for field, values in invalid.items():
-            for value in values:
-                with self.subTest(field=field, value=value):
-                    candidate = copy.deepcopy(valid)
-                    candidate[field] = value
-                    with self.assertRaises(ValueError):
-                        release.validate_run(candidate, "owner/repo", "123")
-        for identifier in ("0", "01", "123/attempts/1", "123\nx=y"):
-            with self.subTest(identifier=identifier), self.assertRaises(ValueError):
-                release.validate_run(valid, "owner/repo", identifier)
+    def setUp(self):
+        self.commit = "a" * 40
+        self.tag = {"object": {"type": "commit", "sha": self.commit}}
+        self.run = {"id": 123, "repository": {"full_name": "owner/repo"},
+                    "head_repository": {"full_name": "owner/repo"}, "event": "push",
+                    "path": ".github/workflows/release.yml", "head_sha": self.commit, "head_branch": VERSION,
+                    "created_at": "2026-10-29T12:00:00Z"}
+        self.comparison = {"status": "ahead", "merge_base_commit": {"sha": self.commit}}
+        self.requests = []
 
-    def test_version_is_explicit_prerelease_without_shell_or_output_injection(self):
-        for version in (VERSION, "v1.2.3-beta.2", "v2.0.0-rc.1"):
+    def api(self, path):
+        self.requests.append(path)
+        if "/actions/runs/" in path:
+            return self.run
+        if "/git/ref/tags/" in path:
+            return self.tag
+        if "/git/tags/" in path:
+            return {"object": {"type": "commit", "sha": self.commit}}
+        return self.comparison
+
+    def gate(self, **kwargs):
+        args = dict(repository="owner/repo", ref="refs/tags/" + VERSION,
+                    commit=self.commit, run_id="123")
+        args.update(kwargs)
+        with patch.object(release, "github_api", side_effect=self.api):
+            return release.validate_source(**args)
+
+    def test_lightweight_and_annotated_tags_pin_source_and_run_start(self):
+        for tag in (self.tag, {"object": {"type": "tag", "sha": "b" * 40}}):
+            self.tag = tag
+            result = self.gate()
+            self.assertEqual(result, {"commit": self.commit, "version": VERSION,
+                                      "built_at": "2026-10-29T12:00:00Z", "prerelease": "true"})
+        self.assertTrue(any("/git/tags/" in path for path in self.requests))
+        self.run["head_branch"] = "v1.2.3"
+        self.assertEqual(self.gate(ref="refs/tags/v1.2.3")["prerelease"], "false")
+
+    def test_gate_rejects_moved_tag_untrusted_run_and_non_master_source(self):
+        for field, value in {"id": 124, "event": "workflow_dispatch", "head_sha": "b" * 40,
+                             "path": ".github/workflows/ci.yml", "created_at": "bad", "head_branch": "v0.0.1-alpha.2",
+                             "repository": {"full_name": "fork/repo"},
+                             "head_repository": {"full_name": "fork/repo"}}.items():
+            with self.subTest(field=field):
+                saved = self.run[field]
+                self.run[field] = value
+                with self.assertRaises(ValueError):
+                    self.gate()
+                self.run[field] = saved
+        for obj in ({"type": "commit", "sha": "b" * 40}, {"type": "tree", "sha": self.commit}):
+            self.tag = {"object": obj}
+            with self.assertRaises(ValueError):
+                self.gate()
+        self.tag = {"object": {"type": "commit", "sha": self.commit}}
+        for status in ("behind", "diverged"):
+            self.comparison["status"] = status
+            with self.assertRaises(ValueError):
+                self.gate()
+        self.comparison = {"status": "ahead", "merge_base_commit": {"sha": "c" * 40}}
+        with self.assertRaises(ValueError):
+            self.gate()
+
+    def test_invalid_identifiers_are_rejected_before_network(self):
+        for kwargs in ({"ref": "refs/heads/master"}, {"ref": "refs/tags/../master"},
+                       {"repository": "owner/repo/extra"}, {"commit": "A" * 40},
+                       {"run_id": "123/attempts/1"}, {"run_id": "0"}):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                self.gate(**kwargs)
+        self.assertEqual(self.requests, [])
+
+    def test_versions_are_fixed_stable_or_supported_prereleases(self):
+        for version in (VERSION, "v1.2.3-beta.2", "v2.0.0-rc.1", "v1.2.3", "v0.0.0"):
             release.validate_version(version)
-        for version in ("dev", "latest", "v1.2.3", "v01.2.3-alpha.1", "v1.2.3-alpha.0",
-                        VERSION + "\ncommit=evil", "$(touch x)", "v1.2.3-alpha.01", "v" + "1" * 81):
+        for version in ("dev", "latest", "v01.2.3-alpha.1", "v1.2.3-alpha.0",
+                        VERSION + "\ncommit=evil", "$(touch x)", "v1.2.3-alpha.01", "v" + "1" * 81,
+                        "v1.2.3+metadata", "v1.2.3-preview.1"):
             with self.subTest(version=version), self.assertRaises(ValueError):
                 release.validate_version(version)
 

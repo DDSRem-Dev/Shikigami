@@ -84,8 +84,7 @@ func TestNativeLaunchAgentLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	environment := append(os.Environ(), "GORACE=halt_on_error=1")
-	first, firstPin := buildLaunchdBundle(t, ctx, repository, fixture, "launchd-test-a")
-	second, secondPin := buildLaunchdBundle(t, ctx, repository, fixture, "launchd-test-b")
+	first, firstPin, firstVersion, second, secondPin, secondVersion := launchdLifecycleBundles(t, ctx, repository, fixture)
 	// Repeat immediately before activation after the potentially long build.
 	if _, err = os.Lstat(service); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("service appeared during build; refusing activation", err)
@@ -113,6 +112,10 @@ func TestNativeLaunchAgentLifecycle(t *testing.T) {
 		})
 	}
 	activate := func(bundle, pin, version string) install.Result {
+		// Exercise the installer shipped in the target bundle, including on
+		// upgrade; keep that helper for its readiness and rollback checks.
+		helper = filepath.Join(bundle, "shiki-install")
+		t.Logf("activating version=%s with its own installer=%s", version, helper)
 		args := append([]string{"install"}, installArgs...)
 		args = append(args, "--bundle", bundle, "--checksums-sha256", pin, "--version", version)
 		result, err := launchdInstallResult(ctx, environment, helper, args...)
@@ -122,7 +125,7 @@ func TestNativeLaunchAgentLifecycle(t *testing.T) {
 		ready(result)
 		return result
 	}
-	activate(first, firstPin, "launchd-test-a")
+	activate(first, firstPin, firstVersion)
 	plan := install.Plan{Role: "client", User: account.Username, Home: account.HomeDir, Path: "/usr/bin:/bin", Config: configuration}
 	expected, err := install.RenderService(plan, prefix)
 	if err != nil {
@@ -211,7 +214,7 @@ func TestNativeLaunchAgentLifecycle(t *testing.T) {
 		}
 	}
 	t.Log("explicit agent stop: exit 0, host/plugins gone, locks released, no respawn for 15s")
-	upgrade := activate(second, secondPin, "launchd-test-b")
+	upgrade := activate(second, secondPin, secondVersion)
 	if upgrade.Backup == "" {
 		t.Fatal("upgrade did not record a backup")
 	}
@@ -226,7 +229,7 @@ func TestNativeLaunchAgentLifecycle(t *testing.T) {
 	launchdAssertPreferences(t, ctx, upgraded)
 	upgraded.Close()
 	rolled, err := launchdInstallResult(ctx, environment, helper, "rollback", "--prefix", prefix, "--non-interactive")
-	if err != nil || rolled.Version != "launchd-test-a" {
+	if err != nil || rolled.Version != firstVersion {
 		t.Fatal("native rollback failed", rolled, err)
 	}
 	ready(rolled)
@@ -259,7 +262,7 @@ func TestNativeLaunchAgentLifecycle(t *testing.T) {
 	if saved, err := config.LoadClient(configuration); err != nil || saved.Agent.Socket != cfg.Agent.Socket || saved.Tailscale.Enabled {
 		t.Fatal("uninstall changed retained private config", err)
 	}
-	for _, retained := range []string{upgrade.Backup, filepath.Join(cfg.Agent.StateDir, "resources", "state.json"), filepath.Join(prefix, "releases", "launchd-test-a-darwin-"+runtime.GOARCH), filepath.Join(prefix, "releases", "launchd-test-b-darwin-"+runtime.GOARCH)} {
+	for _, retained := range []string{upgrade.Backup, filepath.Join(cfg.Agent.StateDir, "resources", "state.json"), filepath.Join(prefix, "releases", firstVersion+"-darwin-"+runtime.GOARCH), filepath.Join(prefix, "releases", secondVersion+"-darwin-"+runtime.GOARCH)} {
 		if _, err := os.Stat(retained); err != nil {
 			t.Fatal("uninstall removed retained backup/state/release", retained, err)
 		}

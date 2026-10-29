@@ -44,7 +44,9 @@ def phase(message):
     print(message, flush=True)
 
 
-def host(output):
+def host(output, prebuilt=None, fresh_only=False):
+    if fresh_only and not prebuilt:
+        raise RuntimeError("--fresh-only requires authenticated prebuilt bundles")
     repository = Path(__file__).resolve().parent.parent
     output = Path(output).resolve() if output else Path(tempfile.mkdtemp(prefix="shiki-systemd-", dir="/tmp"))
     if output == repository or repository in output.parents:
@@ -75,6 +77,33 @@ def host(output):
     (output / "source-sha256.json").write_text(json.dumps(provenance, indent=2) + "\n")
     run(["go", "mod", "download"], cwd=repository, timeout=180)
     modules = run(["go", "env", "GOMODCACHE"], cwd=repository).stdout.strip()
+    bundle_mount = []
+    if prebuilt:
+        entries = json.loads(Path(prebuilt).read_text())
+        if len(entries) != 2 or entries[0]["version"] == entries[1]["version"]:
+            raise RuntimeError("two distinct authenticated prebuilt versions are required")
+        supplied = output / "prebuilt"
+        supplied.mkdir(mode=0o755)
+        copied = []
+        for index, entry in enumerate(entries):
+            directory = Path(entry["directory"])
+            if not directory.is_absolute() or not directory.is_dir() or directory.is_symlink():
+                raise RuntimeError("prebuilt directory must be an absolute regular directory")
+            target = supplied / str(index)
+            target.mkdir(mode=0o755)
+            for path in directory.iterdir():
+                if path.is_symlink() or not path.is_file():
+                    raise RuntimeError("prebuilt payload must be a flat regular file")
+                shutil.copyfile(path, target / path.name)
+                os.chmod(target / path.name, 0o755 if path.name.startswith("shiki") and not path.name.endswith("json") else 0o644)
+            if hashlib.sha256((target / "SHA256SUMS").read_bytes()).hexdigest() != entry["checksums_sha256"]:
+                raise RuntimeError("prebuilt checksum pin mismatch")
+            copied.append({**entry, "directory": "/release-fixtures/" + str(index)})
+        (supplied / "manifest.json").write_text(json.dumps(copied))
+        os.chmod(supplied / "manifest.json", 0o644)
+        bundle_mount = ["--mount", f"type=bind,source={supplied},target=/release-fixtures,readonly", "--env", "SHIKI_INSTALL_TEST_BUNDLES=/release-fixtures/manifest.json"]
+    if fresh_only:
+        bundle_mount += ["--env", "SHIKI_INSTALL_TEST_FRESH_ONLY=1"]
     created = False
     try:
         phase("Building isolated systemd image")
@@ -85,7 +114,7 @@ def host(output):
              "--cap-add", "SYS_ADMIN", "--tmpfs", "/run", "--tmpfs", "/run/lock", "--tmpfs", "/tmp",
              "--mount", f"type=bind,source={source},target=/source,readonly",
              "--mount", "type=volume,source=shiki-systemd-go-cache,target=/var/cache/shiki-go",
-             "--mount", f"type=bind,source={modules},target=/go/pkg/mod,readonly", image,
+             "--mount", f"type=bind,source={modules},target=/go/pkg/mod,readonly", *bundle_mount, image,
              "/bin/bash", "-c", "set -euo pipefail; mount -o remount,rw /sys/fs/cgroup; exec /sbin/init --log-target=console --log-level=info"])
         wait_for(lambda: run(["docker", "exec", name, "systemctl", "is-system-running"], check=False).stdout.strip() == "running")
         inspect = json.loads(run(["docker", "inspect", name]).stdout)[0]
@@ -134,7 +163,7 @@ def inside():
     evidence = Path("/evidence")
     evidence.mkdir(mode=0o700)
     home = Path("/home/shikitest")
-    env = {**os.environ, "PATH": "/usr/local/go/bin:/usr/bin:/bin", "HOME": str(home), "TMPDIR": "/build/tmp", "GOCACHE": "/var/cache/shiki-go", "GOPATH": "/go", "GOTOOLCHAIN": "local", "GOPROXY": "off", "GOSUMDB": "off", "GOFLAGS": "-mod=readonly -buildvcs=false"}
+    env = {**os.environ, "PATH": "/usr/local/go/bin:/usr/bin:/bin", "HOME": str(home), "TMPDIR": "/build/tmp", "GOCACHE": "/var/cache/shiki-go", "GOPATH": "/go", "GOTOOLCHAIN": "local", "GOPROXY": "off", "GOSUMDB": "off", "GOMAXPROCS": "2", "GOFLAGS": "-p=1 -mod=readonly -buildvcs=false"}
     os.chown("/var/cache/shiki-go", 1000, 1000)
     for directory in (Path("/work"), Path("/build")):
         directory.mkdir()
@@ -147,27 +176,34 @@ def inside():
     def user(args, **kwargs):
         return run(["/usr/sbin/runuser", "-u", "shikitest", "--", "env", "HOME=" + str(home), "USER=shikitest", "XDG_RUNTIME_DIR=/run/user/1000", "PATH=/home/shikitest/.local/bin:/usr/local/go/bin:/usr/bin:/bin", *args], env=env, **kwargs)
 
-    versions = ["systemd-test-a", "systemd-test-b"]
-    bundles = {}
-    for version in versions:
-        phase("Building isolated release " + version)
-        user(["env", "SHIKI_VERSION=" + version, "bash", "scripts/build.sh"], cwd="/work", timeout=300)
-        result = user(["go", "run", "scripts/release.go", "--dir", "bin", "--output", "/build/" + version, "--version", version], cwd="/work", timeout=120)
-        (evidence / (version + "-build.log")).write_text(result.stdout + result.stderr)
-        archive = next(Path("/build", version).glob("*.tar.gz"))
-        bundle = Path("/build", version, "bundle")
-        bundle.mkdir(mode=0o755)
-        with tarfile.open(archive) as packed:
-            for member in packed.getmembers():
-                if not member.isfile() or Path(member.name).name != member.name:
-                    raise RuntimeError("local release archive contains a non-flat regular payload")
-                with packed.extractfile(member) as source, (bundle / member.name).open("wb") as target:
-                    shutil.copyfileobj(source, target)
-        # Real clients and the ordinary-user init command must execute the
-        # separately verified fixture bundle before installed links exist.
-        for file in bundle.iterdir():
-            os.chmod(file, 0o755 if file.name.startswith("shiki") and not file.name.endswith("json") else 0o644)
-        bundles[version] = (bundle, Path(str(archive) + ".checksums-pin").read_text().strip())
+    prebuilt = os.environ.get("SHIKI_INSTALL_TEST_BUNDLES")
+    if prebuilt:
+        entries = json.loads(Path(prebuilt).read_text())
+        versions = [entry["version"] for entry in entries]
+        bundles = {entry["version"]: (Path(entry["directory"]), entry["checksums_sha256"]) for entry in entries}
+        phase("Using supplied authenticated release payloads without rebuilding product binaries: " + ", ".join(versions))
+    else:
+        versions = ["systemd-test-a", "systemd-test-b"]
+        bundles = {}
+        for version in versions:
+            phase("Building isolated release " + version)
+            user(["env", "SHIKI_VERSION=" + version, "bash", "scripts/build.sh"], cwd="/work", timeout=300)
+            result = user(["go", "run", "scripts/release.go", "--dir", "bin", "--output", "/build/" + version, "--version", version], cwd="/work", timeout=120)
+            (evidence / (version + "-build.log")).write_text(result.stdout + result.stderr)
+            archive = next(Path("/build", version).glob("*.tar.gz"))
+            bundle = Path("/build", version, "bundle")
+            bundle.mkdir(mode=0o755)
+            with tarfile.open(archive) as packed:
+                for member in packed.getmembers():
+                    if not member.isfile() or Path(member.name).name != member.name:
+                        raise RuntimeError("local release archive contains a non-flat regular payload")
+                    with packed.extractfile(member) as source, (bundle / member.name).open("wb") as target:
+                        shutil.copyfileobj(source, target)
+            # Real clients and the ordinary-user init command must execute the
+            # separately verified fixture bundle before installed links exist.
+            for file in bundle.iterdir():
+                os.chmod(file, 0o755 if file.name.startswith("shiki") and not file.name.endswith("json") else 0o644)
+            bundles[version] = (bundle, Path(str(archive) + ".checksums-pin").read_text().strip())
     a, b = versions
     fixture = home / "claude-systemd-test-fixture"
     fixture.write_text("#!/bin/sh\nif [ \"${1:-}\" = --version ]; then printf '0.0.0-systemd-fixture\\n'; exit 0; fi\nif [ \"${1:-} ${2:-} ${3:-}\" = 'auth status --json' ]; then printf '{\"loggedIn\":true}'; exit 0; fi\nprintf 'SYSTEMD_FIXTURE_READY\\n'\nwhile IFS= read -r line; do printf '%s\\n' \"$line\" >> \"$HOME/upgrade-terminal-inputs\"; printf 'REPLY:%s\\n' \"$line\"; done\n")
@@ -199,7 +235,7 @@ def inside():
             return report if report["state"] == "local_application_ready" else None
         return wait_for(attempt)
 
-    def install(version, initial=False, token_destination=token):
+    def install(version, initial=False, token_destination=token, expected_state="local_application_ready"):
         bundle, pin = bundles[version]
         args = [bundle / "shiki-install", "install", *daemon_install_args, "--version", version, "--bundle", bundle, "--checksums-sha256", pin]
         if initial:
@@ -210,8 +246,9 @@ def inside():
         data = json.loads(result.stdout)
         if result.returncode == 3:
             data = readiness(version, token_destination if initial else None)
-        assert data["state"] == "local_application_ready", data
-        assert data["external_peer_acceptance"] == "pending"
+        assert data["state"] == expected_state, data
+        if expected_state == "local_application_ready":
+            assert data["external_peer_acceptance"] == "pending"
         return data
 
     phase("Activating rendered daemon unit through real installer")
@@ -231,7 +268,7 @@ def inside():
     os.chown(client_config, 1000, 1000)
     client_prefix = home / ".local/share/shiki/install"
 
-    def client_operation(operation, version, expected_version=None):
+    def client_operation(operation, version, expected_version=None, expected_state="local_application_ready"):
         bundle, pin = bundles[version]
         args = [bundle / "shiki-install", operation, "--role", "client", "--non-interactive"]
         if operation == "install":
@@ -249,7 +286,7 @@ def inside():
                 return data if data["state"] == "local_application_ready" else None
             report = wait_for(ready)
         if operation != "uninstall":
-            assert report["state"] == "local_application_ready" and report["version"] == (expected_version or version), report
+            assert report["state"] == expected_state and report["version"] == (expected_version or version), report
         return report
 
     client_operation("install", a)
@@ -325,6 +362,44 @@ def inside():
         assert report["daemon_id"] == initial["daemon_id"] and not report.get("token_issued", False)
         worker = wait_for(lambda: workers(main_pid()))
         records.append({"operation": label, "daemon_pid": main_pid(), "agent_pid": main_pid("shiki-agent.service", True), "pane_pid": pane, "worker_pids": worker, "version": expected_version, "same_daemon_id_and_original_token": True})
+
+    if os.environ.get("SHIKI_INSTALL_TEST_FRESH_ONLY") == "1":
+        phase("Checking fresh candidate daemon/client, all four plugins, repeat installation and uninstall")
+        cli("--server", "systemd", "plugins", "enable", "port", "--side", "remote")
+        cli("plugins", "enable", "port", "--side", "local")
+        wait_for(lambda: len(workers(daemon_pid)) == 2 and len(workers(agent_pid)) == 2)
+        preserved("fresh candidate application and authenticated session", a)
+        token_before = token.read_bytes()
+        client_config_before = client_config.read_bytes()
+        client_operation("install", a, expected_state="unchanged")
+        install(a, expected_state="unchanged")
+        assert token.read_bytes() == token_before
+        preserved("same candidate repeat install preserves identity and token", a)
+        old_agent, old_daemon = main_pid("shiki-agent.service", True), main_pid()
+        old_workers = workers(old_agent) + workers(old_daemon)
+        client_operation("uninstall", a)
+        removed = run([bundles[a][0] / "shiki-install", "uninstall", *daemon_args], timeout=60)
+        assert json.loads(removed.stdout)["state"] == "uninstalled"
+        wait_for(lambda: gone([old_agent, old_daemon, *old_workers]))
+        assert not Path("/etc/systemd/system/shiki-daemon.service").exists()
+        assert not (home / ".config/systemd/user/shiki-agent.service").exists()
+        assert daemon_config.read_bytes() == config_before and client_config.read_bytes() == client_config_before
+        assert token.read_bytes() == token_before and marker.read_text() == "preserved across systemd lifecycle\n"
+        assert int(user(tmux_args).stdout.strip()) == pane
+        result = {"mode": "fresh-candidate-only", "version": a,
+                  "systemd": run(["systemctl", "--version"]).stdout.splitlines()[0],
+                  "platform": run(["uname", "-m"]).stdout.strip(), "pid1": "systemd",
+                  "product_rebuilt": False, "initial_processes": initial_processes,
+                  "operations": records, "all_four_plugins_ready": True,
+                  "uninstall_preserves_config_state_project_token_tmux": True,
+                  "all_host_and_worker_processes_reaped": True,
+                  "release_trust": "operator-supplied authenticated bundles; see host provenance",
+                  "transport": "loopback TLS only; runtime network disabled",
+                  "claude": "explicit test fixture, no account acceptance",
+                  "external_peer_acceptance": "pending"}
+        (evidence / "evidence.json").write_text(json.dumps(result, indent=2) + "\n")
+        phase("Fresh candidate install/run/repeat/uninstall PASS; tmux retained for systemd shutdown")
+        return
 
     phase("Checking actual stop/restart, SIGKILL recovery and worker reap")
     ctl("stop", "shiki-daemon.service")
@@ -476,7 +551,7 @@ def inside():
     preserved("reinstall after uninstall", a)
     (evidence / "agent-unit.txt").write_text(agent_ctl("cat", "shiki-agent.service").stdout)
     (evidence / "journal.txt").write_text(ctl("status", "shiki-daemon.service", "--no-pager").stdout + run(["journalctl", "-u", "shiki-daemon.service", "--no-pager"]).stdout)
-    data = {"systemd": run(["systemctl", "--version"]).stdout.splitlines()[0], "go": run(["/usr/local/go/bin/go", "version"]).stdout.strip(), "platform": run(["uname", "-m"]).stdout.strip(), "pid1": "systemd", "initial_processes": initial_processes, "operations": records, "uninstall_preserves_config_state_project_token_tmux": True, "user_agent_upgrade_rollback_uninstall_preserves_config_state_credentials": True, "token_count_before_reinstall": 1, "reinstall_issued_one_explicit_new_token": True, "transport": "loopback TLS only; runtime network disabled", "claude": "explicit test fixture, no account acceptance", "release_trust": "local build digests only; not publisher signatures", "external_peer_acceptance": "pending"}
+    data = {"systemd": run(["systemctl", "--version"]).stdout.splitlines()[0], "go": run(["/usr/local/go/bin/go", "version"]).stdout.strip(), "platform": run(["uname", "-m"]).stdout.strip(), "pid1": "systemd", "initial_processes": initial_processes, "operations": records, "uninstall_preserves_config_state_project_token_tmux": True, "user_agent_upgrade_rollback_uninstall_preserves_config_state_credentials": True, "token_count_before_reinstall": 1, "reinstall_issued_one_explicit_new_token": True, "transport": "loopback TLS only; runtime network disabled", "claude": "explicit test fixture, no account acceptance", "release_trust": "operator-supplied authenticated bundles; see host provenance" if prebuilt else "local build digests only; not publisher signatures", "external_peer_acceptance": "pending"}
     data["user_agent_crash_loop"] = crash_evidence
     data["active_upgrade_transfers"] = active_upgrade_evidence
     (evidence / "evidence.json").write_text(json.dumps(data, indent=2) + "\n")
@@ -486,6 +561,8 @@ def inside():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", help="private host evidence directory (default: new /tmp directory)")
+    parser.add_argument("--bundles", help="JSON manifest of two previously authenticated extracted bundles; do not rebuild product binaries")
+    parser.add_argument("--fresh-only", action="store_true", help="with --bundles, install/run/repeat/uninstall only the first supplied candidate in a fresh container")
     parser.add_argument("--inside", action="store_true", help=argparse.SUPPRESS)
     arguments = parser.parse_args()
     interrupted_signal = signal.SIGINT
@@ -502,7 +579,7 @@ if __name__ == "__main__":
         if arguments.inside:
             inside()
         else:
-            host(arguments.output)
+            host(arguments.output, arguments.bundles, arguments.fresh_only)
     except KeyboardInterrupt:
         print("systemd acceptance interrupted; owned container cleanup completed", file=sys.stderr)
         sys.exit(128 + interrupted_signal)

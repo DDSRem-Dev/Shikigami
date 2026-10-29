@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Validate the CI source and unsigned bundles before the signing job gets a key."""
+"""Validate fixed tag sources and bundles before release signing or publication."""
 
 import argparse
+from datetime import datetime
 import hashlib
 import json
 from pathlib import Path
@@ -17,21 +18,59 @@ PAYLOADS = {"shiki", "shiki-agent", "shiki-daemon", "shiki-install", "shiki-plug
 
 
 def validate_version(version):
-    if len(version) > 80 or not re.fullmatch(r"v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-(?:alpha|beta|rc)\.[1-9][0-9]*", version):
-        raise ValueError("an explicit alpha/beta/rc prerelease version is required")
+    if len(version) > 80 or not re.fullmatch(r"v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-(?:alpha|beta|rc)\.[1-9][0-9]*)?", version):
+        raise ValueError("an explicit stable or alpha/beta/rc version tag is required")
+    return "-" in version
 
 
-def validate_run(run, repository, run_id):
-    if not re.fullmatch(r"[1-9][0-9]*", run_id):
-        raise ValueError("CI run ID must be a positive integer")
+def github_api(path, method="GET", data=None, missing=False):
+    command = ["gh", "api", "--method", method, path]
+    if data is not None:
+        command += ["--input", "-"]
+    result = subprocess.run(command, input=None if data is None else json.dumps(data),
+                            text=True, capture_output=True, timeout=60)
+    if result.returncode:
+        if missing and "(HTTP 404)" in result.stderr:
+            return None
+        raise RuntimeError("GitHub API request failed: " + result.stderr.strip())
+    return json.loads(result.stdout) if result.stdout.strip() else None
+
+
+def validate_source(repository, ref, commit, run_id):
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
+        raise ValueError("invalid repository")
+    if not ref.startswith("refs/tags/"):
+        raise ValueError("release requires a tag push")
+    version = ref.removeprefix("refs/tags/")
+    validate_version(version)
+    if not re.fullmatch(r"[0-9a-f]{40}", commit) or not re.fullmatch(r"[1-9][0-9]*", run_id):
+        raise ValueError("invalid source commit or workflow run")
+    run = github_api(f"repos/{repository}/actions/runs/{run_id}")
     if (run.get("id") != int(run_id) or run.get("repository", {}).get("full_name") != repository
             or run.get("head_repository", {}).get("full_name") != repository
-            or run.get("path") != ".github/workflows/ci.yml"
-            or run.get("event") != "push" or run.get("head_branch") != "master"
-            or run.get("status") != "completed" or run.get("conclusion") != "success"
-            or not re.fullmatch(r"[0-9a-f]{40}", run.get("head_sha", ""))):
-        raise ValueError("signing requires successful completed CI for a push to this repository's master")
-    return run["head_sha"]
+            or run.get("event") != "push" or run.get("path") != ".github/workflows/release.yml"
+            or run.get("head_sha") != commit or run.get("head_branch") != version):
+        raise ValueError("release run does not match this repository's tag source")
+    created = run.get("created_at", "")
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", created):
+        raise ValueError("release run has no fixed build start time")
+    datetime.strptime(created, "%Y-%m-%dT%H:%M:%SZ")
+    tag = github_api(f"repos/{repository}/git/ref/tags/{version}")
+    obj = tag.get("object", {})
+    for _ in range(8):
+        if obj.get("type") != "tag":
+            break
+        if not re.fullmatch(r"[0-9a-f]{40}", obj.get("sha", "")):
+            raise ValueError("invalid annotated tag object")
+        obj = github_api(f"repos/{repository}/git/tags/{obj['sha']}").get("object", {})
+    if obj.get("type") != "commit" or obj.get("sha") != commit:
+        raise ValueError("version tag moved or does not name this source commit")
+    comparison = github_api(f"repos/{repository}/compare/{commit}...master")
+    if (comparison.get("status") not in ("ahead", "identical")
+            or comparison.get("merge_base_commit", {}).get("sha") != commit):
+        raise ValueError("release source must be reachable from master")
+    return {"commit": commit, "version": version, "built_at": created,
+            "prerelease": str("-" in version).lower()}
 
 
 def file_digest(path):
@@ -104,25 +143,24 @@ def validate_bundles(directory, version):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    gate = commands.add_parser("gate")
+    gate = commands.add_parser("tag")
     gate.add_argument("--repository", required=True)
+    gate.add_argument("--ref", required=True)
+    gate.add_argument("--commit", required=True)
     gate.add_argument("--run-id", required=True)
-    gate.add_argument("--version", required=True)
-    gate.add_argument("--output", type=Path, required=True)
+    gate.add_argument("--output", type=Path)
     bundles = commands.add_parser("bundles")
     bundles.add_argument("--directory", type=Path, required=True)
     bundles.add_argument("--version", required=True)
     args = parser.parse_args()
-    if args.command == "gate":
-        validate_version(args.version)
-        if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repository):
-            raise ValueError("invalid repository")
-        if not re.fullmatch(r"[1-9][0-9]*", args.run_id):
-            raise ValueError("CI run ID must be a positive integer")
-        response = subprocess.check_output(["gh", "api", f"repos/{args.repository}/actions/runs/{args.run_id}"], timeout=30)
-        commit = validate_run(json.loads(response), args.repository, args.run_id)
-        with args.output.open("a") as output:
-            output.write(f"commit={commit}\nversion={args.version}\nci_run_id={args.run_id}\n")
+    if args.command == "tag":
+        result = validate_source(args.repository, args.ref, args.commit, args.run_id)
+        if args.output:
+            with args.output.open("a") as output:
+                for name, value in result.items():
+                    output.write(f"{name}={value}\n")
+        else:
+            print(json.dumps(result))
     else:
         print(json.dumps(validate_bundles(args.directory, args.version), indent=2))
 

@@ -1,8 +1,8 @@
 # 自动化安装与运维契约
 
-**本文保留安装流程契约。仓库已实现本地固定版本 bundle 校验、事务安装/回滚、服务渲染、异步登录引导与本地就绪诊断；真实 systemd 容器与原生 macOS LaunchAgent 已有下述限定环境生命周期证据；原生 VPS/重启登录持久化、外部连接与正式签名发布仍需单独验收。**
+**本文保留安装流程契约。仓库已实现本地固定版本 bundle 校验、事务安装/回滚、服务渲染、异步登录引导与本地就绪诊断；真实 systemd 容器与原生 macOS LaunchAgent 已有下述限定环境生命周期证据；原生 VPS/重启登录持久化、外部连接与完整公开分发仍需单独验收；专用公钥签名和本机验签已有实际证据。**
 
-`scripts/install.sh`、`install-client.sh`、`uninstall.sh` 与短时运维 helper `shiki-install` 已存在；没有正式签名发布或已核验的自动下载来源。安装只接受本地 bundle、固定版本及调用者从独立可信渠道取得的 checksum pin。可信源码工具 `scripts/release-trust.go fetch` 提供显式HTTPS归档/签名地址、独立可信公钥和固定版本/平台的下载验签入口，先认证签名再下载归档，成功后生成私有副本/pin/receipt；解包与安装仍是显式后续步骤，工具不指定正式来源或建立公钥信任。命令与限制见发布认证，本批验收进度见16。下列完整就绪和运维要求不因本地测试通过而降低。
+`scripts/install.sh`、`install-client.sh`、`uninstall.sh` 与短时运维 helper `shiki-install` 已存在；已完成专用公钥的四目标签名及验签；首个公开tag发布由自动工作流执行，公开下载结果需以实际Release验证为准。安装只接受本地 bundle、固定版本及调用者从独立可信渠道取得的 checksum pin。可信源码工具 `scripts/release-trust.go fetch` 提供显式HTTPS归档/签名地址、独立可信公钥和固定版本/平台的下载验签入口，先认证签名再下载归档，成功后生成私有副本/pin/receipt；解包与安装仍是显式后续步骤，工具不指定正式来源或建立公钥信任。命令与限制见发布认证，本批验收进度见16。下列完整就绪和运维要求不因本地测试通过而降低。
 
 ## 部署模型
 
@@ -183,7 +183,7 @@ systemd 的 `WorkingDirectory` 使用规范 `~`（按 `User=` 或用户 manager 
 
 ### 本地离线签名与验签
 
-可信源码中的 `scripts/release-trust.go` 提供显式 `sign` / `verify`，核心位于 `internal/releaseauth`；不属于宿主常驻服务或公共插件 SDK。`SHIKI_SIGNING_KEY=<外置0600私钥> SHIKI_VERSION=<固定版本> make release` 在本地打包后追加 Ed25519 签名；未配置密钥时仍为未签名本地产物。已有归档、校验 sidecar 或签名不覆盖。专用签名公钥及受保护Actions环境已配置；实际远端签名与公开下载分发仍待验。
+可信源码中的 `scripts/release-trust.go` 提供显式 `sign` / `verify`，核心位于 `internal/releaseauth`；不属于宿主常驻服务或公共插件 SDK。`SHIKI_SIGNING_KEY=<外置0600私钥> SHIKI_VERSION=<固定版本> make release` 在本地打包后追加 Ed25519 签名；未配置密钥时仍为未签名本地产物。已有归档、校验 sidecar 或签名不覆盖。专用签名公钥及受限tag的Actions环境已配置；远端签名及本机再次验签已有证据，公开下载分发由真实tag发布验证。
 
 安装前从独立可信渠道取得 SPKI Ed25519 公钥，从可信源码运行 verifier，并显式指定期望 version/OS/arch。签名绑定归档名、大小、SHA-256 和 SHA256SUMS pin；先验证元数据，再对同一输入流复制并哈希到新建0700目录，归档/pin/最终 receipt 为0600。仅成功的私有副本可进入解包和显式安装；verifier 不解包、不执行、不联网。对同一未认证归档附带的公钥或hash不自动赋予信任。签名者负责确认归档与pin配对，安装器继续检查清单、平台、schema和插件契约。
 
@@ -191,4 +191,4 @@ systemd 的 `WorkingDirectory` 使用规范 `~`（按 `User=` 或用户 manager 
 
 ### 受保护的 Actions 签名
 
-已提供手动签名工作流：仅从本仓库成功的CI push/master运行选择精确commit，四目标无密钥构建，`release-signing`环境经用户审批后统一签名并验签。公钥、指纹、密钥备份与轮换/撤销边界见[发布准备](./18-release-readiness.md#github-actions-自动签名)。工作流生成Actions artifact，不创建tag或Release；工具格式和安装前独立信任要求保持不变。
+按用户要求，首个及后续版本均以推送固定版本tag触发[release.yml](../.github/workflows/release.yml)：校验tag精确来源/master祖先、同源完整CI、四目标无密钥构建，tag限定的`release-signing`环境自动签名并验签，再由独立发布job完整上传草稿资产并公开Release。环境不再要求人工审批；推送tag是发布授权，受保护版本tag不能更新或删除。公钥、指纹、密钥备份、重试/冲突和轮换/撤销边界见[发布准备](./18-release-readiness.md#github-actions-自动构建签名与发布)。稳定版及alpha/beta/rc分别处理；安装前独立信任与校验要求保持不变。

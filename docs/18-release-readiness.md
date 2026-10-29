@@ -29,52 +29,79 @@
 CI采用 `v0.0.0-ci`，后续预发布应从通过验收的固定提交显式构建 `v0.0.1-alpha.1`。
 工作流静态检查不等于远端运行通过；真实结果与剩余验收门槛分别记录。
 
-## GitHub Actions 自动签名
+## GitHub Actions 自动构建、签名与发布
 
-**当前操作进度（2026-10-29）：** [运行40877214329](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40877214329)已成功。DDSRem已批准release-signing；`v0.0.1-alpha.1`四目标完成构建、签名、独立验签和上传，来源为成功CI `40872062129`的提交`92cafaf88d834e84678186aa4e083e35e0439d88`。`signed-v0.0.1-alpha.1`包含22文件，已下载至`dist/v0.0.1-alpha.1/`；本机使用可信仓库verifier和仓库公钥再次验证四份签名、14成员及全部payload hash、pin、版本/目标/来源与远端回执，全部通过。尚未公开发布或执行这些签名包的安装/运行验收。
+用户已要求首个 `v0.0.1-alpha.1` 及后续版本均通过推送 tag 全自动发布。入口为
+[release.yml](../.github/workflows/release.yml)，原手动 `sign-release.yml` 已被替代；
+[ci.yml](../.github/workflows/ci.yml) 保留分支/PR检查，并由发布工作流在同一提交上复用。
+历史运行和签名证据保留。本文中的旧手动审批记录只描述历史流程。
 
-用户已选择Actions自动签名，并授权生成专用Ed25519密钥和本机私有备份。
-正式公钥为 [configs/release-signing.pub](../configs/release-signing.pub)，其规范SPKI DER的SHA-256指纹为：
+版本接受 `vX.Y.Z` 或 `vX.Y.Z-alpha.N` / `beta.N` / `rc.N`（N 从1开始）。
+代码应先合入并推送 `master`；tag 必须指向 master 可达、包含发布工作流的提交。
+后续发布只需：
+
+```bash
+git tag -a v0.0.1-alpha.2 -m "Release v0.0.1-alpha.2"
+git push origin v0.0.1-alpha.2
+```
+
+上述版本只是下一版命令示例，不表示已创建。推送版本 tag 即授权发布该固定版本。
+GitHub `release-signing` 环境已按用户要求取消人工审批，只允许 `v*` tag，
+不允许分支运行取得环境密钥；管理员绕过保持关闭。规则集 `Immutable release tags`
+禁止 `refs/tags/v*` 更新或删除，没有绕过主体；不得移动旧 tag 来替换已发行版本。
+
+自动执行顺序：
+
+1. 校验版本格式、同仓库的 tag push 运行、精确提交、tag 指向及 master 祖先关系。
+2. 在该提交运行完整 Ubuntu/macOS CI 和四目标打包检查；失败则阻止后续发布。
+3. 无密钥构建 Linux/macOS × amd64/arm64 的固定版本归档，注入来源提交。
+   `BuiltAt` 使用该发布运行的固定创建时间，重试保持一致；它表示发布构建运行开始时间。
+4. 独立签名 job 不恢复 Go 缓存、不持仓库写权限。先校验归档并编译可信 verifier，
+   再次校验 tag 后，仅签名单步取得环境私钥。公钥须与仓库公钥匹配；四份归档逐一签名并独立验签。
+5. 独立发布 job 才拥有 `contents: write`；再次验证22文件精确集合、全部归档成员/hash/pin、
+   签名、固定来源和回执。先创建草稿，上传并核对远端资产的大小及SHA-256，重新检查来源和草稿身份后公开。
+   已有冲突资产拒绝覆盖；相同运行的完整已发布结果可重复确认，匹配的部分草稿只补缺失资产。
+6. alpha/beta/rc 自动标为 Pre-release，不占稳定版 latest；稳定版使用GitHub的legacy latest选择策略。
+   有 `docs/releases/<tag>.md` 时使用该版本说明，否则自动生成变更说明并附固定来源、验签与验收范围链接。
+
+失败时查看该运行并重跑失败任务；不得删除或移动版本 tag，也不以手工上传未验签文件绕过流程。
+若草稿资产发生冲突，流程保留现场并失败，不静默覆盖。自动化通过不等于外部账号、原生平台、
+长期资源或全部Phase 0–5门槛已经通过；发布说明必须保持实际支持范围。
+
+正式公钥为 [configs/release-signing.pub](../configs/release-signing.pub)，SPKI DER SHA-256：
 
 ```text
 e21f6dd671ea5042c43c492b759b933dda73985f89a823b43c651ff7c787c17d
 ```
 
-GitHub环境 `release-signing` 已配置必需审批人 `DDSRem`，仅允许 `master` 分支，
-关闭管理员绕过。单维护者允许批准自己发起的运行；签名仍需在GitHub明确点击审批。
-私钥在环境Secret `SHIKI_RELEASE_SIGNING_KEY`，公钥在环境Variable `SHIKI_RELEASE_PUBLIC_KEY`。
-本机备份位于 `$HOME/.config/shikigami/release-keys/20261029-ugffivd_/`，目录0700、私钥0600，
-不进入仓库、日志或Actions artifact。用户应另存一份受保护备份；GitHub Secret不能读回明文用于恢复。
+环境Secret为 `SHIKI_RELEASE_SIGNING_KEY`，公钥Variable为 `SHIKI_RELEASE_PUBLIC_KEY`。
+既有专用密钥保持；本机私有备份位于 `$HOME/.config/shikigami/release-keys/20261029-ugffivd_/`，
+目录0700、私钥0600，未提交或上传至artifact。私钥只在签名单步写入0600临时文件并清除环境变量，
+正常/普通失败退出清理；强杀依赖临时runner销毁，不保证EXIT trap执行。
 
-工作流 [sign-release.yml](../.github/workflows/sign-release.yml) 手动触发，操作顺序：
+首次信任使用预先信任的仓库公钥或独立确认的上述指纹。下载Release资产后，从可信源码运行
+`scripts/release-trust.go verify`，只解包认证后的私有副本。GitHub下载地址会重定向，可以用
+`gh release download <tag> --repo DDSRem-Dev/Shikigami` 取回后离线验签；现有`fetch`明确拒绝重定向，
+不能把GitHub下载URL直接当作已验证可用的fetch入口。PROVENANCE记录工作流来源，独立签名认证的是
+归档及其版本/目标/hash/pin；不将未单独签名的PROVENANCE称为独立源码证明。
 
-1. 先等待目标提交的 `CI` push/master运行完整成功，记录其run ID。
-2. 在Actions选择 **Sign prerelease artifacts → Run workflow**，分支选择 `master`，
-   `version` 填 `v0.0.1-alpha.1`，`ci_run_id` 填上述成功运行ID。
-3. gate检查当前仓库、CI工作流路径、push事件、master、成功终态与精确commit；
-   四目标构建仅检出该commit，注入版本/commit/UTC构建时间，不取得签名私钥。
-4. 四组构建完成后，检查运行所示的来源commit，再由 `DDSRem` 在 **Review deployments**
-   批准 `release-signing`。签名工具来自工作流自身固定commit，先无密钥校验归档并编译verifier；
-   私钥仅传入签名单步的0600临时文件，正常/普通失败退出清理；强杀由临时托管runner销毁处理，不保证EXIT trap执行。环境公钥必须匹配仓库公钥。
-5. 全部签名经独立公钥验签后，下载 `signed-v0.0.1-alpha.1` artifact。
-   内容包括四目标归档、摘要/pin、签名、验证回执、公钥与来源记录；这不是公开Release。
+归档签名不等同Apple代码签名或公证。轮换密钥时更新仓库公钥/指纹和环境Secret/Variable，
+保留旧公钥供历史校验；泄露时暂停发布并撤掉密钥，通过受信渠道公布受影响版本与替代密钥。
+当前verifier没有在线撤销查询，轮换/撤销演练仍待。Actions artifact保留30天，公开Release资产另行保留。
 
-本地验证已通过：5项行为测试、actionlint、四目标微型归档配合临时测试密钥和真实verifier的实际签名shell；两类密钥不匹配负例均拒绝。旧.5两个真实归档也通过只读结构/hash/pin校验。本地结果不等于远端签名工作流已执行。
-
-工作流无创建tag/Release权限，不会自动发布。Actions artifact保留30天，属于中间交付；
-后续公开分发必须核对固定版本/来源/签名并单独发布。首次信任应通过预先信任的仓库公钥或
-独立确认的上述指纹建立，不能只信同一未认证下载包携带的公钥。归档签名不等同Apple代码签名或公证。
-
-密钥轮换需生成新密钥、提交新公钥及指纹，并同步更新受保护环境的Secret/Variable；
-按旧版本保留旧公钥供历史验证。发现私钥泄露时先暂停签名工作流并撤掉环境Secret，
-再通过仓库的受信公告明确受影响版本和撤销指纹、替换密钥及产物。
-当前verifier没有在线撤销查询，验证者必须采用最新可信的撤销/密钥信息；流程配置不代表撤销演练已验收。
+历史手动运行[40877214329](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40877214329)
+由DDSRem审批，为92cafaf源码生成22文件并通过本机再次验签，位于`dist/v0.0.1-alpha.1/`。
+它是首发前的签名候选；首个公开版本将由新tag流程重建，不能把两次归档字节或构建元数据视为相同。
+新流程本地38项工具测试、actionlint及真实verifier的四目标签名/篡改拒绝验证已通过；
+首次真实tag发布结果仍需由GitHub运行和公开资产确认。
 
 ## 当前候选与验收边界
 
+**本轮实际包验收：** 手动签名92cafaf候选已完成macOS arm64原生LaunchAgent的目标helper升级/回滚69.72秒及独立新装，Linux arm64真实systemd的13生命周期/4活动传输升级回滚和独立新装；重复安装、插件、状态保留与正常清理通过。未重建产品，历史A为本地开发.5，真实账号/外部就绪保持pending。新tag会重新构建同版本，生产输入相同不代表归档字节/构建元数据相同；见[精确验收证据](15-implementation-status.md#evidence-signed-alpha-install-20261029)。
+
 文档提交`9fe8e22`的后续CI `40867762758`暴露了Ubuntu凭据轮换夹具中持久客户端误用1秒业务预算，显式冲突解决超时；macOS及四目标打包通过。当前修正夹具以使用文档默认预算，客户端deadline及真实hostrotation双角色定向race通过；随后提交`8f4e4fac83fac5ad73fcafe2ccc53a3f3ff6bb4c`的[CI 40870240722](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40870240722)六项job全部成功，Ubuntu/macOS的hostrotation整包race与完整CI通过。随后签名实际选用了文档收尾后的成功CI `40872062129`，当前结果见上文；公开发布门槛保留。`40865903512`历史成功与`40867762758`失败均保留。
 
-提交`68f93b0bfb6f09743bb17f3e43f57561276fc785`的[CI 40865903512](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40865903512)已完整成功，六项job全部通过，包括Ubuntu/macOS测试、独立终端语义与四目标未签名打包。该成功运行可作为上述签名工作流的`ci_run_id`，构建来源固定为此SHA；文档后续提交不改变此来源。后续签名已由受保护环境审批并成功，实际来源见上文；CI通过不代表已创建tag/Release或满足外部、平台与长期资源门槛。
+提交`68f93b0bfb6f09743bb17f3e43f57561276fc785`的[CI 40865903512](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40865903512)已完整成功，六项job全部通过，包括Ubuntu/macOS测试、独立终端语义与四目标未签名打包。旧手动流程当时可使用该运行作为`ci_run_id`，来源固定为此SHA；当前tag流程不接受该手动输入，而是在tag提交上执行CI。后续签名已由受保护环境审批并成功，实际来源见上文；CI通过不代表已创建tag/Release或满足外部、平台与长期资源门槛。
 
 第二轮CI `40862770945` 已确认端口修复通过，但Ubuntu出现探测deadline/transport取消顺序竞态；macOS和四目标打包成功。共享探测分类已补确定性红绿、保持原预算与信任拒绝边界，后由CI `40865903512`完整复验通过；原失败运行仍不可用于签名。
 

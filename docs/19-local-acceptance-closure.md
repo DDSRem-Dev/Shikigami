@@ -1,5 +1,7 @@
 # 当前候选的本地验收收敛
 
+**本轮更新（2026-10-29）：** 92cafaf源真实签名alpha的macOS原生LaunchAgent及Linux systemd容器新装/运行/开发候选升级回滚已通过，使用各目标包自身helper，所属资源清理与payload后置hash完成。tag自动构建/签名/公开发布已实现并完成本地验证，首个公开alpha也将从新tag工作流产生；新归档另行认证，不追认旧字节。详见[签名包验收](15-implementation-status.md#evidence-signed-alpha-install-20261029)及[自动发布](18-release-readiness.md#github-actions-自动构建签名与发布)。
+
 **签名产物更新（2026-10-29）：** v0.0.1-alpha.1已由Actions运行40877214329从92cafaf固定源码完成四目标签名，DDSRem审批与远端验签成功；22文件已在`dist/v0.0.1-alpha.1/`本机再次验签、payload hash/pin与来源核对通过。它是新的签名候选，不替代下文`.5`的冻结源证据；这批真实签名归档的安装/运行验收、公开分发及既有外部/平台/长期资源门槛仍待。
 
 更新：2026-10-29。本文件汇总当前候选的证据覆盖和剩余验证条件，不改变
