@@ -1,8 +1,8 @@
 # 自动化安装与运维契约
 
-**本文保留安装流程契约。仓库已实现本地固定版本 bundle 校验、事务安装/回滚、服务渲染、异步登录引导与本地就绪诊断；真实 systemd 容器与原生 macOS LaunchAgent 已有下述限定环境生命周期证据；原生 VPS/重启登录持久化、外部连接与完整公开分发仍需单独验收；专用公钥签名和本机验签已有实际证据。**
+**本文保留安装流程契约。仓库已实现本地固定版本 bundle 校验、事务安装/回滚、服务渲染、异步登录引导与本地就绪诊断；真实 systemd 容器与原生 macOS LaunchAgent 已有下述限定环境生命周期证据；首个公开预发布 v0.0.1-alpha.1 已由 tag 自动构建、签名和发布。原生 VPS/重启登录持久化、外部连接、完整平台与 Homebrew 分发仍需单独验收。**
 
-`scripts/install.sh`、`install-client.sh`、`uninstall.sh` 与短时运维 helper `shiki-install` 已存在；已完成专用公钥的四目标签名及验签；首个公开tag发布由自动工作流执行，公开下载结果需以实际Release验证为准。安装只接受本地 bundle、固定版本及调用者从独立可信渠道取得的 checksum pin。可信源码工具 `scripts/release-trust.go fetch` 提供显式HTTPS归档/签名地址、独立可信公钥和固定版本/平台的下载验签入口，先认证签名再下载归档，成功后生成私有副本/pin/receipt；解包与安装仍是显式后续步骤，工具不指定正式来源或建立公钥信任。命令与限制见发布认证，本批验收进度见16。下列完整就绪和运维要求不因本地测试通过而降低。
+`scripts/install.sh`、`install-client.sh`、`uninstall.sh` 与短时运维 helper `shiki-install` 已存在；已完成专用公钥的四目标签名及验签。[首个公开 Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.1) 来自提交 `f0b5f83dce599c8e0d715bda5e7806a0ef6aaa72`、成功自动发布运行 `40895007350`，公开资产的下载验证结果见[发行证据](./15-implementation-status.md#evidence-public-alpha-release-20261029)。安装只接受本地 bundle、固定版本及调用者从独立可信渠道取得的 checksum pin。可信源码工具 `scripts/release-trust.go fetch` 提供显式HTTPS归档/签名地址、独立可信公钥和固定版本/平台的下载验签入口，先认证签名再下载归档，成功后生成私有副本/pin/receipt；解包与安装仍是显式后续步骤，工具不指定正式来源或建立公钥信任。GitHub下载地址会重定向，现有 `fetch` 拒绝重定向；应使用 `gh release download v0.0.1-alpha.1 --repo DDSRem-Dev/Shikigami` 取回资产，再用可信源码 verifier 和独立可信公钥离线验签。命令与限制见发布认证，本批验收进度见16。下列完整就绪和运维要求不因预发布成功而降低。
 
 ## 部署模型
 
@@ -60,7 +60,7 @@
 
 ## 交互方式
 
-最终发布后建议先下载/验证安装器，再从文件执行 Bash；不要把需要 read 的脚本通过 stdin 管道执行，避免把后续脚本正文读成回答。
+先下载并验证安装器，再从文件执行 Bash；不要把需要 read 的脚本通过 stdin 管道执行，避免把后续脚本正文读成回答。
 
 ```bash
 # 在目标 Linux 主机上明确部署；bundle 与 pin 必须已验证。
@@ -175,7 +175,7 @@ systemd 的 `WorkingDirectory` 使用规范 `~`（按 `User=` 或用户 manager 
 
 `scripts/test-launchd.sh` 已在 macOS 27.0.1 arm64、真实 UID501/HOME 和当前 GUI domain 验证原生 LaunchAgent bootstrap、SIGKILL 自动重启/新实例与旧 frontend 拒绝/旧插件回收、正常 agent stop 后 15 秒不重生、升级/回滚与卸载数据保留；另有受控 SIGTERM 取消后的 job/plist 清理证据。使用独立临时配置/产物且预检拒绝已有标准 job/plist。完整命令与证据见 [LAUNCHD-VALIDATION](15-implementation-status.md#evidence-launchd-validation)。这些结果不证明 reboot/login 持久化、已有用户安装迁移、其他 OS/arch、外部认证或生产长稳。两类流程均显式关闭 tsnet；systemd 场景的 Claude 是明确测试替身，`external_peer_acceptance` 仍为 pending。
 
-运维helper提供 `shiki-install --help`、`help <command>` 及各命令 `--help`；帮助在账号、凭据、配置、安装目录和服务访问之前返回0。参数错误仍返回2，`version` 不忽略多余参数。帮助不执行依赖安装或登录。发布说明草稿与升级限制见 [18 发布准备](./18-release-readiness.md)，不代表签名发行或支持渠道已完成。
+运维helper提供 `shiki-install --help`、`help <command>` 及各命令 `--help`；帮助在账号、凭据、配置、安装目录和服务访问之前返回0。参数错误仍返回2，`version` 不忽略多余参数。帮助不执行依赖安装或登录。公开预发布、问题反馈入口与升级限制见 [18 发布准备](./18-release-readiness.md)；预发布不代表全部平台与交付门槛已完成。
 
 `--stage-only` 只适用于 install；rollback/uninstall/status/probe 不接受它或安装布局/产物参数，避免忽略参数后执行与预期不同的操作。维护操作从 role/user/prefix 选中的受管 receipt 读取原配置/状态路径；probe 可另指定登录key或显式Token发行选项。uninstall wrapper验证本地bundle/helper后，仅去除用于bootstrap的bundle/pin参数再调用helper，不把它们作为维护路径覆盖。
 
@@ -183,11 +183,11 @@ systemd 的 `WorkingDirectory` 使用规范 `~`（按 `User=` 或用户 manager 
 
 ### 本地离线签名与验签
 
-可信源码中的 `scripts/release-trust.go` 提供显式 `sign` / `verify`，核心位于 `internal/releaseauth`；不属于宿主常驻服务或公共插件 SDK。`SHIKI_SIGNING_KEY=<外置0600私钥> SHIKI_VERSION=<固定版本> make release` 在本地打包后追加 Ed25519 签名；未配置密钥时仍为未签名本地产物。已有归档、校验 sidecar 或签名不覆盖。专用签名公钥及受限tag的Actions环境已配置；远端签名及本机再次验签已有证据，公开下载分发由真实tag发布验证。
+可信源码中的 `scripts/release-trust.go` 提供显式 `sign` / `verify`，核心位于 `internal/releaseauth`；不属于宿主常驻服务或公共插件 SDK。`SHIKI_SIGNING_KEY=<外置0600私钥> SHIKI_VERSION=<固定版本> make release` 在本地打包后追加 Ed25519 签名；未配置密钥时仍为未签名本地产物。已有归档、校验 sidecar 或签名不覆盖。专用签名公钥及受限tag的Actions环境已配置；首个公开alpha已通过该自动工作流签名、验签和发布，22个公开资产的独立下载、签名/payload/pin/远端摘要核对及双平台直接运行/重复离线暂存已通过；未激活服务，不替代首发前候选的服务验收，详见[发行证据](./15-implementation-status.md#evidence-public-alpha-release-20261029)。
 
 安装前从独立可信渠道取得 SPKI Ed25519 公钥，从可信源码运行 verifier，并显式指定期望 version/OS/arch。签名绑定归档名、大小、SHA-256 和 SHA256SUMS pin；先验证元数据，再对同一输入流复制并哈希到新建0700目录，归档/pin/最终 receipt 为0600。仅成功的私有副本可进入解包和显式安装；verifier 不解包、不执行、不联网。对同一未认证归档附带的公钥或hash不自动赋予信任。签名者负责确认归档与pin配对，安装器继续检查清单、平台、schema和插件契约。
 
-密钥撤销/轮换/分发政策与正式构建来源仍需发布方确立；指纹仅标识实际使用的公钥，工具不提供在线撤销或时间戳服务。输出使用可信私有父目录；异常路径替换时宁可保留不完整证据，也不递归删除未知对象。参数、格式、清理边界及先验签后stage命令见 离线签名说明。
+固定tag构建来源、公钥指纹及轮换/撤销处置边界见[自动发布流程](./18-release-readiness.md#github-actions-自动构建签名与发布)；轮换/撤销演练仍待。指纹仅标识实际使用的公钥，工具不提供在线撤销或时间戳服务。输出使用可信私有父目录；异常路径替换时宁可保留不完整证据，也不递归删除未知对象。参数、格式、清理边界及先验签后stage命令见离线签名说明。
 
 ### 受保护的 Actions 签名
 
