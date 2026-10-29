@@ -1,0 +1,167 @@
+name: Sign prerelease artifacts
+run-name: Sign ${{ inputs.version }} from CI ${{ inputs.ci_run_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Fixed alpha/beta/rc prerelease version
+        required: true
+        default: v0.0.1-alpha.1
+        type: string
+      ci_run_id:
+        description: Successful CI push run on master to build
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: sign-prerelease-${{ inputs.version }}
+  cancel-in-progress: false
+defaults:
+  run:
+    shell: bash
+env:
+  GOMAXPROCS: '2'
+  GOFLAGS: '-p=1 -mod=readonly -buildvcs=false'
+  GOTOOLCHAIN: local
+jobs:
+  source:
+    if: github.ref == 'refs/heads/master' && github.repository == 'DDSRem-Dev/Shikigami'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      commit: ${{ steps.ci.outputs.commit }}
+      version: ${{ steps.ci.outputs.version }}
+      ci_run_id: ${{ steps.ci.outputs.ci_run_id }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require successful CI for this repository and master commit
+        id: ci
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+        run: |
+          python3 scripts/release-actions.py gate \
+            --repository "$GITHUB_REPOSITORY" --run-id "$CI_RUN_ID" \
+            --version "$RELEASE_VERSION" --output "$GITHUB_OUTPUT"
+  build:
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        goos: [linux, darwin]
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.source.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: true
+      - name: Build unsigned fixed-source bundle
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+          SHIKI_VERSION: ${{ needs.source.outputs.version }}
+          SHIKI_COMMIT: ${{ needs.source.outputs.commit }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SHIKI_COMMIT"
+          export SHIKI_BUILT_AT
+          SHIKI_BUILT_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          env -u SHIKI_SIGNING_KEY make release
+          test -z "$(git status --porcelain --untracked-files=no)"
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: unsigned-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+  sign:
+    needs: [source, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: release-signing
+    steps:
+      # Signing code comes from this workflow's master commit, not the build input.
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          pattern: unsigned-*
+          path: unsigned
+          merge-multiple: true
+      - name: Validate all bundles and build trusted verifier without signing key
+        env:
+          RELEASE_VERSION: ${{ needs.source.outputs.version }}
+        run: |
+          set -euo pipefail
+          python3 scripts/release-actions.py bundles --directory unsigned --version "$RELEASE_VERSION" > "$RUNNER_TEMP/bundles.json"
+          go build -trimpath -o "$RUNNER_TEMP/release-trust" ./scripts/release-trust.go
+      - name: Sign and independently verify each target
+        env:
+          SHIKI_RELEASE_SIGNING_KEY: ${{ secrets.SHIKI_RELEASE_SIGNING_KEY }}
+          SHIKI_RELEASE_PUBLIC_KEY: ${{ vars.SHIKI_RELEASE_PUBLIC_KEY }}
+          RELEASE_VERSION: ${{ needs.source.outputs.version }}
+          SOURCE_COMMIT: ${{ needs.source.outputs.commit }}
+          CI_RUN_ID: ${{ needs.source.outputs.ci_run_id }}
+        run: |
+          set -euo pipefail
+          umask 077
+          shiki_key_dir="$(mktemp -d "$RUNNER_TEMP/shiki-signing.XXXXXX")"
+          trap 'rm -rf "$shiki_key_dir"' EXIT
+          test -n "$SHIKI_RELEASE_SIGNING_KEY"
+          test -n "$SHIKI_RELEASE_PUBLIC_KEY"
+          printf '%s\n' "$SHIKI_RELEASE_SIGNING_KEY" > "$shiki_key_dir/private.pem"
+          printf '%s\n' "$SHIKI_RELEASE_PUBLIC_KEY" > "$shiki_key_dir/public.pem"
+          unset SHIKI_RELEASE_SIGNING_KEY SHIKI_RELEASE_PUBLIC_KEY
+          openssl pkey -pubin -in configs/release-signing.pub -outform DER -out "$shiki_key_dir/expected.der"
+          openssl pkey -pubin -in "$shiki_key_dir/public.pem" -outform DER -out "$shiki_key_dir/configured.der"
+          cmp "$shiki_key_dir/expected.der" "$shiki_key_dir/configured.der"
+          mkdir signed
+          for shiki_os in linux darwin; do
+            for shiki_arch in amd64 arm64; do
+              shiki_name="shikigami-${RELEASE_VERSION}-${shiki_os}-${shiki_arch}.tar.gz"
+              "$RUNNER_TEMP/release-trust" sign \
+                --archive "unsigned/$shiki_name" --checksums-pin "unsigned/$shiki_name.checksums-pin" \
+                --private-key "$shiki_key_dir/private.pem" --signature "signed/$shiki_name.sig.json" \
+                --version "$RELEASE_VERSION" --os "$shiki_os" --arch "$shiki_arch"
+              "$RUNNER_TEMP/release-trust" verify \
+                --archive "unsigned/$shiki_name" --signature "signed/$shiki_name.sig.json" \
+                --public-key configs/release-signing.pub --output "$shiki_key_dir/verified-$shiki_os-$shiki_arch" \
+                --version "$RELEASE_VERSION" --os "$shiki_os" --arch "$shiki_arch" > "$shiki_key_dir/receipt.json"
+              cp "$shiki_key_dir/verified-$shiki_os-$shiki_arch/$shiki_name" "signed/$shiki_name"
+              cp "unsigned/$shiki_name.sha256" "unsigned/$shiki_name.checksums-pin" signed/
+              jq 'del(.archive)' "$shiki_key_dir/receipt.json" > "signed/$shiki_name.verification.json"
+            done
+          done
+          cp configs/release-signing.pub signed/release-signing.pub
+          jq -n --arg version "$RELEASE_VERSION" --arg commit "$SOURCE_COMMIT" \
+            --arg signer "$GITHUB_SHA" --arg repository "$GITHUB_REPOSITORY" \
+            --arg ci_run "$CI_RUN_ID" --arg signing_run "$GITHUB_RUN_ID" \
+            '{version:$version, source_commit:$commit, signing_workflow_commit:$signer, repository:$repository, ci_run_id:$ci_run, signing_run_id:$signing_run}' \
+            > signed/PROVENANCE.json
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: signed-${{ needs.source.outputs.version }}
+          path: signed/*
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

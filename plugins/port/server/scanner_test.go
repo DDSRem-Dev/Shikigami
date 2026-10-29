@@ -33,6 +33,52 @@ func TestStructuredScannerParsers(t *testing.T) {
 		t.Fatal("missing address family accepted")
 	}
 }
+func TestSSIPv4DeviceQualifierDoesNotFailWholeScan(t *testing.T) {
+	ports, err := parseSS([]byte("LISTEN 0 4096 127.0.0.53%lo:53 0.0.0.0:*\n"+
+		"LISTEN 0 128 127.0.0.1:3000 0.0.0.0:* users:((\"node\",pid=42,fd=10))\n"), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ports) != 2 || ports[0].BindAddress != "127.0.0.53" || ports[0].Port != 53 || ports[0].Pid != 0 ||
+		ports[1].BindAddress != "127.0.0.1" || ports[1].Port != 3000 || ports[1].Pid != 42 {
+		t.Fatalf("lost or changed scanner records: %v", ports)
+	}
+	if ports[0].SessionId != "" || ports[0].SourceIdentity != "" {
+		t.Fatal("interface qualifier invented ownership")
+	}
+}
+
+func TestSSDeviceQualifierPreservesAddressScope(t *testing.T) {
+	for _, tc := range []struct {
+		endpoint string
+		ipv6     bool
+		want     string
+	}{
+		{"127.0.0.53%lo:53", false, "127.0.0.53"},
+		{"192.0.2.10%eth0:3000", false, "192.0.2.10"},
+		{"0.0.0.0%eth0:3000", false, "0.0.0.0"},
+		{"*%lo:3000", false, "0.0.0.0"},
+		{"[::1]:3000", true, "::1"},
+		{"[fe80::1%eth0]:3000", true, "fe80::1%eth0"},
+		{"[::1%lo]:3000", true, "::1%lo"},
+	} {
+		t.Run(tc.endpoint, func(t *testing.T) {
+			ports, err := parseSS([]byte("LISTEN 0 128 "+tc.endpoint+" *:*\n"), tc.ipv6)
+			if err != nil || len(ports) != 1 || ports[0].BindAddress != tc.want {
+				t.Fatal(ports, err)
+			}
+		})
+	}
+	for _, value := range []string{"127.0.0.53%:53", "127.0.0.53%lo%other:53", "hostname%lo:53", "999.1.1.1%lo:53", "127.0.0.53%lo:bad:53", "127.0.0.53%lo/path:53", "127.0.0.53%lo:0", "127.0.0.53%lo:65536"} {
+		t.Run(value, func(t *testing.T) {
+			ports, err := parseSS([]byte("LISTEN 0 128 127.0.0.1:3000 *:*\nLISTEN 0 128 "+value+" *:*\n"), false)
+			if err == nil || ports != nil {
+				t.Fatal("malformed row became a successful partial scan", ports, err)
+			}
+		})
+	}
+}
+
 func TestActualSystemScannerFindsLoopbackListener(t *testing.T) {
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {

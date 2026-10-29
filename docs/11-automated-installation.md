@@ -183,8 +183,12 @@ systemd 的 `WorkingDirectory` 使用规范 `~`（按 `User=` 或用户 manager 
 
 ### 本地离线签名与验签
 
-可信源码中的 `scripts/release-trust.go` 提供显式 `sign` / `verify`，核心位于 `internal/releaseauth`；不属于宿主常驻服务或公共插件 SDK。`SHIKI_SIGNING_KEY=<外置0600私钥> SHIKI_VERSION=<固定版本> make release` 在本地打包后追加 Ed25519 签名；未配置密钥时仍为未签名本地产物。已有归档、校验 sidecar 或签名不覆盖。正式签名身份和下载分发渠道仍待建立。
+可信源码中的 `scripts/release-trust.go` 提供显式 `sign` / `verify`，核心位于 `internal/releaseauth`；不属于宿主常驻服务或公共插件 SDK。`SHIKI_SIGNING_KEY=<外置0600私钥> SHIKI_VERSION=<固定版本> make release` 在本地打包后追加 Ed25519 签名；未配置密钥时仍为未签名本地产物。已有归档、校验 sidecar 或签名不覆盖。专用签名公钥及受保护Actions环境已配置；实际远端签名与公开下载分发仍待验。
 
 安装前从独立可信渠道取得 SPKI Ed25519 公钥，从可信源码运行 verifier，并显式指定期望 version/OS/arch。签名绑定归档名、大小、SHA-256 和 SHA256SUMS pin；先验证元数据，再对同一输入流复制并哈希到新建0700目录，归档/pin/最终 receipt 为0600。仅成功的私有副本可进入解包和显式安装；verifier 不解包、不执行、不联网。对同一未认证归档附带的公钥或hash不自动赋予信任。签名者负责确认归档与pin配对，安装器继续检查清单、平台、schema和插件契约。
 
 密钥撤销/轮换/分发政策与正式构建来源仍需发布方确立；指纹仅标识实际使用的公钥，工具不提供在线撤销或时间戳服务。输出使用可信私有父目录；异常路径替换时宁可保留不完整证据，也不递归删除未知对象。参数、格式、清理边界及先验签后stage命令见 离线签名说明。
+
+### 受保护的 Actions 签名
+
+已提供手动签名工作流：仅从本仓库成功的CI push/master运行选择精确commit，四目标无密钥构建，`release-signing`环境经用户审批后统一签名并验签。公钥、指纹、密钥备份与轮换/撤销边界见[发布准备](./18-release-readiness.md#github-actions-自动签名)。工作流生成Actions artifact，不创建tag或Release；工具格式和安装前独立信任要求保持不变。

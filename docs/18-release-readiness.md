@@ -1,6 +1,6 @@
 # 首版发布说明草稿与交付门槛
 
-更新：2026-10-29。本文件是发布准备材料，不是发行公告。首个预发布版本已确定为 `v0.0.1-alpha.1`；发布 tag 尚未创建，最终提交和签名身份尚未确定；当前没有可供用户下载的正式签名发行版。范围仍由 [08 路线图](./08-roadmap.md) 决定，本文件不另设较小的“完成”标准。
+更新：2026-10-29。本文件是发布准备材料，不是发行公告。首个预发布版本已确定为 `v0.0.1-alpha.1`；发布 tag 尚未创建，最终发行提交尚未确定；签名公钥及受保护的Actions环境已配置；当前没有可供用户下载的正式签名发行版。范围仍由 [08 路线图](./08-roadmap.md) 决定，本文件不另设较小的“完成”标准。
 
 ## 首发兼容基线
 
@@ -29,7 +29,48 @@
 CI采用 `v0.0.0-ci`，后续预发布应从通过验收的固定提交显式构建 `v0.0.1-alpha.1`。
 工作流静态检查不等于远端运行通过；真实结果与剩余验收门槛分别记录。
 
+## GitHub Actions 自动签名
+
+用户已选择Actions自动签名，并授权生成专用Ed25519密钥和本机私有备份。
+正式公钥为 [configs/release-signing.pub](../configs/release-signing.pub)，其规范SPKI DER的SHA-256指纹为：
+
+```text
+e21f6dd671ea5042c43c492b759b933dda73985f89a823b43c651ff7c787c17d
+```
+
+GitHub环境 `release-signing` 已配置必需审批人 `DDSRem`，仅允许 `master` 分支，
+关闭管理员绕过。单维护者允许批准自己发起的运行；签名仍需在GitHub明确点击审批。
+私钥在环境Secret `SHIKI_RELEASE_SIGNING_KEY`，公钥在环境Variable `SHIKI_RELEASE_PUBLIC_KEY`。
+本机备份位于 `$HOME/.config/shikigami/release-keys/20261029-ugffivd_/`，目录0700、私钥0600，
+不进入仓库、日志或Actions artifact。用户应另存一份受保护备份；GitHub Secret不能读回明文用于恢复。
+
+工作流 [sign-release.yml](../.github/workflows/sign-release.yml) 手动触发，操作顺序：
+
+1. 先等待目标提交的 `CI` push/master运行完整成功，记录其run ID。
+2. 在Actions选择 **Sign prerelease artifacts → Run workflow**，分支选择 `master`，
+   `version` 填 `v0.0.1-alpha.1`，`ci_run_id` 填上述成功运行ID。
+3. gate检查当前仓库、CI工作流路径、push事件、master、成功终态与精确commit；
+   四目标构建仅检出该commit，注入版本/commit/UTC构建时间，不取得签名私钥。
+4. 四组构建完成后，检查运行所示的来源commit，再由 `DDSRem` 在 **Review deployments**
+   批准 `release-signing`。签名工具来自工作流自身固定commit，先无密钥校验归档并编译verifier；
+   私钥仅传入签名单步的0600临时文件，正常/普通失败退出清理；强杀由临时托管runner销毁处理，不保证EXIT trap执行。环境公钥必须匹配仓库公钥。
+5. 全部签名经独立公钥验签后，下载 `signed-v0.0.1-alpha.1` artifact。
+   内容包括四目标归档、摘要/pin、签名、验证回执、公钥与来源记录；这不是公开Release。
+
+本地验证已通过：5项行为测试、actionlint、四目标微型归档配合临时测试密钥和真实verifier的实际签名shell；两类密钥不匹配负例均拒绝。旧.5两个真实归档也通过只读结构/hash/pin校验。本地结果不等于远端签名工作流已执行。
+
+工作流无创建tag/Release权限，不会自动发布。Actions artifact保留30天，属于中间交付；
+后续公开分发必须核对固定版本/来源/签名并单独发布。首次信任应通过预先信任的仓库公钥或
+独立确认的上述指纹建立，不能只信同一未认证下载包携带的公钥。归档签名不等同Apple代码签名或公证。
+
+密钥轮换需生成新密钥、提交新公钥及指纹，并同步更新受保护环境的Secret/Variable；
+按旧版本保留旧公钥供历史验证。发现私钥泄露时先暂停签名工作流并撤掉环境Secret，
+再通过仓库的受信公告明确受影响版本和撤销指纹、替换密钥及产物。
+当前verifier没有在线撤销查询，验证者必须采用最新可信的撤销/密钥信息；流程配置不代表撤销演练已验收。
+
 ## 当前候选与验收边界
+
+首轮远端CI `40859588149` 的四目标打包与macOS测试通过，Ubuntu因ss IPv4接口后缀解析失败。修复已通过native受影响race/vet，待新远端CI验证。该修复尚未进入旧`.5`归档；下文`.5`只描述原冻结源码，新签名产物必须选择真正成功的CI提交。
 
 本地可独立收尾的证据矩阵和条件驱动方案已完成，见 [19 本地验收收敛](./19-local-acceptance-closure.md)。已知 syncack 和当前 systemd 组合遗漏已由对应补验关闭；当前候选长期资源门槛仍待有效证据，不再把这两项写成未启动任务。以下带冻结源编号的段落是历史验收范围，不能叠加成一次当前全套验收。
 
@@ -96,7 +137,7 @@ Shikigami 通过本地 CLI/TUI 和常驻 agent 使用远端普通用户的 tmux/
 
 目前使用可信源码构建或已经独立验证的本地 bundle。`SHIKI_VERSION=<固定版本> make release` 产生本机目标 tarball、release.json、SHA256SUMS、archive digest 和 checksums pin；默认不签名；显式配置 `SHIKI_SIGNING_KEY` 时追加本地 Ed25519 签名。它不会上传、创建 tag 或建立下载渠道。不同目标必须独立构建，不在同一工作树并行生成内嵌产物。
 
-安装前验证整个归档和来源，之后再解包/运行脚本或 helper。对刚下载文件自行计算摘要只能发现后续变化，不能证明发布者身份。调用 helper 时仍必须传入独立可信的 `--checksums-sha256`；不能从未认证的同一归档读出一个值就称完成发布者验证。可信源码 verifier 配合独立公钥、固定 version/OS/arch 认证归档，再生成新私有副本与认证 pin；新增显式HTTPS下载入口先验签再取归档，安装仍使用本地认证副本，当前验收范围见15/16。操作说明见[固定版本发布认证](11-automated-installation.md#本地离线签名与验签)。正式签名密钥/身份、信任根分发、轮换和渠道尚未确立。
+安装前验证整个归档和来源，之后再解包/运行脚本或 helper。对刚下载文件自行计算摘要只能发现后续变化，不能证明发布者身份。调用 helper 时仍必须传入独立可信的 `--checksums-sha256`；不能从未认证的同一归档读出一个值就称完成发布者验证。可信源码 verifier 配合独立公钥、固定 version/OS/arch 认证归档，再生成新私有副本与认证 pin；新增显式HTTPS下载入口先验签再取归档，安装仍使用本地认证副本，当前验收范围见15/16。操作说明见[固定版本发布认证](11-automated-installation.md#本地离线签名与验签)。专用公钥与受保护Actions签名身份现已配置，见本页自动签名章节；实际远端签名运行、可信公开分发和轮换/撤销演练仍待验。
 
 此前608文件冻结源码的实际完整`make release`已在macOS arm64和普通用户Linux arm64容器通过：一次性测试密钥签名、可信源码verifier配合独立公钥验签、认证私有副本解包、六二进制版本核对、真实helper暂存（macOS client；Linux client/daemon）。仅生成可审查服务文件，未激活或发布；详见[完整签名构建](15-implementation-status.md#evidence-current-release-validation)。此证据补齐先前旧developer归档的构建来源范围，不建立正式发布者身份。
 

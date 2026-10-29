@@ -4,13 +4,13 @@
 [08 路线图](./08-roadmap.md)的原始要求，也不代替
 [15 实施记录](./15-implementation-status.md)和
 [16 架构一致性检查](./16-architecture-conformance.md)中的批次记录。
-本页记录候选的只读证据审查与计划收敛；同批另完成构建元数据入口、文档清理及诊断runner去文档依赖，详情见15/16。未启动新负载或重启原长测，产品Go/proto/module输入未变。
+本页记录候选的只读证据审查与计划收敛；同批另完成构建元数据入口、文档清理及诊断runner去文档依赖，详情见15/16。未启动新负载或重启原长测，该收敛批次产品Go/proto/module输入未变；后续Ubuntu扫描修复已修改port的scanner.go及其测试，当前源码不再与旧.5完全相同，详见08/15/16。
 
 ## 候选与来源
 
 已交付候选为 `v0.0.0-local.20261029.5`，位于
 `dist/local-20261029.5/`，包含 macOS arm64、Linux arm64 开发归档。
-本轮重新计算当前工作树中的 541 份 Go、proto、根及嵌套 module 文件，
+签名配置前的收敛批次曾重新计算工作树中的 541 份 Go、proto、根及嵌套 module 文件，
 与已有候选执行输入清单逐项相同，零差异。清单为
 `/tmp/shiki-long-run-source-delta-20261029.json`。
 

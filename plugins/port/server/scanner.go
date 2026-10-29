@@ -143,7 +143,27 @@ func parseSS(data []byte, ipv6 bool) ([]*pb.OpenPort, error) {
 		if len(fields) < 5 || fields[0] != "LISTEN" {
 			return nil, errors.New("unrecognized ss record")
 		}
-		address, port, err := endpoint(fields[3], ipv6)
+		value := fields[3]
+		if !ipv6 {
+			// ss appends %device to IPv4 addresses bound to an interface.
+			// This is not an IPv6 zone and is not part of the IPv4 literal.
+			if colon := strings.LastIndexByte(value, ':'); colon > 0 {
+				if host, device, qualified := strings.Cut(value[:colon], "%"); qualified {
+					if device == "" || strings.ContainsAny(device, "%:/[]\x00\t\r\n ") {
+						return nil, errors.New("invalid ss interface qualifier")
+					}
+					if host == "*" {
+						host = "0.0.0.0"
+					}
+					addr, err := netip.ParseAddr(host)
+					if err != nil || !addr.Is4() {
+						return nil, errors.New("invalid ss interface-qualified IPv4 address")
+					}
+					value = addr.String() + value[colon:]
+				}
+			}
+		}
+		address, port, err := endpoint(value, ipv6)
 		if err != nil {
 			return nil, err
 		}
