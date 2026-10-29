@@ -2,7 +2,9 @@ package agent
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net/http/httptest"
 	"os"
@@ -18,10 +20,11 @@ import (
 )
 
 // Exercise a real HTTP/2 stream while an independent identity probe exhausts
-// its own fair-share deadline. No parent cancellation or transport error is
-// injected: the existing authenticated terminal continues to exchange bytes.
+// its own fair-share deadline. The cancellation-ordering case forces a local
+// transport status; every case keeps a real authenticated terminal exchanging
+// bytes without canceling its parent.
 func TestProbeTimeoutPreservesSharedTerminalUntilConsecutiveFailure(t *testing.T) {
-	for _, outcome := range []string{"short callers repeat", "full success resets", "full consecutive timeout", "authentication rejection", "identity rejection", "remote deadline", "remote cancellation"} {
+	for _, outcome := range []string{"short callers repeat", "local cancellation after deadline", "full success resets", "full consecutive timeout", "authentication rejection", "identity rejection", "remote deadline", "remote cancellation"} {
 		t.Run(outcome, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 			defer cancel()
@@ -74,6 +77,17 @@ func TestProbeTimeoutPreservesSharedTerminalUntilConsecutiveFailure(t *testing.T
 			r.mu.Lock()
 			original := r.pools[record.Config.Id]
 			original.nextCheck = time.Now().Add(time.Hour)
+			if outcome == "local cancellation after deadline" {
+				// Force the transport cancellation ordering seen on CI: the
+				// probe expires, but its transport reports local Canceled.
+				// Keep the original real HTTP/2 terminal independently alive.
+				original.base = connect.NewClient(clientTransport{original.base}, func(connect.ClientFunc) connect.ClientFunc {
+					return func(ctx context.Context, _ connect.Spec) (connect.ClientStream, error) {
+						<-ctx.Done()
+						return nil, connect.NewError(connect.CodeCanceled, "transport cleanup canceled request")
+					}
+				})
+			}
 			r.mu.Unlock()
 			resolve := func(action string, fullBudget bool) (*connect.Client, error) {
 				t.Helper()
@@ -123,6 +137,8 @@ func TestProbeTimeoutPreservesSharedTerminalUntilConsecutiveFailure(t *testing.T
 			preserved()
 			exchange(1)
 			switch outcome {
+			case "local cancellation after deadline":
+				// The shared terminal and retry budget were checked above.
 			case "short callers repeat":
 				for n := 2; n <= 4; n++ {
 					if next, err := resolve("timeout", false); next != nil || connect.CodeOf(err) != connect.CodeUnavailable {
@@ -180,6 +196,38 @@ func TestProbeTimeoutPreservesSharedTerminalUntilConsecutiveFailure(t *testing.T
 				probe.waitClosed(t, ready.AttachmentId)
 			}
 		})
+	}
+}
+
+func TestProbeDeadlineDoesNotHideRemoteOrTrustErrors(t *testing.T) {
+	expired, stop := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
+	defer stop()
+	for _, err := range []error{
+		connect.NewError(connect.CodeCanceled, "remote canceled").WithRemote(),
+		connect.NewError(connect.CodeDeadlineExceeded, "remote deadline").WithRemote(),
+		connect.NewError(connect.CodeUnauthenticated, "remote authentication").WithRemote(),
+		connect.NewError(connect.CodeUnauthenticated, "authentication rejected"),
+		connect.NewError(connect.CodePermissionDenied, "identity rejected"),
+		connect.NewError(connect.CodeFailedPrecondition, "protocol incompatible"),
+		x509.UnknownAuthorityError{},
+	} {
+		t.Run(err.Error(), func(t *testing.T) {
+			if got := classifyProbeError(t.Context(), expired, err); got != err {
+				t.Fatalf("probe deadline hid an independent rejection: got %v, want %v", got, err)
+			}
+		})
+	}
+	localCanceled := connect.NewError(connect.CodeCanceled, "local canceled")
+	if got := classifyProbeError(t.Context(), t.Context(), localCanceled); got != localCanceled {
+		t.Fatal("live probe cancellation became a timeout", got)
+	}
+	parent, cancel := context.WithCancel(t.Context())
+	cancel()
+	if got := classifyProbeError(parent, expired, localCanceled); !errors.Is(got, context.Canceled) {
+		t.Fatal("probe deadline hid caller cancellation", got)
+	}
+	if got := classifyProbeError(expired, expired, localCanceled); !errors.Is(got, context.DeadlineExceeded) {
+		t.Fatal("probe deadline hid caller deadline", got)
 	}
 }
 

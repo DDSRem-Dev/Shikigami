@@ -98,7 +98,12 @@ func classifyProbeError(parent, probe context.Context, err error) error {
 	// A local transport can report its deadline before the context timer's
 	// callback is scheduled. Preserve the causal local error in that case;
 	// remote application deadlines above are never route/fallback evidence.
-	if errors.Is(err, context.DeadlineExceeded) || err != nil && probe.Err() == context.DeadlineExceeded && connect.CodeOf(err) == connect.CodeDeadlineExceeded {
+	// Cancellation cleanup can also cancel the transport child before its
+	// parent's deadline propagates, making unary Send return local Canceled.
+	// Require the actual probe deadline so ordinary cancellation and trust
+	// failures cannot gain timeout grace or trigger route fallback.
+	code := connect.CodeOf(err)
+	if errors.Is(err, context.DeadlineExceeded) || err != nil && probe.Err() == context.DeadlineExceeded && (code == connect.CodeDeadlineExceeded || code == connect.CodeCanceled) {
 		return remoteProbeTimeout{}
 	}
 	return err
