@@ -2,7 +2,7 @@
 
 通过本地 CLI/TUI 和常驻 agent，使用远端 VPS 上的 tmux / Claude Code。核心链路采用 Connect/protobuf over HTTP/2；文件同步和 TCP 转发由双端插件执行。
 
-**正在实施完整 Phase 0–5，尚不是已发行的完整产品。** CLI、agent、daemon、真实 tmux 终端、双端同步/转发插件、监控、配置快照和 TUI 已有实现与本地验收。安装升级/回滚和内嵌产物已有隔离测试；原生macOS LaunchAgent和Linux容器真实systemd已通过生命周期验收，外部网络认证、原生VPS/重启登录持久化、完整平台/长稳与正式发布门槛仍待完成。证据见 [实施记录](docs/15-implementation-status.md) 和 [架构一致性检查](docs/16-architecture-conformance.md)，完整范围以 [路线图](docs/08-roadmap.md) 为准。
+**已提供公开 alpha，完整 Phase 0–5 尚未交付。** CLI、agent、daemon、真实 tmux 终端、双端同步/转发插件、监控、配置快照和 TUI 已有实现与本地验收。安装升级/回滚和内嵌产物已有隔离测试；原生macOS LaunchAgent和Linux容器真实systemd已通过限定生命周期验收，外部网络认证、原生VPS/重启登录持久化、完整平台与当前版本长期资源稳定仍待完成。证据见 [实施记录](docs/15-implementation-status.md) 和 [架构一致性检查](docs/16-architecture-conformance.md)，完整范围以 [路线图](docs/08-roadmap.md) 为准。
 
 ## 开发
 
@@ -14,7 +14,7 @@ make test
 make lint
 ```
 
-`make build` 输出 `bin/shiki`、`bin/shiki-agent`、`bin/shiki-daemon`、短时运维 helper `bin/shiki-install`，以及两个插件和对应 manifest。这是开发构建；本地固定版本 bundle 的打包、校验及安装工具见 [工具说明](docs/18-release-readiness.md)，尚无正式受信下载源。`make test` 包含 race detector 和本机 tmux 测试；缺少 tmux 时对应测试会报告跳过，不能据此声称完成终端验证。
+`make build` 输出 `bin/shiki`、`bin/shiki-agent`、`bin/shiki-daemon`、短时运维 helper `bin/shiki-install`，以及两个插件和对应 manifest。这是开发构建；固定版本 bundle 的打包、验签及安装工具见 [工具说明](docs/18-release-readiness.md)，公开归档见 [GitHub Releases](https://github.com/DDSRem-Dev/Shikigami/releases)。`make test` 包含 race detector 和本机 tmux 测试；缺少 tmux 时对应测试会报告跳过，不能据此声称完成终端验证。
 
 重新生成协议：
 
@@ -37,6 +37,12 @@ make generate-proto
 - `plugins/sync/`、`plugins/port/`：独立插件入口和业务实现，分别以 `--side=client|server` 启动。
 - `internal/node/`：内嵌 tsnet 与本地 NodeControl；真实本地控制面测试，外部部署认证待验收。
 
-设计文档入口：[docs/README.md](docs/README.md)。代码仓库：[DDSRem-Dev/Shikigami](https://github.com/DDSRem-Dev/Shikigami)。许可证：[MIT](LICENSE)。目前没有正式版本、Homebrew formula 或一键安装源。
+设计文档入口：[docs/README.md](docs/README.md)。代码仓库：[DDSRem-Dev/Shikigami](https://github.com/DDSRem-Dev/Shikigami)。公开版本、自动发布流程与安装方式见 [发布准备](docs/18-release-readiness.md)。
 
-发布说明草稿、平台证据、升级限制和故障排除见 [发布准备](docs/18-release-readiness.md)；这不是已发布版本或正式支持承诺。
+## 许可证
+
+Copyright (c) 2026 Shikigami contributors。
+
+当前项目采用 **GNU General Public License version 3 only（SPDX: GPL-3.0-only）**，完整正文见 [LICENSE](LICENSE)。软件按许可证条款提供，不附带任何担保。第三方依赖保留各自许可证。
+
+从 `v0.0.1-alpha.2` 起的本项目发行采用 GPL-3.0-only；已发布的 `v0.0.1-alpha.1` 及其冻结源码保留当时的 MIT 许可证，历史归档不重新标注或覆盖。

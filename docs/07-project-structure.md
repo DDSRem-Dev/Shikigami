@@ -6,6 +6,7 @@
 shikigami/
 ├── README.md / LICENSE / go.mod / go.sum / Makefile
 ├── .github/workflows/                 # CI / release
+├── Formula/shikigami.rb               # 成功公开发行后自动生成的 Homebrew 分发入口
 ├── docs/                              # 00–14设计 + 实施/验收/发布准备记录
 ├── proto/
 │   ├── shiki.proto                    # 远端 RPC
@@ -72,6 +73,7 @@ shikigami/
 ├── scripts/
 │   ├── install.sh / install-client.sh / uninstall.sh
 │   ├── generate-proto.sh / build.sh / dev-setup.sh
+│   ├── homebrew-formula.py / release-homebrew.py # 已验签产物生成与CAS更新分发入口
 │   └── build-embedded.sh / release.sh / release.go / release-trust.go / test-linux.sh
 └── test/
     ├── integration/                   # 跨进程/插件/协议测试

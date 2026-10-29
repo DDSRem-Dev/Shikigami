@@ -140,7 +140,7 @@ agent 必须使用与交互 shell 一致且明确的配置路径；launchd/syste
 
 ## 本地实现入口与仍待验收的部署边界
 
-`make release` 打包当前固定版本的本地产物、MIT `LICENSE` 及校验清单；清单内同时约束 OS/arch、协议 major、状态/配置 schema 和双端插件能力。许可证本身也在 payload 摘要清单中。`make build-embedded` 生成按目标平台嵌入的插件，开发构建不依赖生成目录。`shiki-install` 是一次性的安装/运维 helper，不是第四个常驻宿主。
+`make release` 打包当前固定版本的本地产物、根目录 `LICENSE`（当前 GPL-3.0-only）及校验清单；清单内同时约束 OS/arch、协议 major、状态/配置 schema 和双端插件能力。许可证本身也在 payload 摘要清单中。`make build-embedded` 生成按目标平台嵌入的插件，开发构建不依赖生成目录。`shiki-install` 是一次性的安装/运维 helper，不是第四个常驻宿主。
 
 安装新增 `--bundle`、`--checksums-sha256`、`--prefix`、`--state-dir`、`--plugins-dir`、`--bin-dir`、`--path`、`--claude-executable` 与 `--stage-only`。stage 只复制校验通过的不可变版本并生成可审查 service 文件；不写实际配置、不注册服务、不登录、不显示 ready。checksum pin 必须由操作者独立确认，不能将对未认证下载自行计算的 hash 冒充发布者签名。
 
@@ -187,7 +187,7 @@ systemd 的 `WorkingDirectory` 使用规范 `~`（按 `User=` 或用户 manager 
 
 安装前从独立可信渠道取得 SPKI Ed25519 公钥，从可信源码运行 verifier，并显式指定期望 version/OS/arch。签名绑定归档名、大小、SHA-256 和 SHA256SUMS pin；先验证元数据，再对同一输入流复制并哈希到新建0700目录，归档/pin/最终 receipt 为0600。仅成功的私有副本可进入解包和显式安装；verifier 不解包、不执行、不联网。对同一未认证归档附带的公钥或hash不自动赋予信任。签名者负责确认归档与pin配对，安装器继续检查清单、平台、schema和插件契约。
 
-固定tag构建来源、公钥指纹及轮换/撤销处置边界见[自动发布流程](./18-release-readiness.md#github-actions-自动构建签名与发布)；轮换/撤销演练仍待。指纹仅标识实际使用的公钥，工具不提供在线撤销或时间戳服务。输出使用可信私有父目录；异常路径替换时宁可保留不完整证据，也不递归删除未知对象。参数、格式、清理边界及先验签后stage命令见离线签名说明。
+固定tag构建来源、公钥指纹及轮换/撤销处置边界见[自动发布流程](./18-release-readiness.md#github-actions-自动构建签名与发布)；已完成[隔离测试密钥轮换/撤信演练](21-release-key-rotation.md)，未操作生产身份。指纹仅标识实际使用的公钥，工具不提供在线撤销或时间戳服务。输出使用可信私有父目录；异常路径替换时宁可保留不完整证据，也不递归删除未知对象。参数、格式、清理边界及先验签后stage命令见离线签名说明。
 
 ### 受保护的 Actions 签名
 

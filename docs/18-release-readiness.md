@@ -2,6 +2,12 @@
 
 更新：2026-10-29。首个公开预发布 [v0.0.1-alpha.1](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.1) 已通过 tag 全自动工作流发布；固定提交为 `f0b5f83dce599c8e0d715bda5e7806a0ef6aaa72`，[Actions 40895007350](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40895007350) 已完成且成功，包含同源 CI、四目标构建、签名验签和公开发布。Release 于 `2026-10-29T15:13:47Z` 公开，`draft=false`、`prerelease=true`，共22个资产；独立下载与实际产物验证结果见[公开发行证据](15-implementation-status.md#evidence-public-alpha-release-20261029)。本文件保存发布流程、验收边界与剩余门槛；[该版本说明](./releases/v0.0.1-alpha.1.md) 随 tag 冻结。完整范围仍由 [08 路线图](./08-roadmap.md) 决定，预发布不缩小交付要求。
 
+## 当前许可证与下一预发布
+
+用户指定Homebrew首发版本为`v0.0.1-alpha.2`，采用GPL-3.0-only。根[LICENSE](../LICENSE)为[GNU官网GPLv3完整正文](https://www.gnu.org/licenses/gpl-3.0.txt)，35,149字节，SHA-256 `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`；项目授权范围在根README明确为version3 only。构建原样复制LICENSE并纳入归档签名/hash；生成器从四目标已认证归档的完整LICENSE识别许可证，未知或不一致拒绝。旧alpha.1及其固定源码保留MIT，不覆盖或追改历史产物。
+
+alpha.2的发布说明见[冻结说明](releases/v0.0.1-alpha.2.md)。新tag实际成功与公开分发验证记录以15为准，不能用alpha.1旧流程冒充新Homebrew步骤已经执行。
+
 ## 首发兼容基线
 
 首次发布前，2026-10-29用户确认从未对外发布可用版本，当时GitHub Release和tag列表的只读检查也为空。
@@ -63,6 +69,9 @@ GitHub `release-signing` 环境已按用户要求取消人工审批，只允许 
    已有冲突资产拒绝覆盖；相同运行的完整已发布结果可重复确认，匹配的部分草稿只补缺失资产。
 6. alpha/beta/rc 自动标为 Pre-release，不占稳定版 latest；稳定版使用GitHub的legacy latest选择策略。
    有 `docs/releases/<tag>.md` 时使用该版本说明，否则自动生成变更说明并附固定来源、验签与验收范围链接。
+7. 从已验签四目标归档生成Homebrew公式，发布前检查Ruby语法；公开后再次验证Release和22资产，自动以Git文件SHA条件更新master的`Formula/shikigami.rb`。版本、URL、摘要、公钥/签名和许可证来自固定产物，不手改版本。旧运行不降级，同版不同内容拒绝；有稳定版后预发布不替换稳定渠道。该bot提交不会再次触发GitHub Actions，因此公式验证在当前发布任务内完成。
+
+若Release已公开但Homebrew更新失败，已公开资产保持原样；重跑失败任务会确认同源完整Release并继续Formula更新。初次创建或并发更新冲突不覆盖其他内容；明确409最多重读三次，其他API/权限错误直接失败。
 
 失败时查看该运行并重跑失败任务；不得删除或移动版本 tag，也不以手工上传未验签文件绕过流程。
 若草稿资产发生冲突，流程保留现场并失败，不静默覆盖。自动化通过不等于外部账号、原生平台、
@@ -79,6 +88,8 @@ e21f6dd671ea5042c43c492b759b933dda73985f89a823b43c651ff7c787c17d
 目录0700、私钥0600，未提交或上传至artifact。私钥只在签名单步写入0600临时文件并清除环境变量，
 正常/普通失败退出清理；强杀依赖临时runner销毁，不保证EXIT trap执行。
 
+Homebrew首发目标为`v0.0.1-alpha.2`；该tag须实际完成上述新步骤后才能认定分发完成。alpha.1旧工作流成功不追认为已执行Homebrew更新。安装布局、服务激活与平台验收限制见[Homebrew分发](22-homebrew-distribution.md)。
+
 首次信任使用预先信任的仓库公钥或独立确认的上述指纹。下载Release资产后，从可信源码运行
 `scripts/release-trust.go verify`，只解包认证后的私有副本。GitHub下载地址会重定向，可以用
 `gh release download <tag> --repo DDSRem-Dev/Shikigami` 取回后离线验签；现有`fetch`明确拒绝重定向，
@@ -87,7 +98,7 @@ e21f6dd671ea5042c43c492b759b933dda73985f89a823b43c651ff7c787c17d
 
 归档签名不等同Apple代码签名或公证。轮换密钥时更新仓库公钥/指纹和环境Secret/Variable，
 保留旧公钥供历史校验；泄露时暂停发布并撤掉密钥，通过受信渠道公布受影响版本与替代密钥。
-当前verifier没有在线撤销查询，轮换/撤销演练仍待。Actions artifact保留30天，公开Release资产另行保留。
+当前verifier没有在线撤销查询；[临时测试密钥的轮换/调用方撤信演练](21-release-key-rotation.md)已通过，生产身份未轮换或撤销。Actions artifact保留30天，公开Release资产另行保留。
 
 历史手动运行[40877214329](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40877214329)
 由DDSRem审批，为92cafaf源码生成22文件并通过本机再次验签，位于`dist/v0.0.1-alpha.1/`。
@@ -174,7 +185,7 @@ Shikigami 通过本地 CLI/TUI 和常驻 agent 使用远端普通用户的 tmux/
 
 可从上述GitHub Release下载固定版本并独立验签，或使用可信源码构建；安装始终使用已经认证的本地 bundle。`SHIKI_VERSION=<固定版本> make release` 产生本机目标 tarball、release.json、SHA256SUMS、archive digest 和 checksums pin；默认不签名；显式配置 `SHIKI_SIGNING_KEY` 时追加本地 Ed25519 签名。该本地命令不会上传、创建 tag 或建立下载渠道；公开发行由前述tag工作流负责。不同目标必须独立构建，不在同一工作树并行生成内嵌产物。
 
-安装前验证整个归档和来源，之后再解包/运行脚本或 helper。对刚下载文件自行计算摘要只能发现后续变化，不能证明发布者身份。调用 helper 时仍必须传入独立可信的 `--checksums-sha256`；不能从未认证的同一归档读出一个值就称完成发布者验证。可信源码 verifier 配合独立公钥、固定 version/OS/arch 认证归档，再生成新私有副本与认证 pin；新增显式HTTPS下载入口先验签再取归档，安装仍使用本地认证副本，当前验收范围见15/16。操作说明见[固定版本发布认证](11-automated-installation.md#本地离线签名与验签)。专用公钥与受保护Actions签名身份已有实际运行证据，首发前92cafaf签名包安装/运行及新f0b5f83公开归档的独立下载认证、直接运行/暂存均已通过；两批来源与覆盖分别见上文。密钥轮换/撤销演练、完整平台与外部就绪仍待验。
+安装前验证整个归档和来源，之后再解包/运行脚本或 helper。对刚下载文件自行计算摘要只能发现后续变化，不能证明发布者身份。调用 helper 时仍必须传入独立可信的 `--checksums-sha256`；不能从未认证的同一归档读出一个值就称完成发布者验证。可信源码 verifier 配合独立公钥、固定 version/OS/arch 认证归档，再生成新私有副本与认证 pin；新增显式HTTPS下载入口先验签再取归档，安装仍使用本地认证副本，当前验收范围见15/16。操作说明见[固定版本发布认证](11-automated-installation.md#本地离线签名与验签)。专用公钥与受保护Actions签名身份已有实际运行证据，首发前92cafaf签名包安装/运行及新f0b5f83公开归档的独立下载认证、直接运行/暂存均已通过；两批来源与覆盖分别见上文。隔离密钥轮换/撤信演练已通过；完整平台与外部就绪仍待验。
 
 此前608文件冻结源码的实际完整`make release`已在macOS arm64和普通用户Linux arm64容器通过：一次性测试密钥签名、可信源码verifier配合独立公钥验签、认证私有副本解包、六二进制版本核对、真实helper暂存（macOS client；Linux client/daemon）。仅生成可审查服务文件，未激活或发布；详见[完整签名构建](15-implementation-status.md#evidence-current-release-validation)。此证据补齐先前旧developer归档的构建来源范围，不建立正式发布者身份。
 
@@ -212,6 +223,6 @@ Shikigami 通过本地 CLI/TUI 和常驻 agent 使用远端普通用户的 tmux/
 
 必须继续补齐 [08](./08-roadmap.md) 的剩余门槛；不能仅因文档或预发布已完成就勾选未验收的复合条目。持续负载要记录真实完成时长、尾部恢复与清理，性能结论需给工作负载和资源预算。隔离磁盘满、精确fsync错误及新进程恢复已有[故障专项证据](15-implementation-status.md#evidence-fault-validation)，不等同真实硬件掉电或全部提交点覆盖。当前依赖扫描没有受影响的已导入包，仍有未导入 OpenPGP 的模块级公告；见 [安全报告](15-implementation-status.md#evidence-security-validation)，不能写成“没有任何漏洞”。
 
-仓库路径为 `github.com/DDSRem-Dev/Shikigami`，公开问题反馈入口为已核实可访问的 [GitHub Issues](https://github.com/DDSRem-Dev/Shikigami/issues)，没有响应时限承诺；私密安全报告渠道与SLA未提供，不应上传凭据或其他敏感材料。MIT 许可证位于 [LICENSE](../LICENSE)，发行包已包含并纳入摘要；固定版本GitHub Release已公开，Homebrew formula仍未提供。不得建议用户执行占位域名的 curl 管道，或将历史本地产物/自签测试密钥当作公开发行。
+仓库路径为 `github.com/DDSRem-Dev/Shikigami`，公开问题反馈入口为已核实可访问的 [GitHub Issues](https://github.com/DDSRem-Dev/Shikigami/issues)，没有响应时限承诺；私密安全报告渠道与SLA未提供，不应上传凭据或其他敏感材料。当前项目[LICENSE](../LICENSE)为GPL-3.0-only，从alpha.2起随发行包纳入摘要；alpha.1冻结MIT许可证保持；固定版本GitHub Release已公开，Homebrew formula仍未提供。不得建议用户执行占位域名的 curl 管道，或将历史本地产物/自签测试密钥当作公开发行。
 
 历史502文件/415份源码冻结整套回归：macOS43包通过、真实client凭据轮换的WatchStats提前Canceled导致整套退出1（E2E224.579秒自身通过）；Linux44包通过、整套退出0（E2E199.408秒）。当时相关生命周期条目暂撤勾选；之后507文件快照双平台完整回归通过，按该版本证据恢复，原Stats事件因果仍未确认。终端项已由独立语义验收恢复；当前sync基线项已凭v3同源双平台最终验收恢复勾选。568文件版本整套race/E2E已通过，但其15个无测试包及6/10项skip不计通过，也不替代资源或外部验收，详见15/16及`/tmp/shiki-full-race-20261028-5h0eo7fo/summary.json`。

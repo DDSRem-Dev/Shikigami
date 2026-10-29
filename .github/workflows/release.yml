@@ -190,6 +190,17 @@ jobs:
           path: signed
       - name: Build trusted verifier without publication token
         run: go build -trimpath -o "$RUNNER_TEMP/release-trust" ./scripts/release-trust.go
+      - name: Verify and validate generated Homebrew formula before publication
+        env:
+          RELEASE_VERSION: ${{ needs.source.outputs.version }}
+          SOURCE_COMMIT: ${{ needs.source.outputs.commit }}
+        run: |
+          python3 scripts/homebrew-formula.py \
+            --repository "$GITHUB_REPOSITORY" --version "$RELEASE_VERSION" \
+            --commit "$SOURCE_COMMIT" --run-id "$GITHUB_RUN_ID" \
+            --directory signed --verifier "$RUNNER_TEMP/release-trust" \
+            --public-key configs/release-signing.pub --output "$RUNNER_TEMP/shikigami.rb"
+          ruby -c "$RUNNER_TEMP/shikigami.rb"
       - name: Verify signatures and publish the complete release from a draft
         env:
           GH_TOKEN: ${{ github.token }}
@@ -203,3 +214,14 @@ jobs:
             --commit "$SOURCE_COMMIT" --run-id "$GITHUB_RUN_ID" \
             --directory signed --verifier "$RUNNER_TEMP/release-trust" \
             --public-key configs/release-signing.pub --notes-directory docs/releases
+      - name: Advance Homebrew formula from the verified public release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.source.outputs.version }}
+          SOURCE_COMMIT: ${{ needs.source.outputs.commit }}
+        run: |
+          python3 scripts/release-homebrew.py \
+            --repository "$GITHUB_REPOSITORY" --version "$RELEASE_VERSION" \
+            --commit "$SOURCE_COMMIT" --run-id "$GITHUB_RUN_ID" \
+            --directory signed --verifier "$RUNNER_TEMP/release-trust" \
+            --public-key configs/release-signing.pub
