@@ -4,6 +4,17 @@
 
 **已提供公开 alpha，完整 Phase 0–5 尚未交付。** CLI、agent、daemon、真实 tmux 终端、双端同步/转发插件、监控、配置快照和 TUI 已有实现与本地验收。安装升级/回滚和内嵌产物已有隔离测试；原生macOS LaunchAgent和Linux容器真实systemd已通过限定生命周期验收，外部网络认证、原生VPS/重启登录持久化、完整平台与当前版本长期资源稳定仍待完成。证据见 [实施记录](docs/15-implementation-status.md) 和 [架构一致性检查](docs/16-architecture-conformance.md)，完整范围以 [路线图](docs/08-roadmap.md) 为准。
 
+## 安装
+
+当前公开预发布为 [v0.0.1-alpha.2](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.2)。通过 Homebrew 安装：
+
+```bash
+brew tap ddsrem-dev/shikigami https://github.com/DDSRem-Dev/Shikigami
+brew install ddsrem-dev/shikigami/shikigami
+```
+
+后续版本由推送 tag 自动完成构建、签名、Release 和 Formula 更新；无需手改公式版本或校验值。Homebrew 只安装命令和完整 bundle，服务安装、升级与账号登录需显式操作，见 [Homebrew 使用与平台限制](docs/22-homebrew-distribution.md)。
+
 ## 开发
 
 需要 Go ≥ 1.26.5；项目工具链固定为 Go 1.26.10，以满足 tsnet SDK 的最低补丁版本。真实终端测试需要 `tmux`；`make test` 中的验收采集器回归需要 Python 3.10+，并须以普通用户运行。源码中已经包含生成的 protobuf/Connect 代码，普通构建不需要 protoc。

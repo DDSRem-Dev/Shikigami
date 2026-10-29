@@ -1,6 +1,6 @@
 # Shikigami 设计文档导航
 
-**状态：首个公开预发布 v0.0.1-alpha.1 已通过 tag 全自动工作流发布；Phase 0–5 尚未完整交付。** 三宿主命令、终端闭环、双端同步/端口插件、监控、配置快照、TUI 与诊断已有实现及本地测试；安装事务和产物工具已有隔离验收，原生macOS LaunchAgent及Linux容器真实systemd生命周期已通过；外部认证、原生VPS/重启登录持久化、完整平台/长稳及其余分发门槛仍未完成。逐项进度见 [08 路线图](./08-roadmap.md)，证据与待完成门槛见 [15 实施记录](./15-implementation-status.md)。00–14 保留设计契约，不能仅凭示例认定功能已经可用。
+**状态：当前公开预发布 v0.0.1-alpha.2 已通过 tag 全自动构建、签名、发布并更新 Homebrew Formula；Phase 0–5 尚未完整交付。** 三宿主命令、终端闭环、双端同步/端口插件、监控、配置快照、TUI 与诊断已有实现及本地测试；安装事务和产物工具已有隔离验收，原生macOS LaunchAgent及Linux容器真实systemd生命周期已通过；外部认证、原生VPS/重启登录持久化、完整平台/长稳及其余分发门槛仍未完成。逐项进度见 [08 路线图](./08-roadmap.md)，证据与待完成门槛见 [15 实施记录](./15-implementation-status.md)。00–14 保留设计契约，不能仅凭示例认定功能已经可用。
 
 ## 文档清单
 
@@ -63,4 +63,4 @@
 
 09 是远端与插件消息形状的唯一来源，13 是本地 agent IPC 的来源；02/03/04/10 规定行为。修改接口时必须同步相关行为、UX 和验收。09 的代码块可用于协议语法验证，但未表示服务已经实现。待实现能力必须列在路线图，不能通过界面示例宣称完成。
 
-实际 module 为 `github.com/DDSRem-Dev/Shikigami`，当前根目录采用[GPL-3.0-only](../LICENSE)，从v0.0.1-alpha.2起随发行包分发；已公开alpha.1及其冻结源码保留原MIT许可证。首个发行源为 [v0.0.1-alpha.1 GitHub Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.1)，公开问题反馈入口为 [GitHub Issues](https://github.com/DDSRem-Dev/Shikigami/issues)，不承诺响应时限；来源及下载验证结果见[公开发行证据](./15-implementation-status.md#evidence-public-alpha-release-20261029)。文档中的 `yourusername`、`shiki.dev`、其余示例版本/下载地址、Homebrew 包名和邮箱仍是占位示例；Homebrew 尚未提供，不得将占位地址当作实际安装源。
+实际 module 为 `github.com/DDSRem-Dev/Shikigami`，当前根目录采用[GPL-3.0-only](../LICENSE)，从v0.0.1-alpha.2起随发行包分发；已公开alpha.1及其冻结源码保留原MIT许可证。当前发行源为 [v0.0.1-alpha.2 GitHub Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.2)，公开问题反馈入口为 [GitHub Issues](https://github.com/DDSRem-Dev/Shikigami/issues)，不承诺响应时限；来源及下载验证结果见[公开发行证据](./15-implementation-status.md#evidence-public-alpha2-release-20261030)。文档中的 `yourusername`、`shiki.dev`、其余示例版本/下载地址、未关联22的 Homebrew 示例包名和邮箱仍是占位示例；真实 Homebrew 安装命令和平台边界见[22 分发与安装](22-homebrew-distribution.md)，其余占位地址不得当作实际安装源。

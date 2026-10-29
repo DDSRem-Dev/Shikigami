@@ -59,6 +59,8 @@ agent前几小时中位数小幅上升，第6小时发生明显下降，第6至1
 
 ## 697源到公开alpha的执行输入差异
 
+本节精确比较目标为alpha.1。后续alpha.2固定fa35debd源的生产Go/proto/module与alpha.1一致，仅发布工具、测试、工作流、LICENSE和文档变化；此差异表可解释其生产覆盖边界，但不宣称alpha.2新归档实际跑过12小时。
+
 比较目标固定为公开tag提交`f0b5f83dce599c8e0d715bda5e7806a0ef6aaa72`，通过git对象读取，未用并行修改中的工作树。统计范围为全部Go/proto及根/嵌套go.mod/go.sum：原521份、公开版本542份，482相同、39修改、21新增、0删除；60处变化分为26生产Go、3协议/生成、28测试Go、1诊断Go及2个独立分析器module文件。原先697→.5的54处差异属于旧比较目标，不能继续当作当前alpha的精确统计。
 
 11份default_rotation Go文件和`test-default-rotation.sh`与公开tag字节相同；原697冻结源独有的`test-default-rotation-current-env.sh`是该次外部环境包装器，未进入tag，不称删除产品功能。构建/CI/其他脚本另外比较并记录19处变化，不把Go/proto清单冒充全部构建输入相同。

@@ -1,12 +1,14 @@
 # 首版预发布、自动发布流程与交付门槛
 
-更新：2026-10-29。首个公开预发布 [v0.0.1-alpha.1](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.1) 已通过 tag 全自动工作流发布；固定提交为 `f0b5f83dce599c8e0d715bda5e7806a0ef6aaa72`，[Actions 40895007350](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40895007350) 已完成且成功，包含同源 CI、四目标构建、签名验签和公开发布。Release 于 `2026-10-29T15:13:47Z` 公开，`draft=false`、`prerelease=true`，共22个资产；独立下载与实际产物验证结果见[公开发行证据](15-implementation-status.md#evidence-public-alpha-release-20261029)。本文件保存发布流程、验收边界与剩余门槛；[该版本说明](./releases/v0.0.1-alpha.1.md) 随 tag 冻结。完整范围仍由 [08 路线图](./08-roadmap.md) 决定，预发布不缩小交付要求。
+更新：2026-10-30。当前公开版本为[v0.0.1-alpha.2](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.2)，固定源`fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2`的[Release40912019720](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40912019720)完整成功，22资产于`2026-10-29T17:30:47Z`公开；`draft=false`、`prerelease=true`。同一运行自动生成并提交Formula，bot提交`85003591044fca15f82c9c220b2051766f1e47aa`。公开下载和平台验收范围见[alpha.2记录](15-implementation-status.md#evidence-public-alpha2-release-20261030)与[Homebrew](22-homebrew-distribution.md)。
 
-## 当前许可证与下一预发布
+历史首个公开预发布 [v0.0.1-alpha.1](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.1) 已通过 tag 全自动工作流发布；固定提交为 `f0b5f83dce599c8e0d715bda5e7806a0ef6aaa72`，[Actions 40895007350](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40895007350) 已完成且成功，包含同源 CI、四目标构建、签名验签和公开发布。Release 于 `2026-10-29T15:13:47Z` 公开，`draft=false`、`prerelease=true`，共22个资产；独立下载与实际产物验证结果见[公开发行证据](15-implementation-status.md#evidence-public-alpha-release-20261029)。本文件保存发布流程、验收边界与剩余门槛；[该版本说明](./releases/v0.0.1-alpha.1.md) 随 tag 冻结。完整范围仍由 [08 路线图](./08-roadmap.md) 决定，预发布不缩小交付要求。
+
+## 当前许可证与 Homebrew 首发
 
 用户指定Homebrew首发版本为`v0.0.1-alpha.2`，采用GPL-3.0-only。根[LICENSE](../LICENSE)为[GNU官网GPLv3完整正文](https://www.gnu.org/licenses/gpl-3.0.txt)，35,149字节，SHA-256 `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`；项目授权范围在根README明确为version3 only。构建原样复制LICENSE并纳入归档签名/hash；生成器从四目标已认证归档的完整LICENSE识别许可证，未知或不一致拒绝。旧alpha.1及其固定源码保留MIT，不覆盖或追改历史产物。
 
-alpha.2的发布说明见[冻结说明](releases/v0.0.1-alpha.2.md)。新tag实际成功与公开分发验证记录以15为准，不能用alpha.1旧流程冒充新Homebrew步骤已经执行。
+alpha.2的发布说明见[冻结说明](releases/v0.0.1-alpha.2.md)。该tag的新自动Homebrew步骤已实际成功；下载和真实tap验证结果以15/22为准，alpha.1旧流程仍保留为历史。
 
 ## 首发兼容基线
 
@@ -47,11 +49,11 @@ CI采用 `v0.0.0-ci`，后续预发布应从通过验收的固定提交显式构
 后续发布只需：
 
 ```bash
-git tag -a v0.0.1-alpha.2 -m "Release v0.0.1-alpha.2"
-git push origin v0.0.1-alpha.2
+git tag -a v0.0.1-alpha.3 -m "Release v0.0.1-alpha.3"
+git push origin v0.0.1-alpha.3
 ```
 
-上述版本只是下一版命令示例，不表示已创建。推送版本 tag 即授权发布该固定版本。
+上述alpha.3仅为后续版本示例，尚未创建。alpha.2的受保护tag已固定到`fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2`，由[Release40912019720](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40912019720)处理，不能再次创建或移动。推送版本 tag 即授权发布该固定版本。
 GitHub `release-signing` 环境已按用户要求取消人工审批，只允许 `v*` tag，
 不允许分支运行取得环境密钥；管理员绕过保持关闭。规则集 `Immutable release tags`
 禁止 `refs/tags/v*` 更新或删除，没有绕过主体；不得移动旧 tag 来替换已发行版本。
@@ -88,7 +90,7 @@ e21f6dd671ea5042c43c492b759b933dda73985f89a823b43c651ff7c787c17d
 目录0700、私钥0600，未提交或上传至artifact。私钥只在签名单步写入0600临时文件并清除环境变量，
 正常/普通失败退出清理；强杀依赖临时runner销毁，不保证EXIT trap执行。
 
-Homebrew首发目标为`v0.0.1-alpha.2`；该tag须实际完成上述新步骤后才能认定分发完成。alpha.1旧工作流成功不追认为已执行Homebrew更新。安装布局、服务激活与平台验收限制见[Homebrew分发](22-homebrew-distribution.md)。
+Homebrew首发`v0.0.1-alpha.2`已由上述tag运行自动发布公式，版本/URL/hash/签名/许可证均未手工修改。alpha.1旧工作流仅作历史，不追认为执行过Homebrew更新。安装布局、服务激活与平台验收限制见[Homebrew分发](22-homebrew-distribution.md)。
 
 首次信任使用预先信任的仓库公钥或独立确认的上述指纹。下载Release资产后，从可信源码运行
 `scripts/release-trust.go verify`，只解包认证后的私有副本。GitHub下载地址会重定向，可以用
@@ -223,6 +225,6 @@ Shikigami 通过本地 CLI/TUI 和常驻 agent 使用远端普通用户的 tmux/
 
 必须继续补齐 [08](./08-roadmap.md) 的剩余门槛；不能仅因文档或预发布已完成就勾选未验收的复合条目。持续负载要记录真实完成时长、尾部恢复与清理，性能结论需给工作负载和资源预算。隔离磁盘满、精确fsync错误及新进程恢复已有[故障专项证据](15-implementation-status.md#evidence-fault-validation)，不等同真实硬件掉电或全部提交点覆盖。当前依赖扫描没有受影响的已导入包，仍有未导入 OpenPGP 的模块级公告；见 [安全报告](15-implementation-status.md#evidence-security-validation)，不能写成“没有任何漏洞”。
 
-仓库路径为 `github.com/DDSRem-Dev/Shikigami`，公开问题反馈入口为已核实可访问的 [GitHub Issues](https://github.com/DDSRem-Dev/Shikigami/issues)，没有响应时限承诺；私密安全报告渠道与SLA未提供，不应上传凭据或其他敏感材料。当前项目[LICENSE](../LICENSE)为GPL-3.0-only，从alpha.2起随发行包纳入摘要；alpha.1冻结MIT许可证保持；固定版本GitHub Release已公开，Homebrew formula仍未提供。不得建议用户执行占位域名的 curl 管道，或将历史本地产物/自签测试密钥当作公开发行。
+仓库路径为 `github.com/DDSRem-Dev/Shikigami`，公开问题反馈入口为已核实可访问的 [GitHub Issues](https://github.com/DDSRem-Dev/Shikigami/issues)，没有响应时限承诺；私密安全报告渠道与SLA未提供，不应上传凭据或其他敏感材料。当前项目[LICENSE](../LICENSE)为GPL-3.0-only，从alpha.2起随发行包纳入摘要；alpha.1冻结MIT许可证保持；固定版本GitHub Release及[Homebrew Formula](../Formula/shikigami.rb)已由alpha.2工作流公开，实际安装与平台边界见[22](22-homebrew-distribution.md)。不得建议用户执行占位域名的 curl 管道，或将历史本地产物/自签测试密钥当作公开发行。
 
 历史502文件/415份源码冻结整套回归：macOS43包通过、真实client凭据轮换的WatchStats提前Canceled导致整套退出1（E2E224.579秒自身通过）；Linux44包通过、整套退出0（E2E199.408秒）。当时相关生命周期条目暂撤勾选；之后507文件快照双平台完整回归通过，按该版本证据恢复，原Stats事件因果仍未确认。终端项已由独立语义验收恢复；当前sync基线项已凭v3同源双平台最终验收恢复勾选。568文件版本整套race/E2E已通过，但其15个无测试包及6/10项skip不计通过，也不替代资源或外部验收，详见15/16及`/tmp/shiki-full-race-20261028-5h0eo7fo/summary.json`。

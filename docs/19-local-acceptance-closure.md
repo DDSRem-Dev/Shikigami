@@ -1,6 +1,8 @@
 # 公开预发布与历史候选的验收收敛
 
-**本轮更新（2026-10-29）：** 首个公开预发布 [v0.0.1-alpha.1](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.1) 已从固定提交 `f0b5f83dce599c8e0d715bda5e7806a0ef6aaa72` 通过成功运行 [40895007350](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40895007350) 自动完成同源CI、构建、签名验签与发布，22个公开资产独立下载认证已通过。macOS arm64与Linux arm64的直接运行/重复离线暂存通过，未激活服务。首发前92cafaf签名候选已另行完成原生LaunchAgent及systemd容器新装/运行/开发候选升级回滚；它不替代新发行归档的验收。详见[公开发行证据](15-implementation-status.md#evidence-public-alpha-release-20261029)、[签名包验收](15-implementation-status.md#evidence-signed-alpha-install-20261029)及[自动发布](18-release-readiness.md#github-actions-自动构建签名与发布)。
+**当前更新（2026-10-30）：** [v0.0.1-alpha.2](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.2)已从固定fa35debd源经Release40912019720完成完整CI、四目标构建、签名、公开发布及自动Formula提交8500359。22公开资产独立验签、四目标GPL完整正文、24二进制元数据和双平台6次暂存通过；公式从公开产物再生成后字节一致。真实tap与macOS工具门槛见[22](22-homebrew-distribution.md)，详细证据见[alpha.2验收](15-implementation-status.md#evidence-public-alpha2-release-20261030)。本轮不激活服务，原697长跑及旧服务证据不追认为alpha.2整栈验收。
+
+**历史首发更新（2026-10-29）：** 首个公开预发布 [v0.0.1-alpha.1](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.1) 已从固定提交 `f0b5f83dce599c8e0d715bda5e7806a0ef6aaa72` 通过成功运行 [40895007350](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40895007350) 自动完成同源CI、构建、签名验签与发布，22个公开资产独立下载认证已通过。macOS arm64与Linux arm64的直接运行/重复离线暂存通过，未激活服务。首发前92cafaf签名候选已另行完成原生LaunchAgent及systemd容器新装/运行/开发候选升级回滚；它不替代新发行归档的验收。详见[公开发行证据](15-implementation-status.md#evidence-public-alpha-release-20261029)、[签名包验收](15-implementation-status.md#evidence-signed-alpha-install-20261029)及[自动发布](18-release-readiness.md#github-actions-自动构建签名与发布)。
 
 **历史签名候选（2026-10-29）：** 首发前同版本候选由Actions运行40877214329从92cafaf固定源码完成四目标签名，DDSRem审批与远端验签成功；22文件在`dist/v0.0.1-alpha.1/`本机再次验签、payload hash/pin与来源核对通过，后续实际包安装/运行证据见上方链接。它未作为公开Release资产发布，也不替代下文`.5`的冻结源证据；新tag产物使用不同来源与构建元数据，不追认旧归档字节。既有外部/平台/长期资源门槛保持待验。
 
@@ -12,7 +14,7 @@
 
 ## 候选与来源
 
-当前公开版本为 `v0.0.1-alpha.1`，来源为f0b5f83及自动运行40895007350，公开时间为 `2026-10-29T15:13:47Z`；Release为非草稿预发布。下载认证与执行范围见顶部证据链接。
+当前公开版本为 `v0.0.1-alpha.2`，来源为fa35debd及自动运行40912019720，公开时间为 `2026-10-29T17:30:47Z`；Release为非草稿预发布，许可证为GPL-3.0-only。下载认证与执行范围见顶部证据链接。alpha.1来源f0b5f83/运行40895007350的历史发行与MIT保持冻结。
 
 历史开发候选为 `v0.0.0-local.20261029.5`，位于
 `dist/local-20261029.5/`，包含 macOS arm64、Linux arm64 开发归档。
@@ -32,7 +34,7 @@
 
 | 工作 | 已有结果与覆盖 | 仍未证明的内容 |
 |---|---|---|
-| 当前公开alpha归档 | f0b5f83同源CI及四目标构建、签名、发布成功；22资产独立下载认证，24二进制版本/提交/目标核对；双平台各12条帮助/版本命令及client重复stage、Linux另有daemon重复stage通过 | 本轮没有激活服务；BuiltAt仅4个shiki二进制静态保留，其余20个被优化掉；完整原生平台、外部就绪与长期资源稳定仍待 |
+| 当前公开alpha.2归档 | fa35debd同源CI及四目标构建、签名、发布成功；22资产独立下载认证，24二进制版本/提交/目标核对；双平台各12条帮助/版本命令及client重复stage、Linux另有daemon重复stage通过 | 本轮没有激活服务；BuiltAt仅4个shiki二进制静态保留，其余20个被优化掉；完整原生平台、外部就绪与长期资源稳定仍待 |
 | 历史92cafaf签名候选 | 四目标签名与本机认证，macOS目标helper升级回滚及新装、Linux13生命周期/4活动升级回滚及新装，状态保留、payload后置hash与清理通过 | 生产/构建输入相同不代表新公开归档字节相同；历史A为开发.5，不是历史正式发行 |
 | 历史.5开发归档 | 同一 739 文件冻结源构建两平台归档，每平台 52 条实际检查；六程序、双插件、14 成员、摘要与首次/重复暂存校验通过 | 该历史归档未签名，不作为当前公开下载源；其证据不代表完整平台支持 |
 | sync Stop 行为 | 五类阻塞依赖、调用者独立截止、实际排空、重复等待者错误一致性及未知提交日志/源保留有确定性修前红/修后绿和双平台检查 | 当前版本长期运行后的整体资源稳定性 |
@@ -51,7 +53,7 @@ syncack 和 systemd 的遗漏已通过既有补验关闭，不能继续列为“
 本轮没有发现新的已确认生产缺陷，也没有足以支持重复短内存窗口的具体新缺口。
 
 仍须保留：当前候选长期资源稳定、历史增长归因、完整原生平台与物理多设备、
-真实 Tailscale/Claude 账号、原生部署/重启登录、Homebrew渠道平台验收；隔离测试密钥轮换/撤信演练已完成，生产身份未操作；专用身份的四目标归档签名与GitHub公开发行已完成，见顶部更新。
+真实 Tailscale/Claude 账号、原生部署/重启登录、Homebrew原生macOS工具及其他未验平台；隔离测试密钥轮换/撤信演练已完成，生产身份未操作；专用身份的四目标归档签名与GitHub公开发行已完成，见顶部更新。
 用户在首发前确认从未对外发布，历史正式升级首发无对象；本次公开alpha须作为后续正式归档升级验收的来源。开发schema/版本边界与回滚验证仍保留。
 其中环境和发布条件见路线图；它们不会因一次本地长测成功而自动完成。
 历史只读收敛批次没有新增勾选；本次公开发行后的原条目进度以08/15/16同步记录为准，不将“审查或预发布完成”写成“Phase 5 验收完成”。

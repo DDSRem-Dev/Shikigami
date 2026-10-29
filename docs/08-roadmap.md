@@ -1,6 +1,6 @@
 # 开发路线图
 
-**资源收敛、签名演练与alpha.2分发准备（2026-10-30）：** 已完成原697源全部740组/5920条资源样本及12进程代际复算，保留全部峰值/末半小时；697到公开alpha.1执行输入482相同/39修改/21新增，明确新Stop/probe/诊断等覆盖差异，未确认新生产保留根，不由RSS宣称无泄漏或追加盲目长测。临时测试密钥的真实verifier12步轮换/撤信正负演练和3项回归通过，私钥清理，真实发行身份未操作；旧钥显式传入仍可验签，在线撤销未提供。用户指定当前项目GPL-3.0-only及Homebrew首发v0.0.1-alpha.2；完整GNU正文已置LICENSE，README/构建说明同步，旧alpha.1冻结MIT保持。Homebrew从已认证四目标归档自动生成版本/URL/hash/签名/许可证，发布前Ruby校验，公开后master单文件CAS更新，同版幂等/冲突拒绝、旧版防降级与稳定渠道保护；仅保留CI/Release工作流。整套55工具测试、最终生成器7项定向复验及actionlint通过；Linux arm64普通用户Homebrew实际安装/test、包revision升级/test、重装/test及卸载7步全部退出0，三次test共6次helper暂存；Homebrew4/7暂存附加文件和LICENSE搬移两处适配已修正，完整认证包位于libexec/bundle，早期失败保留。最终native公式方法/重复暂存/签名篡改拒绝通过；实际环境细节见22，macOS27因Xcode/CLT不足被前置拒绝，不能记为brew全流程通过。alpha.2实际tag/公开产物及自动Formula提交仍待执行。七类复核无生产模块/RPC/状态/生命周期偏差；原42条文字/顺序及31/42保持，外部/平台/当前候选长期资源门槛保留。详见[资源审查](20-long-run-resource-review.md)、[密钥演练](21-release-key-rotation.md)与[Homebrew分发](22-homebrew-distribution.md)。
+**资源收敛、签名演练与alpha.2自动分发完成（2026-10-30）：** 已完成原697源全部740组/5920条资源样本及12进程代际复算，保留全部峰值/末半小时；697到公开alpha.1执行输入482相同/39修改/21新增，明确新Stop/probe/诊断等覆盖差异，未确认新生产保留根，不由RSS宣称无泄漏或追加盲目长测。临时测试密钥的真实verifier12步轮换/撤信正负演练和3项回归通过，私钥清理，真实发行身份未操作；旧钥显式传入仍可验签，在线撤销未提供。用户指定当前项目GPL-3.0-only及Homebrew首发v0.0.1-alpha.2；完整GNU正文已置LICENSE，README/构建说明同步，旧alpha.1冻结MIT保持。Homebrew从已认证四目标归档自动生成版本/URL/hash/签名/许可证，发布前Ruby校验，公开后master单文件CAS更新，同版幂等/冲突拒绝、旧版防降级与稳定渠道保护；仅保留CI/Release工作流。整套55工具测试、最终生成器7项定向复验及actionlint通过；Linux arm64普通用户Homebrew实际安装/test、包revision升级/test、重装/test及卸载7步全部退出0，三次test共6次helper暂存；Homebrew4/7暂存附加文件和LICENSE搬移两处适配已修正，完整认证包位于libexec/bundle，早期失败保留。最终native公式方法/重复暂存/签名篡改拒绝通过；实际环境细节见22，macOS27因Xcode/CLT不足被前置拒绝，不能记为brew全流程通过。alpha.2受保护tag固定fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2，Release40912019720完整成功并于2026-10-29T17:30:47Z公开22资产；Ubuntu/macOS完整CI、四目标构建、签名验签、发布前公式检查与公开后自动Formula提交85003591044fca15f82c9c220b2051766f1e47aa全部通过，双平台各56工具测试通过。macOS前两次容量取消均未执行步骤，第三次通过；历史失败保留。22公开资产重新验签、四目标GPL全文、24二进制及双平台6次暂存通过，公开产物重新生成Formula与bot提交字节一致。真实远端tap固定8500359，在Linux arm64普通用户环境完成tap/安装/test/重装/test/卸载6步及4次helper暂存，精确容器清理通过；本机完整brew的Xcode/CLT门槛保持。七类复核无生产模块/RPC/状态/生命周期偏差；原42条文字/顺序及31/42保持，外部/平台/当前候选长期资源门槛保留。详见[资源审查](20-long-run-resource-review.md)、[密钥演练](21-release-key-rotation.md)与[Homebrew分发](22-homebrew-distribution.md)。
 
 **Linux默认12小时终态核验完成（2026-10-29）：** 原697文件冻结源运行已于北京时间23:11:50正常结束，应用/collector均退出0；实际工作12h30m3.603s、4368轮、740检查点，四角色各自然替换一次且在原两分钟预算内恢复，恢复尾部1803.013s、30个恢复后检查点，原持有TCP结束且无重放。11个受管PID的fixture清理、collector源码后置hash/快照移除与精确容器缺席已核验；预先准备的只读终态verifier实际返回verified，旧Linux578源失败保留。此证据仅属于原697源，不追认为当前alpha整版本长稳或无内存泄漏；FD+4/测试goroutine+6门禁不等于生产goroutine或全时RSS限制。当前31/42、11项待完成不变。本批没有启动新测试或操作服务/容器；七类架构复核保持原契约，后续先分析完整已有资源记录与当前版本覆盖差异，再决定必要补验。详见[Linux最终核验](15-implementation-status.md#evidence-default-linux-final-20261029)。
 
@@ -33,7 +33,7 @@
 | --- | --- | --- |
 | 原697源Linux默认12小时 | 终态通过；740组5920资源样本/12代际及到公开alpha源码差异已完成分析 | 生产heap/object归因、当前候选长期覆盖仍待，不从RSS推断无泄漏 |
 | 发行密钥轮换/撤信 | 临时测试密钥12步演练及异常清理通过，真实签名身份保持 | 显式旧钥仍可认证旧钥签名；在线撤销未提供，生产身份操作需独立记录 |
-| GPL与Homebrew alpha.2 | GPL-3.0-only正文与自动生成/验签/CAS更新实现完成；本地/容器分发验收见22 | 实际新tag完整流水线、公开alpha.2与自动Formula提交仍待执行；macOS工具门槛保留 |
+| GPL与Homebrew alpha.2 | GPL-3.0-only正文与自动生成/验签/CAS更新实现完成；本地/容器分发验收见22 | Release40912019720、自动Formula8500359、22公开资产认证及Linux远端tap完整链通过；macOS工具与其他平台门槛保留 |
 | 完整交付门槛 | 当前31/42、11项待完成 | 外部账号/物理平台、长期资源与完整渠道平台验收依路线图推进 |
 
 31/42是原始复合条目的验收数，不是代码完成率；历史批次中的旧计数保持当时范围。独立工作并行推进，不重复已通过检查。
@@ -127,7 +127,7 @@
 | 节点授权与端口准入 | lease请求回调解绑、宿主首帧/分类门、worker短查询与Watch隔离及Stop共享完成；同源双平台验证通过 | 不解释旧TLS内存增长；资源/外部门槛保持 |
 | 文件RPC资源准入 | 宿主/worker共享分类限额、首帧预算、SDK取消与Stop重试；双平台受影响race/vet与架构复核通过 | 此缺口关闭；不替代总体负载容量、资源泄漏或长稳验收 |
 | 后台同步截止时间 | 默认5秒unary、文件大小预算、未知提交恢复；双平台受影响race/vet及架构检查通过 | 此缺口关闭，Phase1条目恢复勾选；不替代长稳/外部验收 |
-| 离线发布认证 | 同608文件源码双平台实际完整签名构建、验签/解包/真实helper暂存通过，见[构建验收](15-implementation-status.md#evidence-current-release-validation) | 专用身份、公开Release下载认证已完成；轮换/撤销和Homebrew等渠道仍待 |
+| 离线发布认证 | 同608文件源码双平台实际完整签名构建、验签/解包/真实helper暂存通过，见[构建验收](15-implementation-status.md#evidence-current-release-validation) | 专用身份、公开下载认证、隔离密钥演练和alpha.2自动Homebrew/Linux真实tap均完成；原生macOS工具与其他平台门槛保留，生产身份未轮换或撤销 |
 | 插件目录与依赖边界 | 入口/业务位于 `plugins/sync/`、`plugins/port/`；宿主与SDK分别为 `internal/plugin/`、`pkg/plugin/`，架构检查通过 | 后续每批继续检查，不允许宿主内嵌插件业务回退 |
 | sync跳过告警 | 双端真实子进程回归与macOS/Linux专项通过 | 已收尾；证据见Phase 2 |
 | 共享探测与转发隔离 | 短调用/远端取消不撤共享pool，完整5秒探测连续两次失败才进入恢复；原生四包race与build/lint通过 | 修复后507文件快照双平台完整race/E2E均通过；原Stats事件因果仍未确认，历史失败保留 |
@@ -335,8 +335,8 @@
   - 本批按文档补齐终端549文件双平台语义验收；安装529文件空间预检及备份fsync已有双平台专项/真实服务证据。sync提交后ACK丢失/两端回退保护的开发专项已通过，旧状态迁移栅栏、SDK固定目录/未来schema字段拒绝代码均已完成，SDK原生受影响race及Linux故障矩阵已通过，最终v3同源双平台合并已通过，恢复sync条目；完整长稳、资源归因及外部门槛仍待。已有syscall故障、marker或历史全套通过不能替代这些恢复边界验收。
   - 每批架构复核、关键行为测试和固定 govulncheck v1.1.4 扫描已执行；后续审计修正原CLI-only范围，改全仓库package扫描并将compress升级至修复GO-2026-5841的1.18.7，复扫未发现受影响的已导入包（仍记录未导入openpgp的模块公告）；连接/安装合并 macOS 全套 race 与 Linux 全套含 E2E 已通过。后续节点路径、CLI 权限/交互和24轮资源循环已有专项验收；本次修复 tmux/端口扫描子进程输出经 io.Copy 绕过上限的问题，macOS/Linux 回归通过。新增后端 API/退出恢复已通过双平台专项；安装就绪和产物专项通过，最终macOS与冻结Linux全套race含E2E均通过（E2E190.197/173.475秒），三项合并回归发现的问题已修复并保留记录。本批另完成65处Snapshot.Get调用审计、真实TLS跨Token重放授权与持久状态故障分支验证、四目标全仓库依赖静态扫描，详见 [相关验收摘要](15-implementation-status.md#evidence-security-validation)；服务修复/compress1.18.7及本批节点/终端/崩溃守卫的最终完整双平台race/E2E已通过（207.127/177.266秒），历史失败与修复均保留。此前版本/能力与helper批次完整macOS/Linux race亦通过（E2E196.232/183.381秒）；原macOS一秒认证夹具跨JWT整秒边界过期，修为三秒并增加实际expiry断言，仅改测试，双平台各20次race通过。
 - [ ] 产物签名/校验、版本固定、插件匹配、真实安装源和 Homebrew 等分发渠道。
-  - 2026-10-30：新增自动Homebrew生成/发布与隔离12步密钥演练，当前LICENSE切换GPL-3.0-only，首个Homebrew目标alpha.2；原生macOS brew受Xcode/CLT门槛阻塞，实际新tag/渠道结果另验，复合项保持未勾选。
-  - 已按用户要求替换为全自动tag发布，首个alpha也使用新流程；同源CI、隔离签名和完整草稿发布已有本地验证，GitHub已限定tag环境并取消人工审批。92cafaf真实签名包双平台新装/运行/升级回滚通过；新tag公开22资产下载认证与双平台暂存已通过，Homebrew及轮换撤销演练仍待；详见[发布准备](18-release-readiness.md#github-actions-自动构建签名与发布)。
+  - 2026-10-30：新增自动Homebrew生成/发布与隔离12步密钥演练，当前LICENSE切换GPL-3.0-only，首个Homebrew alpha.2已完成全自动发布及公式提交，公开22资产认证和双平台暂存通过；实际渠道安装见22，原生macOS brew受Xcode/CLT门槛阻塞，复合项保持未勾选。
+  - 已按用户要求替换为全自动tag发布，首个alpha也使用新流程；同源CI、隔离签名和完整草稿发布已有本地验证，GitHub已限定tag环境并取消人工审批。92cafaf真实签名包双平台新装/运行/升级回滚通过；新tag公开22资产下载认证与双平台暂存已通过，隔离密钥轮换/撤信演练已完成，生产身份未操作；Homebrew完整平台验收仍待。详见[发布准备](18-release-readiness.md#github-actions-自动构建签名与发布)。
   - 2026-10-29已完成专用公钥身份的Actions四目标签名：v0.0.1-alpha.1固定92cafaf源、成功CI40872062129、DDSRem审批后签名运行40877214329成功；22文件已本机再次验签/完整payload hash及来源核验。此真实签名包的安装/运行验收、公开Release/安装源/Homebrew及密钥轮换撤销演练仍待，复合条目保持未勾选。
   - 2026-10-29同739源最新未签名候选v0.0.0-local.20261029.5已交付macOS/Linux arm64归档，541执行输入与已验738一致；14成员、六程序/双插件版本与hash、来源清单及每侧52实际命令通过，含两agent诊断/正常清理与归档helper首次/重复stage-only。暂存不激活服务、不生成current/receipt/config/state，标准服务前后保持。Commit/BuiltAt如实unknown；旧.2/.3/.4、608测试签名与697长跑范围独立保留。见[本地候选](15-implementation-status.md#evidence-local-candidate-20261029-5)。
   - 新增显式HTTPS固定版本Fetch，先验签再下载且拒绝重定向/凭据URL，限量/取消/私有输出及CLI双平台通过；此前608源94MB native产物经当前Fetch取回、独立OpenSSL核验及真实helper stage-only通过。正式来源、公钥分发/撤销及渠道仍待，不以测试TLS/密钥建立信任根。见[下载验收](15-implementation-status.md#evidence-release-fetch-validation)。

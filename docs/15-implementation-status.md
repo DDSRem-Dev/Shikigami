@@ -1,6 +1,6 @@
 # 实施与验收记录
 
-**资源收敛、签名演练与alpha.2分发准备（2026-10-30）：** 已完成原697源全部740组/5920条资源样本及12进程代际复算，保留全部峰值/末半小时；697到公开alpha.1执行输入482相同/39修改/21新增，明确新Stop/probe/诊断等覆盖差异，未确认新生产保留根，不由RSS宣称无泄漏或追加盲目长测。临时测试密钥的真实verifier12步轮换/撤信正负演练和3项回归通过，私钥清理，真实发行身份未操作；旧钥显式传入仍可验签，在线撤销未提供。用户指定当前项目GPL-3.0-only及Homebrew首发v0.0.1-alpha.2；完整GNU正文已置LICENSE，README/构建说明同步，旧alpha.1冻结MIT保持。Homebrew从已认证四目标归档自动生成版本/URL/hash/签名/许可证，发布前Ruby校验，公开后master单文件CAS更新，同版幂等/冲突拒绝、旧版防降级与稳定渠道保护；仅保留CI/Release工作流。整套55工具测试、最终生成器7项定向复验及actionlint通过；Linux arm64普通用户Homebrew实际安装/test、包revision升级/test、重装/test及卸载7步全部退出0，三次test共6次helper暂存；Homebrew4/7暂存附加文件和LICENSE搬移两处适配已修正，完整认证包位于libexec/bundle，早期失败保留。最终native公式方法/重复暂存/签名篡改拒绝通过；实际环境细节见22，macOS27因Xcode/CLT不足被前置拒绝，不能记为brew全流程通过。alpha.2实际tag/公开产物及自动Formula提交仍待执行。七类复核无生产模块/RPC/状态/生命周期偏差；原42条文字/顺序及31/42保持，外部/平台/当前候选长期资源门槛保留。详见[资源审查](20-long-run-resource-review.md)、[密钥演练](21-release-key-rotation.md)与[Homebrew分发](22-homebrew-distribution.md)。
+**资源收敛、签名演练与alpha.2自动分发完成（2026-10-30）：** 已完成原697源全部740组/5920条资源样本及12进程代际复算，保留全部峰值/末半小时；697到公开alpha.1执行输入482相同/39修改/21新增，明确新Stop/probe/诊断等覆盖差异，未确认新生产保留根，不由RSS宣称无泄漏或追加盲目长测。临时测试密钥的真实verifier12步轮换/撤信正负演练和3项回归通过，私钥清理，真实发行身份未操作；旧钥显式传入仍可验签，在线撤销未提供。用户指定当前项目GPL-3.0-only及Homebrew首发v0.0.1-alpha.2；完整GNU正文已置LICENSE，README/构建说明同步，旧alpha.1冻结MIT保持。Homebrew从已认证四目标归档自动生成版本/URL/hash/签名/许可证，发布前Ruby校验，公开后master单文件CAS更新，同版幂等/冲突拒绝、旧版防降级与稳定渠道保护；仅保留CI/Release工作流。整套55工具测试、最终生成器7项定向复验及actionlint通过；Linux arm64普通用户Homebrew实际安装/test、包revision升级/test、重装/test及卸载7步全部退出0，三次test共6次helper暂存；Homebrew4/7暂存附加文件和LICENSE搬移两处适配已修正，完整认证包位于libexec/bundle，早期失败保留。最终native公式方法/重复暂存/签名篡改拒绝通过；实际环境细节见22，macOS27因Xcode/CLT不足被前置拒绝，不能记为brew全流程通过。alpha.2受保护tag固定fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2，Release40912019720完整成功并于2026-10-29T17:30:47Z公开22资产；Ubuntu/macOS完整CI、四目标构建、签名验签、发布前公式检查与公开后自动Formula提交85003591044fca15f82c9c220b2051766f1e47aa全部通过，双平台各56工具测试通过。macOS前两次容量取消均未执行步骤，第三次通过；历史失败保留。22公开资产重新验签、四目标GPL全文、24二进制及双平台6次暂存通过，公开产物重新生成Formula与bot提交字节一致。真实远端tap固定8500359，在Linux arm64普通用户环境完成tap/安装/test/重装/test/卸载6步及4次helper暂存，精确容器清理通过；本机完整brew的Xcode/CLT门槛保持。七类复核无生产模块/RPC/状态/生命周期偏差；原42条文字/顺序及31/42保持，外部/平台/当前候选长期资源门槛保留。详见[资源审查](20-long-run-resource-review.md)、[密钥演练](21-release-key-rotation.md)与[Homebrew分发](22-homebrew-distribution.md)。
 
 **Linux默认12小时终态核验完成（2026-10-29）：** 原697文件冻结源运行已于北京时间23:11:50正常结束，应用/collector均退出0；实际工作12h30m3.603s、4368轮、740检查点，四角色各自然替换一次且在原两分钟预算内恢复，恢复尾部1803.013s、30个恢复后检查点，原持有TCP结束且无重放。11个受管PID的fixture清理、collector源码后置hash/快照移除与精确容器缺席已核验；预先准备的只读终态verifier实际返回verified，旧Linux578源失败保留。此证据仅属于原697源，不追认为当前alpha整版本长稳或无内存泄漏；FD+4/测试goroutine+6门禁不等于生产goroutine或全时RSS限制。当前31/42、11项待完成不变。本批没有启动新测试或操作服务/容器；七类架构复核保持原契约，后续先分析完整已有资源记录与当前版本覆盖差异，再决定必要补验。详见[Linux最终核验](15-implementation-status.md#evidence-default-linux-final-20261029)。
 
@@ -46,7 +46,7 @@
 | --- | --- | --- |
 | 原697源Linux默认12小时 | 终态通过；740组5920资源样本/12代际及到公开alpha源码差异已完成分析 | 生产heap/object归因、当前候选长期覆盖仍待，不从RSS推断无泄漏 |
 | 发行密钥轮换/撤信 | 临时测试密钥12步演练及异常清理通过，真实签名身份保持 | 显式旧钥仍可认证旧钥签名；在线撤销未提供，生产身份操作需独立记录 |
-| GPL与Homebrew alpha.2 | GPL-3.0-only正文与自动生成/验签/CAS更新实现完成；本地/容器分发验收见22 | 实际新tag完整流水线、公开alpha.2与自动Formula提交仍待执行；macOS工具门槛保留 |
+| GPL与Homebrew alpha.2 | GPL-3.0-only正文与自动生成/验签/CAS更新实现完成；本地/容器分发验收见22 | Release40912019720、自动Formula8500359、22公开资产认证及Linux远端tap完整链通过；macOS工具与其他平台门槛保留 |
 | 完整交付门槛 | 当前31/42、11项待完成 | 外部账号/物理平台、长期资源与完整渠道平台验收依路线图推进 |
 
 31/42是原始复合条目的验收数，不是代码完成率；历史批次中的旧计数保持当时范围。独立工作并行推进，不重复已通过检查。
@@ -807,4 +807,23 @@ v4普通/race分阶段profile均完整通过31.73/40.40秒：16次256KiB双向�
 
 真实Linux arm64普通用户Homebrew完成安装/test、仅包revision升级/test、重装/test和卸载共7步，均退出0，三次test共6次实际helper暂存；此为alpha.1认证包的兼容fixture，不是Homebrew公开首发或跨产品版本升级。两处实际包管理问题已修：Homebrew staging的工具文件不纳入包，完整14认证成员置于libexec/bundle以避免Homebrew4/7元文件整理移走LICENSE。原始失败均保留，未改helper或放宽hash。最终native公式方法、2次helper暂存与签名篡改拒绝通过，但本机完整brew因macOS27的Xcode/CLT不足前置失败，门槛保持。
 
-七类独立审查未发现剩余确定性生产偏差。原42条文字/顺序及31/42保持；本批提交后还需实际alpha.2 tag全流程、22公开产物认证及远端tap验收，准备不记作发行完成。macOS brew完整链、真实账号/原生平台/长期资源等门槛继续待验。
+七类独立审查未发现剩余确定性生产偏差。原42条文字/顺序及31/42保持；本准备批次提交时尚待实际alpha.2 tag全流程、22公开产物认证及远端tap验收，随后已在[公开验收批次](#evidence-public-alpha2-release-20261030)完成；保留准备阶段范围。macOS brew完整链、真实账号/原生平台/长期资源等门槛继续待验。
+
+
+<a id="evidence-public-alpha2-release-20261030"></a>
+## alpha.2 自动发布、GPL与公开下载验收（2026-10-30）
+
+[v0.0.1-alpha.2](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.2)的受保护annotated tag固定到`fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2`。[Release40912019720](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40912019720)完整成功，Ubuntu/macOS CI、四目标打包检查、四目标正式包、签名/独立验签、公式生成/Ruby语法、公开发布和Formula更新全部实际执行。两平台各56项工具回归通过；Ubuntu耗时4.968秒、macOS5.974秒。macOS前两次因托管runner容量不足取消，runner_id为0且steps为空；仅重试该任务，第三次通过，不把基础设施取消改写为测试失败或通过。重复的master CI40911980224为避免重复执行同源检查被取消，不能将其记为成功。
+
+Release于`2026-10-29T17:30:47Z`（北京时间2026-10-30 01:30:47）公开，非草稿预发布，共22资产。随后GitHub Actions bot自动提交`85003591044fca15f82c9c220b2051766f1e47aa`，仅新增`Formula/shikigami.rb`；Formula SHA-256为`53fe01dcc5f9aa1d4c4dc5aab8d9d4ea05013631993835eb1ce9bb4d293f15ea`。版本、四目标URL/hash、签名和GPL-3.0-only标签来自认证产物，没有手改公式；其后从公开下载重新生成的公式与自动提交逐字节一致。GITHUB_TOKEN提交不启动新CI，当前发布job已执行生成/语法检查，另有真实tap验收见[22](22-homebrew-distribution.md)。
+
+22公开资产下载至`dist/releases/v0.0.1-alpha.2/`，由可信仓库verifier与预先固定公钥逐一验证Ed25519、远端大小/hash、归档14成员、全部payload hash、checksums pin、来源和验签回执。四个归档LICENSE全文均与根GNU官方GPLv3正文摘要一致，README明确GPL-3.0-only；旧alpha.1的MIT源码/归档保持冻结。24二进制版本、完整commit、Go1.26.10及OS/arch正确，4个shiki保留的BuiltAt匹配固定运行开始时间`2026-10-29T16:29:06Z`，其余20个被链接器消除，未宣称静态验证了不存在的变量。
+
+本机macOS arm64和普通用户Linux arm64各执行12条version/help命令；macOS client首次/重复stage-only两次，Linux client/daemon首次/重复四次，合计6次实际helper暂存通过。Linux为UID1000、断网、cap-drop ALL、只读根；全部暂存14成员hash、0600 review、显式路径和不激活状态通过，无current/config/state/plugins初始化，现有服务文件不变。输入后置hash、临时解包清理和精确容器缺席独立核验，独占验收镜像标签已移除。此项不等于新归档完整服务升级或全平台验收，旧92cafaf生命周期证据单独保留。
+
+证据目录`/tmp/shiki-postrelease-delivery-20261029/`保存`alpha2-release.json`、`alpha2-run.json`、`alpha2-publish.log`、双平台CI日志及两次runner容量记录；`public-alpha2-acceptance/summary.json`为passed，另有`public-verification.json`、`binary-build-metadata.json`、两平台summary、`container.json`与`cleanup-verification.json`。公开Release及Issues均由无登录curl验证TLS并返回HTTP200。临时证据不是永久存档，不可取得时不能扩大本摘要结论。
+
+本批生产Go/proto/module未改。七类架构复核、原42条文字/顺序及31/42保持；原生macOS完整Homebrew安装仍受Xcode/CLT不足阻止，原生amd64/WSL、真实账号/网络、原生部署/重启登录、物理多设备和当前版本长期资源门槛保留。原697源12小时成功、完整资源报告和隔离密钥演练均已完成，不再列作等待；未重新运行长测或操作生产密钥。
+
+
+实际远端tap验收补充：`/tmp/shiki-homebrew-alpha2-public-20261030/verified-summary.json`为passed，克隆HEAD精确为8500359，Formula摘要与自动提交相同；Linux aarch64/Homebrew4.6.20/UID1000实际tap、install、test、reinstall、test、uninstall六步均退出0，4次helper暂存、14成员/13payload hash及GPL全文验证通过。未激活服务或生成current/config/state；容器die0/destroy事件与全CID独立inspect缺席通过。此为当前alpha.2真实远端安装链，旧alpha.1 fixture的revision升级仍独立保留，不外推当前发行跨版本升级或原生macOS完整brew通过。

@@ -1,8 +1,8 @@
 # 自动化安装与运维契约
 
-**本文保留安装流程契约。仓库已实现本地固定版本 bundle 校验、事务安装/回滚、服务渲染、异步登录引导与本地就绪诊断；真实 systemd 容器与原生 macOS LaunchAgent 已有下述限定环境生命周期证据；首个公开预发布 v0.0.1-alpha.1 已由 tag 自动构建、签名和发布。原生 VPS/重启登录持久化、外部连接、完整平台与 Homebrew 分发仍需单独验收。**
+**本文保留安装流程契约。仓库已实现本地固定版本 bundle 校验、事务安装/回滚、服务渲染、异步登录引导与本地就绪诊断；真实 systemd 容器与原生 macOS LaunchAgent 已有下述限定环境生命周期证据；当前公开预发布 v0.0.1-alpha.2 已由 tag 自动构建、签名、发布并更新 Homebrew Formula，实际分发与平台证据见[22](22-homebrew-distribution.md)。原生 VPS/重启登录持久化、外部连接与完整平台仍需单独验收。**
 
-`scripts/install.sh`、`install-client.sh`、`uninstall.sh` 与短时运维 helper `shiki-install` 已存在；已完成专用公钥的四目标签名及验签。[首个公开 Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.1) 来自提交 `f0b5f83dce599c8e0d715bda5e7806a0ef6aaa72`、成功自动发布运行 `40895007350`，公开资产的下载验证结果见[发行证据](./15-implementation-status.md#evidence-public-alpha-release-20261029)。安装只接受本地 bundle、固定版本及调用者从独立可信渠道取得的 checksum pin。可信源码工具 `scripts/release-trust.go fetch` 提供显式HTTPS归档/签名地址、独立可信公钥和固定版本/平台的下载验签入口，先认证签名再下载归档，成功后生成私有副本/pin/receipt；解包与安装仍是显式后续步骤，工具不指定正式来源或建立公钥信任。GitHub下载地址会重定向，现有 `fetch` 拒绝重定向；应使用 `gh release download v0.0.1-alpha.1 --repo DDSRem-Dev/Shikigami` 取回资产，再用可信源码 verifier 和独立可信公钥离线验签。命令与限制见发布认证，本批验收进度见16。下列完整就绪和运维要求不因预发布成功而降低。
+`scripts/install.sh`、`install-client.sh`、`uninstall.sh` 与短时运维 helper `shiki-install` 已存在；已完成专用公钥的四目标签名及验签。[当前公开 Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.2) 来自提交 `fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2`、成功自动发布运行 `40912019720`，公开资产的下载验证结果见[发行证据](./15-implementation-status.md#evidence-public-alpha2-release-20261030)。安装只接受本地 bundle、固定版本及调用者从独立可信渠道取得的 checksum pin。可信源码工具 `scripts/release-trust.go fetch` 提供显式HTTPS归档/签名地址、独立可信公钥和固定版本/平台的下载验签入口，先认证签名再下载归档，成功后生成私有副本/pin/receipt；解包与安装仍是显式后续步骤，工具不指定正式来源或建立公钥信任。GitHub下载地址会重定向，现有 `fetch` 拒绝重定向；应使用 `gh release download v0.0.1-alpha.2 --repo DDSRem-Dev/Shikigami` 取回资产，再用可信源码 verifier 和独立可信公钥离线验签。命令与限制见发布认证，本批验收进度见16。下列完整就绪和运维要求不因预发布成功而降低。
 
 ## 部署模型
 
