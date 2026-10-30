@@ -1,6 +1,6 @@
 # 官方 tsnet 外部验收
 
-2026-10-30：用户已提供官方 tailnet、已登录的 Chrome，以及家庭宽带 Mac 与不同网络的 VPS。首次真实网络批次已关闭08的Phase 2首条；当前32/42，10项部分完成。其余认证矩阵和平台门槛不随此项关闭。后续官方节点移除暴露旧流残留，peer生命周期修复已有本地回归证据；第三次重新认证已online，随后不含诊断代码的最终构建重启及应用重连通过；官方再次移除已验证旧附件回收与主节点不受影响；自身状态分类与显式恢复的本地修复及分层回归已完成；旧63924ce诊断构建已重新认证并恢复应用连接，candidate4 clean重启同地址online。最终候选已完成两个独立的官方控制面受控断网场景：已有终端保持及控制恢复、无持有终端时显式connect复用授权。首轮混入主动连接重配的失败记录保留，完整认证矩阵未关闭。
+2026-10-30：用户已提供官方 tailnet、已登录的 Chrome，以及家庭宽带 Mac 与不同网络的 VPS。首次真实网络批次已关闭08的Phase 2首条；当前32/42，10项部分完成。其余认证矩阵和平台门槛不随此项关闭。后续官方节点移除暴露旧流残留，peer生命周期修复已有本地回归证据；第三次重新认证已online，随后不含诊断代码的最终构建重启及应用重连通过；官方再次移除已验证旧附件回收与主节点不受影响；自身状态分类与显式恢复的本地修复及分层回归已完成；旧63924ce诊断构建已重新认证并恢复应用连接，candidate4 clean重启同地址online。最终候选已完成两个独立的官方控制面受控断网场景：已有终端保持及控制恢复、无持有终端时显式connect复用授权。首轮混入主动连接重配的失败记录保留，最新补验已完成最终agent再次撤销恢复和独立未使用Auth Key撤销，99bee22六job CI通过；独立自然到期调度待执行，审批待批/移除/批准及恢复原设置已实测，完整认证矩阵未关闭。
 
 ## 来源与隔离范围
 
@@ -146,3 +146,27 @@ candidate4的agent/CLI生产输入属于92fe17a，没有诊断overlay；VPS仍ca
 CLI根因是nodeLoginActive没有覆盖仍有有效attempt的offline/NODE_CONTROL_UNAVAILABLE。修复仅将该reason且login_id非空、expires在未来的状态纳入已有轮询；其他离线失败、无ID和过期仍终止，不再次BeginLogin或自动Cancel，不放宽自身/父截止。真实Unix/HTTP2 NodeControl序列先红后绿，交互URL和Auth Key在线结果、截止及拒绝分支覆盖单列；修前日志`/tmp/shiki-cli-control-pending-red.log`；最终CLI整包race40个顶层测试22.312秒通过，无skip或race，日志`/tmp/shiki-cli-control-pending-race.log`，源码及日志清单`/tmp/shiki-ci-and-cli-pending-verification.json`。独立七类审查通过；新远端CI待实际结果，不继承旧Linux通过。
 
 [CI40998046799](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40998046799)精确92fe17a整体failure。Ubuntu完整测试及四目标打包成功；macOS的TestInvalidAuthKeyAndNoCredentialPersistence在SDK仍活动时遍历netmap-cache遇lstat ENOENT，make test失败，随后test-e2e未执行、终端屏幕step跳过。日志`/tmp/shiki-ci-40998046799-failed.log`。夹具现先Node.Close并等待SDK/本地worker与store退出，再DisableRecovery重开最终持久store检查解码值，原Walk全文件和两种key检查保持，所有I/O错误仍失败。定向race三次均通过，总13.190秒，日志`/tmp/shiki-ci-key-persistence-race.log`；这是最终落盘与关闭后文件不含key证据，不是任意运行瞬间取证。没有修改SDK、生产状态存储或忽略ENOENT。
+
+
+## 未使用Auth Key撤销与独立自然到期准备（2026-10-30）
+
+用户确认后，通过Chrome生成独立、从未提交给任何节点的Auth Key：single-use、有效期1天、非ephemeral、无tags。第一枚生成后立即由管理页撤销，页面显示无有效key、2枚recently invalidated；随后才启动从未存在tsnet状态目录的隔离节点，以0600文件读取被撤销key。官方控制面1.932秒明确返回denied/INVALID_AUTH_KEY，无地址、无URL；测试agent正常SIGTERM退出0，key文件已删除。不是无效随机key或已消费key的复用试验；也不代表已登录节点的node-key撤销。证据`unused-key-revoked-console.json`与`unused-key-revoked-result.json`。
+
+本轮使用candidate5 CLI，版本v0.0.1-alpha.2-local.tsnet.5、提交99bee22b47adaafa08db06351db56226848383db，SHA256 b3c5a6e1cbaa00791e2937fb421e04984eccc34959544af91bcb1c5ee5e2c5fe；复用candidate4 agent（相同node/agent生产源码），SHA256 10a617240282902621441a521184280f85373b98bb4dbf145f71a75f5bffde06。构建记录candidate5/cli-build.json核验72项实际编译/嵌入/依赖输入匹配提交且构建前后不变；不把本轮源码当成公开alpha.2产物。
+
+第二枚独立key采用相同限制，控制台显示2026-10-31到期，目前只保存在用户私有目录的0600文件，从未提交注册。以实际取得生成结果之后24小时再加5分钟为保守最早测试时刻：北京时间2026-10-31 15:55:52。到期日网页没有精确秒级时间，因此该时刻是本地验收门槛，不宣称官方精确失效时间。自动验收定在北京时间2026-10-31 15:56，已bootstrap到当前用户GUI域专用label dev.shikigami.tsnet-unused-expired.run-goeshw8f，读回runs=0、not running和日历触发时间；未到期前不启动测试节点或使用key，自然到期仍待验。冻结CLI5/agent4、配置/脚本摘要在私有next-unused-expired/manifest.json，调度preflight/activation.json分别记录提前门槛及激活。runner先检查时间门槛，到期独占一次、核对非秘密输入hash，只提交一次key，finally删除key并TERM/Wait自有agent；超时/非零退出/清理失败不计通过，结果落盘后请求卸载专用job。未写标准LaunchAgents目录，依赖当前Mac GUI登录会话、网络及7897代理；睡眠可延迟触发，关机/登出跨过调度不保证补跑。结果文件为该私有目录result.json，不得凭调度安装就关闭到期验收。
+
+[CI41005895032](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41005895032)已对精确99bee22完成六job全部success，补上上一轮macOS缺失检查。macOS/Linux CLI race22.800/9.724秒、node整包206.020/47.786秒、server38.186/35.466秒、架构1.174/1.068秒、E2E209.733/170.129秒，终端屏幕步骤与四目标未签名包构建成功。日志`/tmp/shiki-ci-41005895032-review.log`。CI未开启的真实服务/12小时专项仍不算通过，旧40998046799失败记录保留；本批没有因此重复本地全套或重建agent。
+
+
+## 官方节点审批、待批移除与批准恢复（2026-10-30）
+
+用户明确授权临时开启手动审批并测试后恢复，已由Chrome核实初始关闭。专用新节点shiki-test-approval-goeshw8f使用candidate5 CLI/candidate4 agent与独立私有目录，既有主Mac、once及VPS身份不变。临时开启审批后，经Chrome同账户与Touch ID完成交互登录：页面显示“Logged in, but device not connected”及“Needs approval”，NodeControl denied/NODE_APPROVAL_REQUIRED、无地址/URL；提供原有效应用Token后sessions调用仍FailedPrecondition。证据approval-start.json、approval-pending.json与approval-pending-admission.json，主Mac同期查询成功见approval-main-before.json。
+
+当前控制台只有Approve和Remove，没有独立Reject。通过Remove移除待审批节点100.76.33.78后，控制台恢复3台原设备；SDK仍报告旧NODE_APPROVAL_REQUIRED，业务继续拒绝，证据approval-removed-pending.json。这证明待批节点被移除仍不得访问，不证明SDK可区分明确管理员拒绝、未审批与被移除；不把它冒充完整审批策略拒绝矩阵。
+
+保留原节点目录，在同agent显式CancelLogin旧attempt后BeginLogin重新申请。candidate5 CLI遇active denied/NODE_APPROVAL_REQUIRED约0.3秒提前退出；稍后GetStatus取得同一新attempt的URL，用该URL重新登录，仍需管理员批准且业务拒绝，见approval-reapply-pending.json。Chrome明确批准新申请100.68.23.49后，agent自动online且URL清除，connect通过原Token、daemon ID及能力协商，ready/tailscale-direct，原tmux session仍ready，见approval-approved-result.json。该现场结果属于旧CLI5与不变agent，后述CLI修复另有本地回归证据。
+
+CLI修复仅将denied/NODE_APPROVAL_REQUIRED且login_id非空、expires在未来的attempt纳入原有有界等待，等待URL或online；输出仍denied、业务仍禁止，INVALID_AUTH_KEY等明确拒绝即使附有效attempt字段也立即终止。无重复BeginLogin、自动Cancel或新注册，不改变原wait与父context截止。真实UDS交互/AuthKey序列修前均提前退出，日志/tmp/shiki-cli-approval-pending-red.log；最终CLI整包race40项23.867秒通过，无skip/race/失败，日志`/tmp/shiki-cli-approval-pending-race.log`，两文件源码与审查清单`/tmp/shiki-cli-approval-verification.json`；独立七类审查通过，新提交CI须另按实际结果判断。自然到期调度继续使用已冻结CLI5，不为这一等待分支修改既有试验。
+
+最终正常TERM专用agent退出0且精确PID不存在，删除控制台专用审批测试节点，保留本地隔离证据；将手动审批恢复关闭并重新加载确认，主Mac/once均查询原session成功，见approval-cleanup.json。未改变node-key180天期限、自动更新、ACL或主Mac/VPS服务。

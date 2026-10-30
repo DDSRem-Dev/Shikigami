@@ -26,7 +26,7 @@
 | Connect 传输 | 本地 NodeControl 使用 UDS/h2c；tsnet 上实际全双工；可选 TLS 协商 h2、证书拒绝及流式终态正确，见 14 | 禁止以 TCP 端口可达或普通 HTTP 200 显示安装成功 |
 | 服务进程保活 | systemd crash/restart 保留 tmux，同时插件/PTY attach 可回收；普通用户和真实 HOME/PATH 可用 | 保活承诺不得进入安装成功提示 |
 
-本地 NodeControl、固定 SDK 的测试控制面登录/身份保持、真实 tsnet/UDS/TLS 传输和普通用户宿主崩溃恢复已有运行证据，详见 15/16。真实 systemd PID1 容器的服务保活和普通用户 user-agent、原生 macOS 当前 GUI 登录域的 LaunchAgent 生命周期已有下述证据；官方Mac/原生VPS登录、key首用/复用拒绝、进程重启身份保持和P2P/DERP已验证，见[23](23-tsnet-external-acceptance.md)；独立key过期/撤销、审批/节点撤销、主机重启登录及Claude完整外部就绪仍未验证。原型必须记录 SDK/OS 版本、步骤和输出，不记录 auth key 或登录 URL；只有相应门槛通过后才可宣称该安装流程已验收。
+本地 NodeControl、固定 SDK 的测试控制面登录/身份保持、真实 tsnet/UDS/TLS 传输和普通用户宿主崩溃恢复已有运行证据，详见 15/16。真实 systemd PID1 容器的服务保活和普通用户 user-agent、原生 macOS 当前 GUI 登录域的 LaunchAgent 生命周期已有下述证据；官方Mac/原生VPS登录、key首用/复用拒绝、进程重启身份保持和P2P/DERP已验证，见[23](23-tsnet-external-acceptance.md)；独立未使用key撤销、最终agent节点撤销恢复及审批待批/移除/批准已有后续证据；key自然到期、明确自身撤销/管理员拒绝分类、主机重启登录及Claude完整外部就绪仍待验。原型必须记录 SDK/OS 版本、步骤和输出，不记录 auth key 或登录 URL；只有相应门槛通过后才可宣称该安装流程已验收。
 
 运行预构建产物不要求用户安装 Go/protoc；源码构建要求 Go ≥ 1.26.5，并锁定 Connect-Go 运行库与生成器 v2.0.2。安装器检查发行清单中的核心/插件应用协议能力；不能把 Connect 库版本当作 Shiki 协议 major。
 

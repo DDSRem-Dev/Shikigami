@@ -117,13 +117,14 @@ func (a *app) nodeCommands() *cobra.Command {
 	return root
 }
 
-// NeedsLogin or a temporarily unavailable control plane may be reported while
-// an accepted asynchronous login obtains its URL or authenticates an auth key.
-// Only an active, unexpired attempt is pending; other offline failures,
-// cancellation, expiry and explicit rejection stay terminal.
+// Required login/approval or an unavailable control plane can precede a URL
+// or successful authentication. These specific states remain pending only for
+// an active, unexpired attempt. Approval still denies business admission;
+// invalid keys, cancellation, expiry and other failures remain terminal.
 func nodeLoginActive(status *apb.NodeStatus) bool {
 	pendingControl := status.State == "needs_login" && status.ReasonCode == "NODE_AUTH_REQUIRED" ||
-		status.State == "offline" && status.ReasonCode == "NODE_CONTROL_UNAVAILABLE"
+		status.State == "offline" && status.ReasonCode == "NODE_CONTROL_UNAVAILABLE" ||
+		status.State == "denied" && status.ReasonCode == "NODE_APPROVAL_REQUIRED"
 	return status.State == "authenticating" ||
 		pendingControl && status.LoginId != "" && status.LoginExpiresAt > time.Now().Unix()
 }

@@ -1,5 +1,7 @@
 # 开发路线图
 
+**未使用key撤销与审批实测、自然到期已调度（2026-10-30）：** 精确99bee22的CI41005895032六job成功，未开启opt-in仍不算通过。独立未使用single-use/1天key撤销后，新隔离节点1.932秒明确INVALID_AUTH_KEY，正常退出0并删key。审批临时开启后，新节点NODE_APPROVAL_REQUIRED且有效Token仍不能访问；管理台仅提供Remove，移除待批节点后仍禁入，但旧reason不证明明确管理员拒绝分类。保留状态显式重新申请并批准后自动online，Token/原daemon ID/能力及原session重验通过；专用节点与进程已清理，审批恢复原关闭，主Mac/VPS正常。另补CLI对有效待审批attempt的有界等待，状态仍denied，明确key拒绝仍终止。独立未使用key自然到期任务已注册，最早北京时间10月31日15:56执行，结果仍待。原42条及32/42保持，完整认证矩阵/平台/主机/长期门槛继续保留，详见[23](23-tsnet-external-acceptance.md)。
+
 **最终agent撤销恢复与CI/CLI补修（2026-10-30）：** 92fe17a的CI40998046799整体失败：Linux测试及四目标构建成功，macOS凭据检查在SDK活动时扫描缓存遭遇ENOENT，后续E2E未执行、终端专项跳过。已修正为SDK完全关闭后重开最终持久状态并严格扫描，未忽略文件错误；定向race三次通过。相同生产源码的candidate4再次由官方移除后，旧附件2→1、专用终端退出，主Mac与tmux保持；自身正确offline/NODE_CONTROL_UNAVAILABLE。最终agent经同一显式attempt的Chrome认证恢复online，Token/原daemon ID/能力重验及P2P连接通过，无诊断overlay。现场另发现CLI在active attempt的控制离线阶段提前退出，已补有界等待，CLI全包race40项/22.312秒通过，详见23。本轮仅补外部子项，不由控制失联断言明确撤销；保持32/42、10项部分完成与原42条要求，独立key撤销/到期、审批及其余门槛继续推进。
 
 **官方撤销回收、认证恢复与控制面断网验证（2026-10-30）：** 63924ce的六job CI已成功；官方移除专用节点后附件2→1、专用终端退出，主Mac与tmux保持正常，观察上界13/27秒包含Chrome操作与采样。用户完成Touch ID后，诊断构建重新认证online并重连原daemon；随后candidate4 clean构建保留同身份恢复。已分离控制面诊断与既有peer授权，修复登录完成/取消竞争、daemon误关健康流及CLI隐式登录；本地node按310.580/82.302/11.242秒三个源码范围分层race通过，server/architecture/CLI检查通过。官方控制面单进程阻断11.807秒期间，既有只读终端存活、新RPC成功，恢复online同地址；显式connect在独立断网场景ready且未触发登录。完整自身撤销分类、独立key过期/撤销、审批及其余认证/平台/长稳门槛保留，不把断联猜为denied。保持32/42、10项部分完成及原42条文字/顺序；本批新CI结果另行核验，详见[23 外部tsnet验收](23-tsnet-external-acceptance.md)。
@@ -169,7 +171,7 @@
 
 | 原条目 | 本地/容器已具备或仍可推进 | 关闭整项仍需 |
 |---|---|---|
-| Phase 0 tsnet认证原型 | 官方双端登录、进程身份保持、key首用/复用拒绝与交互取消已验；peer撤销旧流回收已有本地与官方复验证据，主节点保持正常，见23 | 控制失联分类、重新认证及clean恢复已补验；自身明确撤销分类、独立key过期/撤销、审批及其余11认证矩阵 |
+| Phase 0 tsnet认证原型 | 官方双端登录、进程身份保持、key首用/复用拒绝与交互取消已验；peer撤销旧流回收已有本地与官方复验证据，主节点保持正常，见23 | 控制失联分类、最终agent撤销/重新认证、未使用key撤销及审批等待/移除/批准已验；自身明确撤销/管理员拒绝分类、key自然到期及其余11认证矩阵 |
 | Phase 0 恢复、版本与多设备 | 崩溃恢复、合成版本矩阵、多客户端竞争已验 | 物理多设备；首发无历史版本的事实保留，现有公开alpha.1→alpha.2组合可补验 |
 | Phase 4 多设备体验 | 两个独立agent的映射/接管/冲突已有证据 | 物理多设备完整体验 |
 | Phase 4 安装器与服务 | 原生LaunchAgent、容器systemd、二次PID1启动及未登录system tailscaled非干扰已验；本地启动策略配置展示已完成双平台和真实systemd四态验证 | 外部账号、原生VPS及重启/登录持久化 |
@@ -220,7 +222,7 @@
 - [x] 插件原型：真实 go-plugin gRPC 子进程 Init/Start/Stop + 独立 Connect CoreAPI 回调；验证 AutoMTLS、实例凭据、context 生命周期、跨协议错误/半关闭适配和失败回收。
   - 宿主handler实际join、独立Stop截止、失败Launch锁转交、晚启动进程最终回收及Supervisor等待已修复；有效红绿、最终692基础源/693诊断源双平台相关race/vet及架构复核通过。默认12小时/资源稳定单独待验，见[清理所有权](15-implementation-status.md#evidence-host-handler-ownership)与[受影响链路](15-implementation-status.md#evidence-host-cleanup-affected-validation)。
 - [ ] 完成 11 的 tsnet 登录/一次性 key/身份持久化/认证失败/NodeControl 原型，记录 SDK/OS 版本与脱敏结果。
-  - 固定SDK、本地testcontrol/DERP和NodeControl已有证据；官方双端登录、一次性key首用/复用及无效key拒绝、进程身份保持与交互取消已验。官方节点移除暴露旧流回收缺口；入站/出站peer代际、每秒本地校准和共享5秒观察预算已修复，本地SDK/生命周期回归通过，精确源码与测试范围见[23](23-tsnet-external-acceptance.md#peer撤销修复与复验边界)。前次重新认证及clean最终构建重启/应用重连已通过；再次官方移除后的附件回收与主节点保持正常已验证，本次认证与clean恢复、控制面断网保留通道和独立connect已验证；自身明确撤销分类、key独立过期/撤销、节点审批及其余认证矩阵保持待验。
+  - 固定SDK、本地testcontrol/DERP和NodeControl已有证据；官方双端登录、一次性key首用/复用及无效key拒绝、进程身份保持与交互取消已验。官方节点移除暴露旧流回收缺口；入站/出站peer代际、每秒本地校准和共享5秒观察预算已修复，本地SDK/生命周期回归通过，精确源码与测试范围见[23](23-tsnet-external-acceptance.md#peer撤销修复与复验边界)。前次重新认证及clean最终构建重启/应用重连已通过；再次官方移除后的附件回收与主节点保持正常已验证，本次认证与clean恢复、控制面断网保留通道和独立connect已验证；独立未使用key撤销及审批等待/移除/批准已通过；自身明确撤销/管理员拒绝分类、key自然到期及其余认证矩阵保持待验。
 - [ ] 验证 06 的 agent 崩溃恢复、四层版本边界及多设备条件提交/控制权竞争。
   - 本地真实 agent 崩溃恢复、文件条件提交、多客户端控制权竞争已验证；四层真实独立进程的合成版本矩阵已通过（macOS/Linux 40.604/43.422秒），覆盖major/minor/required拒绝、同地址进程替换后能力收缩、AutoMTLS插件不兼容、未来schema拒绝及显式测试迁移备份，见 [版本验收报告](15-implementation-status.md#evidence-version-validation)。历史正式产物组合及物理多设备验收仍待完成，合成对端不冒充历史发行版。
 - [x] 根据原型结果重估工期，登记不能满足的假设。

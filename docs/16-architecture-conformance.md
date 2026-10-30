@@ -1,5 +1,7 @@
 # 架构与文档一致性检查
 
+**未使用key撤销与审批实测、自然到期已调度（2026-10-30）：** 精确99bee22的CI41005895032六job成功，未开启opt-in仍不算通过。独立未使用single-use/1天key撤销后，新隔离节点1.932秒明确INVALID_AUTH_KEY，正常退出0并删key。审批临时开启后，新节点NODE_APPROVAL_REQUIRED且有效Token仍不能访问；管理台仅提供Remove，移除待批节点后仍禁入，但旧reason不证明明确管理员拒绝分类。保留状态显式重新申请并批准后自动online，Token/原daemon ID/能力及原session重验通过；专用节点与进程已清理，审批恢复原关闭，主Mac/VPS正常。另补CLI对有效待审批attempt的有界等待，状态仍denied，明确key拒绝仍终止。独立未使用key自然到期任务已注册，最早北京时间10月31日15:56执行，结果仍待。原42条及32/42保持，完整认证矩阵/平台/主机/长期门槛继续保留，详见[23](23-tsnet-external-acceptance.md)。
+
 **最终agent撤销恢复与CI/CLI补修（2026-10-30）：** 92fe17a的CI40998046799整体失败：Linux测试及四目标构建成功，macOS凭据检查在SDK活动时扫描缓存遭遇ENOENT，后续E2E未执行、终端专项跳过。已修正为SDK完全关闭后重开最终持久状态并严格扫描，未忽略文件错误；定向race三次通过。相同生产源码的candidate4再次由官方移除后，旧附件2→1、专用终端退出，主Mac与tmux保持；自身正确offline/NODE_CONTROL_UNAVAILABLE。最终agent经同一显式attempt的Chrome认证恢复online，Token/原daemon ID/能力重验及P2P连接通过，无诊断overlay。现场另发现CLI在active attempt的控制离线阶段提前退出，已补有界等待，CLI全包race40项/22.312秒通过，详见23。本轮仅补外部子项，不由控制失联断言明确撤销；保持32/42、10项部分完成与原42条要求，独立key撤销/到期、审批及其余门槛继续推进。
 
 **官方撤销回收、认证恢复与控制面断网验证（2026-10-30）：** 63924ce的六job CI已成功；官方移除专用节点后附件2→1、专用终端退出，主Mac与tmux保持正常，观察上界13/27秒包含Chrome操作与采样。用户完成Touch ID后，诊断构建重新认证online并重连原daemon；随后candidate4 clean构建保留同身份恢复。已分离控制面诊断与既有peer授权，修复登录完成/取消竞争、daemon误关健康流及CLI隐式登录；本地node按310.580/82.302/11.242秒三个源码范围分层race通过，server/architecture/CLI检查通过。官方控制面单进程阻断11.807秒期间，既有只读终端存活、新RPC成功，恢复online同地址；显式connect在独立断网场景ready且未触发登录。完整自身撤销分类、独立key过期/撤销、审批及其余认证/平台/长稳门槛保留，不把断联猜为denied。保持32/42、10项部分完成及原42条文字/顺序；本批新CI结果另行核验，详见[23 外部tsnet验收](23-tsnet-external-acceptance.md)。
@@ -1199,3 +1201,13 @@ v4普通/race分阶段profile均完整通过31.73/40.40秒：16次256KiB双向�
 ## 最终agent撤销恢复与CI/CLI补修七类复核（2026-10-30）
 
 本批独立只读审查：目录/插件依赖方向、SDK与host所有权、RPC传输/准入/能力/授权、持久schema/revision/去重均未变化。candidate4的node/agent生产源码保持，官方操作只作用于专用测试身份，主Mac/VPS服务未更换。CLI仅补有效pending控制离线状态的原有轮询，不修改认证判定或新增重试；父/自身截止、无ID/过期/其他reason终止边界均有真实UDS回归。进程/文件检查偏差通过先Close/join再重开最终store修复，原完整文件遍历及两种key断言保持，不忽略ENOENT。终端撤销后关闭、原tmux保留、同进程认证恢复及重新授权已有外部证据；CLI早退历史失败和修复证据分开。安装/产物/协议/系统网络布局未变，新CLI修改不追认为candidate4。CI整体失败、macOS E2E未执行及终端skip明确记录；最终落盘不含凭据不扩大为全运行期取证。原42条/32勾选保持，08/15/16同步；独立key过期/撤销、审批等外部门槛仍待。
+
+
+## 未使用key撤销与到期准备七类复核（2026-10-30）
+
+本批没有产品源码、模块、协议或公开产物变更。目录/依赖及SDK-host-plugin归属维持；RPC/能力/授权复用既有NodeControl，正式拒绝证据不由超时推断。持久与运行状态分离：每个key使用独立全新节点目录，不修改已有身份/应用凭据，不把秘密放入argv/仓库/证据；撤销key从0600文件读取并在finally删除。进程生命周期按隔离agent的SIGTERM/Wait正常退出0确认。文件/终端/网络/限额和安装/CLI布局未变，主Mac/VPS进程及配置未操作。candidate5 CLI输入与99bee22匹配，agent沿用candidate4明确列来源；新CI六job实际成功，原失败及opt-in边界保留。自然到期只准备未使用凭据与保守时间门槛，结果未发生不勾选；延后调度审查和激活结果另记。三份摘要同步，原42条/32勾选保持。
+
+
+## 审批验收与pending等待最终复核（2026-10-30）
+
+独立七类审查通过：仅CLI helper及其测试增加合法未到期审批attempt的等待，目录/插件依赖、SDK-host归属、RPC/能力/授权、持久schema/revision/去重、node/agent进程和I/O限额、安装与发行布局均保持。不得用URL将denied改为online；测试断言URL发布时仍denied，明确INVALID_AUTH_KEY依然终止。原5秒RPC、CLI等待/父context上界和单BeginLogin保持。官方待批、移除后禁入与批准后自动online/应用重新认证各自独立记录，控制台无Reject及旧SDK reason不被写成明确管理员拒绝。授权临时设置已恢复、专用进程/控制台节点已清理，原节点业务复查成功。到期runner已独立审查：提前门槛零key访问/零进程，到期单次独占、hash固定、finally删除/自有PID回收、异常不得计通过；激活runs0不冒充真实到期测试。调度冻结CLI5不追认本批helper修复，三份进度与原42条/32勾选保持一致。

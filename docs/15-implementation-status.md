@@ -1,5 +1,7 @@
 # 实施与验收记录
 
+**未使用key撤销与审批实测、自然到期已调度（2026-10-30）：** 精确99bee22的CI41005895032六job成功，未开启opt-in仍不算通过。独立未使用single-use/1天key撤销后，新隔离节点1.932秒明确INVALID_AUTH_KEY，正常退出0并删key。审批临时开启后，新节点NODE_APPROVAL_REQUIRED且有效Token仍不能访问；管理台仅提供Remove，移除待批节点后仍禁入，但旧reason不证明明确管理员拒绝分类。保留状态显式重新申请并批准后自动online，Token/原daemon ID/能力及原session重验通过；专用节点与进程已清理，审批恢复原关闭，主Mac/VPS正常。另补CLI对有效待审批attempt的有界等待，状态仍denied，明确key拒绝仍终止。独立未使用key自然到期任务已注册，最早北京时间10月31日15:56执行，结果仍待。原42条及32/42保持，完整认证矩阵/平台/主机/长期门槛继续保留，详见[23](23-tsnet-external-acceptance.md)。
+
 **最终agent撤销恢复与CI/CLI补修（2026-10-30）：** 92fe17a的CI40998046799整体失败：Linux测试及四目标构建成功，macOS凭据检查在SDK活动时扫描缓存遭遇ENOENT，后续E2E未执行、终端专项跳过。已修正为SDK完全关闭后重开最终持久状态并严格扫描，未忽略文件错误；定向race三次通过。相同生产源码的candidate4再次由官方移除后，旧附件2→1、专用终端退出，主Mac与tmux保持；自身正确offline/NODE_CONTROL_UNAVAILABLE。最终agent经同一显式attempt的Chrome认证恢复online，Token/原daemon ID/能力重验及P2P连接通过，无诊断overlay。现场另发现CLI在active attempt的控制离线阶段提前退出，已补有界等待，CLI全包race40项/22.312秒通过，详见23。本轮仅补外部子项，不由控制失联断言明确撤销；保持32/42、10项部分完成与原42条要求，独立key撤销/到期、审批及其余门槛继续推进。
 
 **官方撤销回收、认证恢复与控制面断网验证（2026-10-30）：** 63924ce的六job CI已成功；官方移除专用节点后附件2→1、专用终端退出，主Mac与tmux保持正常，观察上界13/27秒包含Chrome操作与采样。用户完成Touch ID后，诊断构建重新认证online并重连原daemon；随后candidate4 clean构建保留同身份恢复。已分离控制面诊断与既有peer授权，修复登录完成/取消竞争、daemon误关健康流及CLI隐式登录；本地node按310.580/82.302/11.242秒三个源码范围分层race通过，server/architecture/CLI检查通过。官方控制面单进程阻断11.807秒期间，既有只读终端存活、新RPC成功，恢复online同地址；显式connect在独立断网场景ready且未触发登录。完整自身撤销分类、独立key过期/撤销、审批及其余认证/平台/长稳门槛保留，不把断联猜为denied。保持32/42、10项部分完成及原42条文字/顺序；本批新CI结果另行核验，详见[23 外部tsnet验收](23-tsnet-external-acceptance.md)。
@@ -394,6 +396,8 @@ Linux容器第二轮用630文件生产源、10份工具及2536份tailscale.com v
 四份 proto 保持文档字段号、service、流方向及 go_package 分包，仅将占位 module 替换为真实仓库路径。协议可生成不等于相应方法已实现；当前只为实际实现的能力进行协商。
 
 ## 历史实现证据（各批快照，不等于整阶段验收）
+
+以下表格及紧随两段保留首次官方tsnet验收前的历史状态；其中“尚未/仍需”不表示当前结论。2026-10-30官方P2P/DERP、一次性key复用/独立撤销、最终agent节点撤销恢复及远端CI新证据以文首和23为准。
 
 | 要求 | 实现与可重复验证 | 仍需完成 |
 |---|---|---|
@@ -881,3 +885,13 @@ Release于`2026-10-29T17:30:47Z`（北京时间2026-10-30 01:30:47）公开，�
 ## 最终agent官方撤销恢复与验收夹具修复（2026-10-30）
 
 本批最终agent官方移除、offline诊断、同进程显式认证及应用重新验证已通过，详见[23本轮记录](23-tsnet-external-acceptance.md#最终agent再次撤销与恢复cicli补修2026-10-30)。主Mac与原tmux保持，未重启agent、删除身份目录或使用诊断overlay。CLI在pending控制离线阶段提前退出已单独修复；不将后续GetStatus取URL恢复倒推为旧CLI成功。CI40998046799整体failure及其macOS未执行/跳过边界保留；凭据扫描夹具改为SDK关闭后检查最终store和全部文件，三次定向race13.190秒通过，不降低断言。CLI真实IPC先红后绿，最终完整包race40项/22.312秒通过，无skip或race；源码与日志摘要为`/tmp/shiki-ci-and-cli-pending-verification.json`。完整认证矩阵、平台/主机/长期条件保持待验，32/42不变。
+
+
+## 未使用key撤销与自然到期调度（2026-10-30）
+
+正式生成后未消费的key撤销已有独立外部证据：全新节点明确INVALID_AUTH_KEY，1.932秒；进程退出0、密钥文件删除。另一枚独立key最短1天有效期，仍未提交注册，真实自然到期不能由已撤销或消费key代替。candidate5 CLI+candidate4 agent来源、官方操作/清理及调度见[23](23-tsnet-external-acceptance.md#未使用auth-key撤销与独立自然到期准备2026-10-30)。精确99bee22六job CI已通过，旧macOS失败保留，未开启专项不计通过。32/42保持；审批待批/移除/批准结果见下节，明确自身撤销/管理员拒绝分类及其余外部门槛继续待验。
+
+
+## 审批待批、移除与批准恢复（2026-10-30）
+
+用户授权的临时手动审批已完成并恢复原关闭：新节点待批无地址且有效Token仍被拒绝；控制台Remove待批节点后仍不得访问，但SDK旧approval reason不能代表明确管理员拒绝。保留目录同agent显式取消/重新申请，经Chrome批准后online并通过Token/原daemon ID/能力和session重验。专用agent退出0、PID不存在且控制台节点已删除，原主节点业务正常。CLI5在待审批新attempt URL返回前早退已单独修复；细节、证据范围和回归见[23](23-tsnet-external-acceptance.md#官方节点审批待批移除与批准恢复2026-10-30)。独立自然到期任务已装载但未执行，32/42保持。

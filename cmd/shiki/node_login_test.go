@@ -25,15 +25,19 @@ import (
 // before the control plane has supplied an interactive URL or accepted a key.
 func TestNodeLoginWaitsForPendingControlPlane(t *testing.T) {
 	for _, tc := range []struct {
-		name                    string
-		authKey, controlOffline bool
+		name                              string
+		authKey, controlOffline, approval bool
 	}{
-		{"interactive_url", false, false}, {"auth_key_online", true, false},
-		{"control_offline/interactive_url", false, true}, {"control_offline/auth_key_online", true, true},
+		{"interactive_url", false, false, false}, {"auth_key_online", true, false, false},
+		{"control_offline/interactive_url", false, true, false}, {"control_offline/auth_key_online", true, true, false},
+		{"approval_pending/interactive_url", false, false, true}, {"approval_pending/auth_key_online", true, false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			authKey := tc.authKey
 			pending := pendingLoginStatus()
+			if tc.approval {
+				pending.State, pending.ReasonCode = "denied", "NODE_APPROVAL_REQUIRED"
+			}
 			last := proto.Clone(pending).(*apb.NodeStatus)
 			want := "https://login.example.invalid/test-only"
 			if authKey {
@@ -61,8 +65,9 @@ func TestNodeLoginWaitsForPendingControlPlane(t *testing.T) {
 			}
 			out, stderr, err := runNodeLogin(t.Context(), socket, args...)
 			var result struct {
-				State    string `json:"state"`
-				LoginURL string `json:"login_url"`
+				State      string `json:"state"`
+				LoginURL   string `json:"login_url"`
+				ReasonCode string `json:"reason_code"`
 			}
 			decodeErr := json.Unmarshal([]byte(out), &result)
 			completed := result.LoginURL == want
@@ -71,6 +76,9 @@ func TestNodeLoginWaitsForPendingControlPlane(t *testing.T) {
 			}
 			if err != nil || decodeErr != nil || !completed {
 				t.Fatalf("pending login did not complete: %v, output=%s", err, out)
+			}
+			if tc.approval && !authKey && (result.State != "denied" || result.ReasonCode != "NODE_APPROVAL_REQUIRED") {
+				t.Fatal("publishing an approval login URL changed the node's denied status")
 			}
 			if stderr != "" || strings.Contains(out, "unit-test-auth-key") {
 				t.Fatal("unexpected diagnostics or auth-key disclosure")
@@ -84,6 +92,10 @@ func TestNodeLoginStopsForTerminalStatus(t *testing.T) {
 	for _, status := range []*apb.NodeStatus{
 		{State: "denied", ReasonCode: "NODE_APPROVAL_REQUIRED"},
 		{State: "denied", ReasonCode: "INVALID_AUTH_KEY"},
+		{State: "denied", ReasonCode: "INVALID_AUTH_KEY", LoginId: "rejected-attempt", LoginExpiresAt: time.Now().Add(time.Minute).Unix()},
+		{State: "denied", ReasonCode: "NODE_APPROVAL_REQUIRED", LoginExpiresAt: time.Now().Add(time.Minute).Unix()},
+		{State: "denied", ReasonCode: "NODE_APPROVAL_REQUIRED", LoginId: "expired-approval", LoginExpiresAt: 1},
+		{State: "denied", ReasonCode: "NODE_APPROVAL_REQUIRED", LoginId: "finished-approval"},
 		{State: "expired", ReasonCode: "NODE_KEY_EXPIRED"},
 		{State: "needs_login", ReasonCode: "LOGIN_CANCELED"},
 		{State: "needs_login", ReasonCode: "LOGIN_EXPIRED"},
@@ -110,16 +122,20 @@ func TestNodeLoginStopsForTerminalStatus(t *testing.T) {
 
 func TestNodeLoginPendingWaitIsBounded(t *testing.T) {
 	for _, tc := range []struct {
-		name                           string
-		parentDeadline, controlOffline bool
+		name                                     string
+		parentDeadline, controlOffline, approval bool
 	}{
-		{"wait_timeout", false, false}, {"earlier_parent_deadline", true, false},
-		{"control_offline/wait_timeout", false, true}, {"control_offline/earlier_parent_deadline", true, true},
+		{"wait_timeout", false, false, false}, {"earlier_parent_deadline", true, false, false},
+		{"control_offline/wait_timeout", false, true, false}, {"control_offline/earlier_parent_deadline", true, true, false},
+		{"approval_pending/wait_timeout", false, false, true}, {"approval_pending/earlier_parent_deadline", true, false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			pending := pendingLoginStatus()
 			if tc.controlOffline {
 				pending.State, pending.ReasonCode = "offline", "NODE_CONTROL_UNAVAILABLE"
+			}
+			if tc.approval {
+				pending.State, pending.ReasonCode = "denied", "NODE_APPROVAL_REQUIRED"
 			}
 			probe := &nodeLoginProbe{statuses: []*apb.NodeStatus{pending}}
 			socket := nodeLoginSocket(t, probe)
