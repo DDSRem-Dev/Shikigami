@@ -22,6 +22,8 @@ A为原生macOS27.0.1 arm64、UID501；B为已有Debian VPS原生amd64上的新�
 | 4 | 35.61秒失败：双端Sessions与终端阶段通过；CAS负例误用不支持的ctrl-x先被参数校验拒绝 | 改为契约允许的ctrl-]，继续使用旧revision验证Aborted；不更改产品错误优先级 |
 | 5 | 39.06秒失败：终端、配置CAS及不同路径并发通过；夹具经前端代理调用raw StatFile被PermissionDenied拒绝 | 按13保留前端白名单；条件提交原语使用独立认证TLS文件RPC，普通同步继续走agent/真实插件 |
 | 6 | 61.40秒失败：.3完整产品的普通上传SIGKILL恢复、基线核对与B流保持通过；冲突解决SIGKILL后重试返回Canceled | ListConflicts可返回扫描前持久化旧冲突；改为等待新worker同revision的active/conflicted，incomplete日志必须由后台恢复消除，再判断结果；不重试Canceled写请求 |
+| 7 | 85.84秒失败：两类SIGKILL完整恢复和条件写竞争均通过；重连旧attachment接管在agent返回PermissionDenied | 依13前端所有权先拒绝旧附件，夹具原NotFound预期属于后续daemon层；改为精确PermissionDenied，不放宽产品权限 |
+| 8 | 160.95秒失败：离线冲突、过期generation拒绝、KEEP_BOTH及真实Sync界面通过；副本碰撞前置下载已被5秒父截止终止 | 8MiB双向32KiB/25ms限速仅下载理论即≥6.4秒，误超13/14既有短RPC预算。碰撞专项改1MiB，保留同名注入/无覆盖断言；独立两类SIGKILL仍8MiB。不延长产品截止；异步RPC失败立即显示 |
 
 每轮重新初始化专用状态并发行新的独立测试Token，保留失败结论；不在失败后重用已撤销凭据。原始临时证据位于本轮closeout目录，各轮events单独保存；最终清理后可用性以清理记录为准。
 

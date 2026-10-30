@@ -482,9 +482,9 @@ class Matrix:
         current = self.b.rpc('GetSession', {'id': self.session['id']}, remote=True)
         self.a.rpc('TakeControl', {'session_id': self.session['id'], 'attachment_id': self.old_a_attachment,
                    'expected_control_revision': current['control_revision'], 'request_id': request_id()},
-                   remote=True, expect=('not_found',))
+                   remote=True, expect=('permission_denied',))
         self.record('attachment-renewal', {'old': self.old_a_attachment, 'new': reopened,
-                                          'old_attachment_rejected': True, 'cli_input_replay_tested': False})
+                                          'old_attachment_rejected': True, 'rejection_boundary': 'agent frontend ownership', 'cli_input_replay_tested': False})
         conflict = self.conflict(self.a, 'offline.txt')
         deleted = self.conflict(self.a, 'deleted.txt')
         require(not deleted['remote']['exists'] and deleted['local']['exists'], 'modify/delete did not retain deletion conflict')
@@ -716,7 +716,9 @@ class Matrix:
         self.hard_crash('resolution', 'resolve-crash.bin', 'resolve-upload-', resolve=conflict)
 
     def copy_collision(self):
-        name, pattern, size = 'copy-collision.txt', 'remote-copy-payload-', 8 << 20
+        # Keep the collision window inside the documented 5s frontend unary
+        # budget. The separate SIGKILL scenarios still transfer 8 MiB.
+        name, pattern, size = 'copy-collision.txt', 'remote-copy-payload-', 1 << 20
         self.pause(self.a, False)
         self.a.write(name, 'A collision local version\n')
         self.b.call('file.write', {'path': self.b.settings['files'] + '/' + name, 'pattern': pattern, 'size': size})
@@ -726,6 +728,9 @@ class Matrix:
         self.a.call('proxy.mode', {'handle': self.proxy['handle'], 'slow': True, 'paused': False})
         pending = self.pool.submit(lambda: self.resolve(self.a, conflict, 'KEEP_BOTH'))
         def local_copy():
+            if pending.done():
+                pending.result()  # Surface an early RPC failure instead of polling.
+                raise Failure('KEEP_BOTH completed before collision injection')
             files = self.a.call('file.list', {'path': self.a.settings['files'], 'recursive': True})['files']
             return next((f for f in files if f['path'].startswith(name + '.conflict-')
                          and f['sha256'] == digest(payload(pattern, size))), None)
@@ -734,6 +739,7 @@ class Matrix:
             require(not self.shared_stat(copy['path'])['exists'], 'remote copy committed before collision injection')
             sentinel = 'existing same-name remote copy must survive\n'
             self.b.call('file.write', {'path': self.env['daemon']['project_root'] + '/' + copy['path'], 'content': sentinel})
+            self.a.call('proxy.mode', {'handle': self.proxy['handle'], 'slow': False, 'paused': False})
             try:
                 pending.result(timeout=90)
             except Failure as error:

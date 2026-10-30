@@ -144,7 +144,7 @@ CI 的四目标编译任务使用固定 `v0.0.0-ci` 执行既有 `make release`�
 
 依赖扫描分别覆盖根 module 和独立终端 analyzer module；根目录的 `./...` 不包含嵌套 module。CI 保持原根扫描，另在 analyzer 目录以固定 `govulncheck v1.1.4` 执行 package 级扫描。记录数据库日期、实际目标及已导入包与仅模块公告的区别；静态目标扫描不作为目标平台运行或无漏洞证明。该入口的本地证据与远端 CI 执行分开记录，见 [analyzer 依赖扫描](15-implementation-status.md#evidence-terminal-analyzer-security-validation)。
 
-Go module 路径为 `github.com/DDSRem-Dev/Shikigami`，正式发行尚未发布；旧设计中的 `github.com/yourusername/shikigami` 为占位符。Connect-Go 基线为 connectrpc.com/connect/v2 v2.0.2，库最低要求 Go ≥ 1.26.0；项目因 tsnet v1.98.10 将最低版本固定为 1.26.5，使用 1.26.10 工具链；protoc-gen-go 基线 v1.36.11。仅插件适配层保留 go-plugin v1.8.0、grpc-go v1.85.0 和 protoc-gen-go-grpc v1.6.2；CoreAPI 回调用 Connect。运行库与 Connect 生成器锁定同版，protoc 也固定版本（见 09）。避免 @latest 使结果不确定。单文件内嵌构建按平台生成插件，开发构建不依赖该目录。
+Go module 路径为 `github.com/DDSRem-Dev/Shikigami`，当前已公开预发布 `v0.0.1-alpha.2`，稳定版尚未发布，来源及验收范围见[18](18-release-readiness.md)；旧设计中的 `github.com/yourusername/shikigami` 为占位符。Connect-Go 基线为 connectrpc.com/connect/v2 v2.0.2，库最低要求 Go ≥ 1.26.0；项目因 tsnet v1.98.10 将最低版本固定为 1.26.5，使用 1.26.10 工具链；protoc-gen-go 基线 v1.36.11。仅插件适配层保留 go-plugin v1.8.0、grpc-go v1.85.0 和 protoc-gen-go-grpc v1.6.2；CoreAPI 回调用 Connect。运行库与 Connect 生成器锁定同版，protoc 也固定版本（见 09）。避免 @latest 使结果不确定。单文件内嵌构建按平台生成插件，开发构建不依赖该目录。
 
 日志使用统一结构化接口，context 私有类型键；错误映射统一 Connect 错误码。测试文件与模块邻近，跨进程集成放 test/；关键恢复/安全测试属于对应阶段交付，不推迟到发布前补做。
 
