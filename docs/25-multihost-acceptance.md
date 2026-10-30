@@ -29,13 +29,13 @@ A为原生macOS27.0.1 arm64、UID501；B为已有Debian VPS原生amd64上的新�
 | 11 | 149.37秒失败：前九阶段及副本碰撞完整通过；撤A后旧终端/TCP已关闭，但新GetProject落在pool退役窗口返回Canceled，A归档因撤权后pause须验证远端而失败 | 先在凭据有效时暂停A映射，再撤权；观察ListServers稳定auth_required/CREDENTIAL_REJECTED后精确要求Unauthenticated。cleanup对已paused映射直接显式归档；不把Canceled记认证拒绝、不声称A同步由撤权终止 |
 | 12 | 157.31秒通过：10阶段全部完成；两helper及controller正常清理 | 两类8MiB强杀、三组条件竞争、离线/冲突/TUI、1MiB副本碰撞及撤A保B全部闭合；OS资源独立回收见下文 |
 
-每轮重新初始化专用状态并发行新的独立测试Token，保留失败结论；不在失败后重用已撤销凭据。原始临时证据位于本轮closeout目录，各轮events单独保存；最终清理后可用性以清理记录为准。
+每轮重新初始化专用状态并发行新的独立测试Token，保留失败结论；不在失败后重用已撤销凭据。各轮events及原始临时证据曾独立保存在本轮closeout目录；现已按用户要求删除，未归档进docs，仅保留本文脱敏结果与固定hash，不再声称旧路径可访问。
 
 ## 终端接管提示修复
 
 原`internal/client.Terminal`在TakeControl返回成功后，仍把READY中的observer状态传入BeforeRaw，导致真实CLI模式提示错误。现在等待同一attachment有序输出中的CONTROL_CHANGED及新的control_revision，再报告controller；unary成功本身不直接放行输入。确认前输出最多64帧/1MiB，随后保持原顺序交给既有事件循环，输入代次、旧输入作废和当前TTY尺寸同步保持。消费后释放缓存引用；READY和控制确认超时回调在Stop失败时join，避免迟到回调取消健康终端。确认等待最多5秒且可取消，错误/EOF/崩溃/错序/重复READY/旧revision/溢出不进入raw。
 
-真实PTY+Connect回归先红后绿，覆盖RPC早返回、延迟控制事件、前置输出顺序、提前输入不重放及窗口尺寸同步。最终客户端整包race17.257秒；CLI24.145秒、UI2.859秒、架构1.375秒race通过，相应vet通过。两平台CLI实际构建并部署；第三轮真实CLI已复验两种模式提示、退出0及原pane保持。完整双主机矩阵及最终CI仍需继续完成。
+真实PTY+Connect回归先红后绿，覆盖RPC早返回、延迟控制事件、前置输出顺序、提前输入不重放及窗口尺寸同步。最终客户端整包race17.257秒；CLI24.145秒、UI2.859秒、架构1.375秒race通过，相应vet通过。两平台CLI实际构建并部署；第三轮真实CLI已复验两种模式提示、退出0及原pane保持。此处为第3轮阶段记录；完整矩阵随后已在第12轮通过，最终CI41051011635十任务均成功。
 
 ## 有限验收矩阵
 
@@ -51,7 +51,7 @@ CI41039024257的Ubuntu启动IPC取消用例实际失败：caller已经取消后�
 
 ## 验收工具的发送终态
 
-独立review发现helper在条件写header/chunk发送EOF时直接返回会遮蔽远端Aborted/AlreadyExists。v5复用产品既有FinalSendError，仅EOF有界读取一次最终响应（1秒），caller取消/硬错误不额外读取，不重放消息；读取到空终态或成功也不能把失败发送升级为成功。四个原行为定向反证全部失败，最终整包race2.775秒及两平台构建通过，产物与完整冻结源码另存hash。该修正仅诊断工具，不改变产品授权、持久状态或限额。恢复屏障新增只读状态/日志判断，完整矩阵通过前不新增勾选。
+独立review发现helper在条件写header/chunk发送EOF时直接返回会遮蔽远端Aborted/AlreadyExists。v5复用产品既有FinalSendError，仅EOF有界读取一次最终响应（1秒），caller取消/硬错误不额外读取，不重放消息；读取到空终态或成功也不能把失败发送升级为成功。四个原行为定向反证全部失败，最终整包race2.775秒及两平台构建通过，产物与完整冻结源码另存hash。该修正仅诊断工具，不改变产品授权、持久状态或限额。恢复屏障新增只读状态/日志判断，当时完整矩阵未通过，未新增勾选；第12轮及OS清理完成后才关闭三个原条目。
 
 ## 人工慢链路碰撞预算
 
@@ -70,3 +70,16 @@ A映射先按13在有效凭据下暂停，再撤Token；旧A终端/TCP关闭，L
 最终清理先核inode/UID、全部Docker挂载及进程引用，然后删除本轮31个精确本地对象（runtime、v1–v6 helper、冻结构建、传输归档与生成缓存），VPS专用UID995账户/同名组、根目录和已无server/session的私有tmux目录；不停止共享tmux server、不触碰其他容器。SSH专用转发已取消，最后确认本轮无命令master没有其他复用client或listener，再通过准确control socket退出并删除空目录。原VPS SSH/Web/RustDesk监听PID保持；7897代理实际TCP可达；8个受保护进程PID/启动时刻/命令不变，c4 Linux容器仍运行，expiry非秘密输入hash和预约runs=0保持，未读取auth.key。
 
 清理回执SHA-256 `d60cc2425fd4951467a1fac21ab60afdb6e64841a917e9aabcc20ce85ab22597`。完整业务结果、部署hash、OS回收及独立审查一致；08/15/16关闭上述三个原项，计36/42。公开alpha.2不含本批产品修复；本批没有新tag/Release，正在运行的c4长测也不覆盖后续terminal/connection修复。CI858df71/92a35f1/423485a/aa394b4分别成功，原473710f取消竞态失败仍保留。
+
+
+## 历史临时材料最终清理
+
+2026-10-30在23已有111项、16项VM缓存目录及仓库bin/dist专项之外，再逐项核对源文件hash、模块/build metadata、明确文档或已确权脚本引用，清除811项历史临时对象：第一组409项，第二组402项。每组执行前核验inode/UID/mtime、全部9个容器挂载、宿主进程及打开文件；第一组13项目录仅有经识别Apple Virtualization的47个只读缓存句柄，无容器或真实宿主使用，VM保持运行且未重配；第二组402项均无引用。未按名称前缀直接删除，未执行全局容器/缓存/tmux清理。
+
+第一组先删除9项，随后遇到UID501所有的0555冻结源码目录而PermissionError；原失败保留。确认同inode/UID及本次部分删除后更新该项元数据，逐目录验证设备/所有权后仅补owner权限，剩余400项全部删除。第二组402项零错误。三份清理回执SHA-256依次为`e064f2e5818461b8ab9f76a1f87c78632463db357e12accb891f862333be23d5`、`740e85c4d42b58c5d7e47ab5b402003cc04d3c9bb876461f91234a9a0214bca0`、`1f42cdee44e2307a39dfc213b8678d0f432f463cdf14c7e7ce1fb850db9af381`。这些是历史清理数量，不覆盖前文双主机31对象/VPS账户/SSH专项范围。
+
+最终20:12:33（北京时间）删除`/tmp/shiki-closeout-20261030`与`/tmp/shiki-historical-ownership-20261030`两个自有审计目录，并删除一次性清理脚本；原始日志、失败轮次events、归属报告和清理回执均未复制进docs。删除前后8个保护进程PID/启动时刻/命令相同，c4 Linux容器仍运行，expiry非秘密输入hash保持、预约未执行（runs=0）、auth.key仅验证存在未读取、7897代理实际TCP可达。最终清理JSON摘要SHA-256为`074a7ea4a841e7eee157180beeb9690d818448e9d8ce1d8e354c67beda7932b0`。VPS原服务已在关闭专用SSH master前核验，之后没有远端操作，未虚称再次连接复查。
+
+保留边界：在系统与用户临时目录的盘点中，124项历史对象来源不足，另`/tmp/shiki-homebrew-linux-acceptance.py`缺少归属证据且仍有1个VM缓存引用，均不删；未确认用途的real-signing目录及正式签名私有备份保留。当前双平台c4默认12h及未使用key到期任务、冻结输入/来源记录/容器/预约继续隔离保留；不能为宣称环境全部清空而中断测试。两平台完整尾部最早10月31日约05:35，到期任务15:56执行，实际结果和最终资源回收仍待验。
+
+最终源码提交cc0bb7e的CI41051011635十任务全成功；本次收尾仅修正文档历史状态和记录清理，没有产品行为/版本/能力变更，也没有新tag或Release。36/42及原42条文字顺序保持；历史失败仍保留为失败，临时证据删除不产生新增验收通过。

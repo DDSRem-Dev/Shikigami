@@ -183,3 +183,6 @@ CLI修复仅将denied/NODE_APPROVAL_REQUIRED且login_id非空、expires在未来
 文件/账户清理已完成：本机run-goeshw8f的28个旧测试顶层项删除，仅next-unused-expired保留；VPS专用用户/同名组及/home/shiki-tsnet-test删除，UID1000无进程，死tmux socket目录删除。旧构建证据目录的115个条目删除，仅candidate4/host-build.json与candidate5/cli-build.json作为expiry来源记录保留。历史原始临时日志不再可用，正文中的脱敏结论与固定来源不改变，不虚称仍可从旧路径取证。停止清理回执摘要SHA-256为`27be4c705cd72b68f84e02bf5a0ff8419443d16200b199060f9334941a533aaf`；原系统SSH/Web/RustDesk监听及进程保持，7897实际TCP可连接，expiry冻结输入hash和c4进程身份复核保持。
 
 历史文件补充清理：按文档逐个核对路径和运行/容器引用后，111项旧实验残留删除（约1.69GiB allocated，零删除错误）；另16项已结束测试目录仅被Apple Virtualization保留只读句柄，经核实无容器挂载/进程使用后删除（5,082,578,194逻辑字节），VM未停止或重配。仓库旧bin/dist已清理，dist含1,869,899,435逻辑字节；开发.tools和用户文件保持。旧候选包README断链13处已改为清理说明，docs验收结论保留。对应回执SHA-256：111项`c2335974ff658a61060b47f3d7fc32be745979191804b02b270027b18dff43a5`、16项`3a6123da28db945d48d34b67ccc6f717de033ef39c115669ee33daa8eab8466b`、仓库产物`7783bb9845b5b13bdbaec7b2fb59df76e1053d49aa3d18a7669d9a79bf627ed4`。这些不是当前双主机runtime或保留预约/长测资源的清理证明，后者见25最终结果。
+
+
+最终补充历史清理及本轮临时审计材料回收已完成，811项确权对象与未知/运行中保留边界见[25清理终态](25-multihost-acceptance.md#历史临时材料最终清理)。expiry输入与runs=0仍保持；此记录不新增认证验收通过。
