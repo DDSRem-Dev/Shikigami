@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/DDSRem-Dev/Shikigami/internal/connection"
 	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
 	ppb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/plugin"
 	rpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/protocolconnect"
@@ -190,16 +191,8 @@ func (h *helper) fileStream(ctx context.Context, r request) (any, error) {
 			return nil, err
 		}
 		data := []byte(a.Content)
-		err = stream.Send(&pb.WriteFileRequest{Payload: &pb.WriteFileRequest_Header{Header: &pb.WriteFileHeader{ProjectId: a.ProjectID, Path: a.Path, BaseRevision: a.BaseRevision, ContentHash: digest(data), Size: int64(len(data)), Mode: 0600}}})
-		if err != nil {
-			return nil, err
-		}
-		if len(data) > 0 {
-			if err = stream.Send(&pb.WriteFileRequest{Payload: &pb.WriteFileRequest_Chunk{Chunk: data}}); err != nil {
-				return nil, err
-			}
-		}
-		info, err := stream.CloseAndReceive()
+		header := &pb.WriteFileHeader{ProjectId: a.ProjectID, Path: a.Path, BaseRevision: a.BaseRevision, ContentHash: digest(data), Size: int64(len(data)), Mode: 0600}
+		info, err := uploadContent(call, cancel, stream, header, data)
 		if err != nil {
 			return nil, err
 		}
@@ -237,4 +230,28 @@ func (h *helper) fileStream(ctx context.Context, r request) (any, error) {
 		_, _ = sum.Write(frame.GetChunk())
 	}
 	return map[string]any{"size": size, "sha256": hex.EncodeToString(sum.Sum(nil))}, nil
+}
+
+type uploadStream interface {
+	Send(*pb.WriteFileRequest) error
+	CloseAndReceive() (*pb.FileInfo, error)
+}
+
+// A conditional rejection can close the request writer before Send sees its
+// final status. Resolve EOF once, within FinalSendError's bounded deadline;
+// never replay the header/chunk or turn a failed send into a successful upload.
+func uploadContent(ctx context.Context, cancel context.CancelFunc, stream uploadStream, header *pb.WriteFileHeader, content []byte) (*pb.FileInfo, error) {
+	frames := []*pb.WriteFileRequest{{Payload: &pb.WriteFileRequest_Header{Header: header}}}
+	if len(content) > 0 {
+		frames = append(frames, &pb.WriteFileRequest{Payload: &pb.WriteFileRequest_Chunk{Chunk: content}})
+	}
+	for _, frame := range frames {
+		if err := stream.Send(frame); err != nil {
+			return nil, connection.FinalSendError(ctx, cancel, err, func() error {
+				_, final := stream.CloseAndReceive()
+				return final
+			})
+		}
+	}
+	return stream.CloseAndReceive()
 }

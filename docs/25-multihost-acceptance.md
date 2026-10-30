@@ -21,6 +21,7 @@ A为原生macOS27.0.1 arm64、UID501；B为已有Debian VPS原生amd64上的新�
 | 3 | 45.14秒失败：修复后的真实CLI观察/接管提示及Ctrl+Q均通过，Dashboard夹具过早发q，最终超时；正常清理 | 改为等待真实界面/目标面板/所需内容，再发送退出；不使用固定延迟猜测就绪 |
 | 4 | 35.61秒失败：双端Sessions与终端阶段通过；CAS负例误用不支持的ctrl-x先被参数校验拒绝 | 改为契约允许的ctrl-]，继续使用旧revision验证Aborted；不更改产品错误优先级 |
 | 5 | 39.06秒失败：终端、配置CAS及不同路径并发通过；夹具经前端代理调用raw StatFile被PermissionDenied拒绝 | 按13保留前端白名单；条件提交原语使用独立认证TLS文件RPC，普通同步继续走agent/真实插件 |
+| 6 | 61.40秒失败：.3完整产品的普通上传SIGKILL恢复、基线核对与B流保持通过；冲突解决SIGKILL后重试返回Canceled | ListConflicts可返回扫描前持久化旧冲突；改为等待新worker同revision的active/conflicted，incomplete日志必须由后台恢复消除，再判断结果；不重试Canceled写请求 |
 
 每轮重新初始化专用状态并发行新的独立测试Token，保留失败结论；不在失败后重用已撤销凭据。原始临时证据位于本轮closeout目录，各轮events单独保存；最终清理后可用性以清理记录为准。
 
@@ -41,3 +42,7 @@ A为原生macOS27.0.1 arm64、UID501；B为已有Debian VPS原生amd64上的新�
 CI41039024257的Ubuntu启动IPC取消用例实际失败：caller已经取消后关闭的发送流返回EOF。共享connection发送层增加caller context检查并重建取消错误，主动关闭且context有效仍返回EOF。确定性unary/server-stream × cancellation/deadline × Send/SendHeaders/CloseSend共12分支修前失败、修后通过，另2个正常关闭对照保持EOF。完整connection race2.482秒，原启动IPC专项race1.532秒，vet通过。
 
 后续完整双主机轮次改用`v0.0.1-alpha.2-local.multihost.3`整套两平台产品（含全部host和匹配插件manifest），冻结源为e50d03d加最终connection修复，commit元数据unknown；二进制和完整源码manifest另存hash。helper v4双平台构建及整包race1.680秒通过；四目标Homebrew公开包、已运行c4默认12h与本候选严格分源。
+
+## 验收工具的发送终态
+
+独立review发现helper在条件写header/chunk发送EOF时直接返回会遮蔽远端Aborted/AlreadyExists。v5复用产品既有FinalSendError，仅EOF有界读取一次最终响应（1秒），caller取消/硬错误不额外读取，不重放消息；读取到空终态或成功也不能把失败发送升级为成功。四个原行为定向反证全部失败，最终整包race2.775秒及两平台构建通过，产物与完整冻结源码另存hash。该修正仅诊断工具，不改变产品授权、持久状态或限额。恢复屏障新增只读状态/日志判断，完整矩阵通过前不新增勾选。

@@ -130,7 +130,7 @@ Homebrew首发`v0.0.1-alpha.2`已由上述tag运行自动发布公式，版本/U
 
 `.3` 在关闭/不可用节点的只读诊断上误报协议不兼容的偏差已修复，并完成有效同测红绿、双平台相关四包race/vet及 `.4` 实际包内验证。路线图恢复29/42；旧归档和原始错误记录保留，不追认后续源码。
 
-历史739源本地开发候选 `v0.0.0-local.20261029.5` 已完成macOS/Linux arm64首轮构建及实际归档验收，交付目录 `dist/local-20261029.5/`。541份Go/proto/根及嵌套module与恢复修复已验738源完全一致；此前 `.2/.3/.4` 保留为历史产物。每平台52实际命令、六程序/双插件/14成员hash与pin、两私有agent状态诊断和正常清理通过；新增归档helper首次/重复stage-only校验同一14成员及review，无激活current/receipt、无配置/状态/安装links生成，标准服务文件保持。Plan.Home来自真实账户查询，仅服务review写入私有prefix，不声称HOME环境重定向标准服务路径。未签名，Commit/BuiltAt unknown；暂存不等于激活，本地摘要不是发布者认证，不追认697长跑。见[交付说明](../dist/local-20261029.5/README.md)与[候选验收](15-implementation-status.md#evidence-local-candidate-20261029-5)。
+历史739源本地开发候选 `v0.0.0-local.20261029.5` 已完成macOS/Linux arm64首轮构建及实际归档验收，交付目录 `dist/local-20261029.5/`。541份Go/proto/根及嵌套module与恢复修复已验738源完全一致；此前 `.2/.3/.4` 保留为历史产物。每平台52实际命令、六程序/双插件/14成员hash与pin、两私有agent状态诊断和正常清理通过；新增归档helper首次/重复stage-only校验同一14成员及review，无激活current/receipt、无配置/状态/安装links生成，标准服务文件保持。Plan.Home来自真实账户查询，仅服务review写入私有prefix，不声称HOME环境重定向标准服务路径。未签名，Commit/BuiltAt unknown；暂存不等于激活，本地摘要不是发布者认证，不追认697长跑。见历史交付说明（临时候选包与说明已于2026-10-30清理；验收摘要保留于本文档集）与[候选验收](15-implementation-status.md#evidence-local-candidate-20261029-5)。
 
 2026-10-29宿主清理修复已完成限定范围的双平台验收：692基础源中仅host/supervisor两份生产文件变化，补齐CoreAPI处理器实际join、并发Stop独立截止、失败Launch锁归属及晚启动进程回收；增加一个诊断脚本后的693源验证真实同步、转发、worker/host轮换、在途文件恢复与架构边界。原生及Linux相关race/vet通过，Linux应用/collector退出0、精确容器/快照清理完成。详见[修复](15-implementation-status.md#evidence-host-handler-ownership)与[受影响验收](15-implementation-status.md#evidence-host-cleanup-affected-validation)。
 

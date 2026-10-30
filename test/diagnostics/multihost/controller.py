@@ -665,6 +665,16 @@ class Matrix:
         self.a.call('frontend.open', {'name': 'default'})
         require(self.a.rpc('GetStatus')['instance_id'] != old_status['instance_id'], 'restart reused crashed instance')
         def recovered():
+            # ListConflicts can expose the durable pre-crash entry before the
+            # new worker has scanned it. Wait for live reconciliation, not just
+            # frontend readiness; never replay a write on Canceled.
+            status = self.a.rpc('GetSyncState', self.a.scope())
+            if (status.get('mapping_revision') != prepared['mapping_revision']
+                    or status.get('state') not in ('active', 'conflicted')):
+                return None
+            snapshot = self.a.call('sync.snapshot', snapshot_args)
+            if operation.get('commit_state') == 'incomplete' and snapshot.get('operation') is not None:
+                return None  # This unchanged source/target must recover itself.
             conflict = next((c for c in self.a.rpc('ListConflicts', self.a.scope()).get('conflicts', []) if c['path'] == filename), None)
             if conflict:
                 require(conflict['local']['content_hash'] == digest(payload(pattern, size)), 'crash lost local payload')
