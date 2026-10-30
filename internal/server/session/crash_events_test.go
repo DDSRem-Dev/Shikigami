@@ -3,7 +3,6 @@ package session
 import (
 	"context"
 	"fmt"
-	"golang.org/x/sys/unix"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
+	"golang.org/x/sys/unix"
 )
 
 func TestObservedExitEventsWithoutAutomaticRestart(t *testing.T) {
@@ -69,8 +69,26 @@ func TestObservedExitEventsWithoutAutomaticRestart(t *testing.T) {
 					t.Fatal(writeErr, closeErr)
 				}
 			}
-			abnormal := action == "exit 7" || action == "kill -TERM $$"
-			knownExit := false
+			abnormal := command == "exit 7" || command == "kill -TERM $$"
+			knownExit, unknownExit := false, false
+			verifyCrash := func(frame *pb.TerminalOutput) {
+				t.Helper()
+				if !abnormal || knownExit {
+					t.Fatalf("unexpected repeated/intentional crash: %v", frame)
+				}
+				if frame.SessionId != value.Id || frame.AttachmentId != sub.ID {
+					t.Fatal("crash event lost attachment scope")
+				}
+				data := frame.GetEvent().Data
+				if command == "exit 7" && (data["exit_code"] != "7" || data["exit_signal"] != "") {
+					t.Fatal(frame)
+				}
+				if command == "kill -TERM $$" && (data["exit_signal"] != "15" || data["exit_code"] != "") {
+					t.Fatal(frame)
+				}
+				knownExit = true
+				t.Logf("verified sequenced crash from tmux cause: %v", data)
+			}
 			if abnormal {
 				for {
 					frame, err := sub.Next(ctx)
@@ -94,6 +112,10 @@ func TestObservedExitEventsWithoutAutomaticRestart(t *testing.T) {
 					}
 					last = frame.Sequence
 					if event := frame.GetEvent(); event != nil && event.Type == pb.SessionEvent_CLAUDE_STOPPED && event.Data["reason_code"] == "EXIT_REASON_UNKNOWN" {
+						unknownExit = true
+						if event.Data["exit_code"] != "" || event.Data["exit_signal"] != "" {
+							t.Fatal("unknown observation invented an exit cause")
+						}
 						observed, err := m.tmux.Inspect(ctx, value.Id)
 						if err != nil || !observed.Dead {
 							t.Fatalf("unknown event without a verified dead pane: %+v %v", observed, err)
@@ -101,26 +123,13 @@ func TestObservedExitEventsWithoutAutomaticRestart(t *testing.T) {
 						if observed.ExitStatus != nil || observed.ExitSignal != 0 {
 							continue
 						} // later observation can upgrade it
-						if event.Data["exit_code"] != "" || event.Data["exit_signal"] != "" {
-							t.Fatal("unknown observation invented an exit cause")
-						}
-						t.Log("tmux retained no exit cause; verified the explicit unknown outcome, no fabricated crash")
+						t.Log("exit cause is currently unknown; a later observed cause may upgrade this event")
 						break
 					}
 					if frame.GetEvent().GetType() != pb.SessionEvent_CLAUDE_CRASHED {
 						continue
 					}
-					knownExit = true
-					t.Logf("verified sequenced crash from tmux cause: %v", frame.GetEvent().Data)
-					if frame.SessionId != value.Id || frame.AttachmentId != sub.ID {
-						t.Fatal("crash event lost attachment scope")
-					}
-					if action == "exit 7" && frame.GetEvent().Data["exit_code"] != "7" {
-						t.Fatal(frame)
-					}
-					if action == "kill -TERM $$" && (frame.GetEvent().Data["exit_signal"] != "15" || frame.GetEvent().Data["exit_code"] != "") {
-						t.Fatal(frame)
-					}
+					verifyCrash(frame)
 					break
 				}
 				logs, err := m.GetLogs(ctx, &pb.SessionLogsRequest{SessionId: value.Id})
@@ -128,8 +137,9 @@ func TestObservedExitEventsWithoutAutomaticRestart(t *testing.T) {
 					t.Fatalf("crash diagnostics: %v %v", logs, err)
 				}
 			}
-			// Drive observation repeatedly: neither a repeated dead-pane sample,
-			// a normal exit, nor explicit Stop may create another crash event.
+			// A previously unknown cause may become known on a later sample.
+			// Only that first crash is allowed; repeated samples, normal exits
+			// and explicit Stop must never create another crash event.
 			for range 3 {
 				m.operations.Lock()
 				err = m.restartStep(ctx, map[string]stableProcess{})
@@ -148,8 +158,15 @@ func TestObservedExitEventsWithoutAutomaticRestart(t *testing.T) {
 					}
 					t.Fatal(err)
 				}
+				if frame.Sequence <= last {
+					t.Fatal("exit observation broke attachment ordering")
+				}
+				last = frame.Sequence
 				if frame.GetEvent().GetType() == pb.SessionEvent_CLAUDE_CRASHED {
-					t.Fatalf("unexpected repeated/intentional crash: %v", frame)
+					if !unknownExit {
+						t.Fatalf("unexpected crash without a pending unknown observation: %v", frame)
+					}
+					verifyCrash(frame)
 				}
 			}
 			pane, err := m.tmux.Inspect(ctx, value.Id)

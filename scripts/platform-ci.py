@@ -23,6 +23,8 @@ REQUIRED_E2E = (
     "TestCLIThreeProcessTLSLifecycle", "TestCLIPortForwardTLSLifecycleAndRecovery",
     "TestInstallerLocalReadinessAndExplicitTokenDelivery",
 )
+MAINTENANCE_PREREQUISITES = ("preflight", "build-lint", "tool-tests", "platform-tool-tests")
+IDENTITY_FIELDS = ("os", "arch", "machine", "go", "kernel", "wsl")
 
 
 class Acceptance:
@@ -73,6 +75,8 @@ class Acceptance:
                             signal.signal(sig, handler)
                     raise
             record["exit_code"] = code
+            if code < 0 or code in (130, 143):
+                raise KeyboardInterrupt("platform child process was interrupted")
             if required is not None:
                 write_json(self.public / (label + ".json"), test_events(log, validate=False))
             if code:
@@ -83,8 +87,10 @@ class Acceptance:
             if required_text:
                 record["required_tests_passed"] = list(required_text)
             record["state"] = "passed"
-        except BaseException:
+        except BaseException as error:
             record["state"] = "failed"
+            if isinstance(error, (KeyboardInterrupt, SystemExit)):
+                record["cancelled"] = True
             raise
         finally:
             record["seconds"] = round(time.monotonic() - started, 3)
@@ -125,7 +131,7 @@ class Acceptance:
                  env={**os.environ, "SHIKI_RUN_EVIDENCE_DIR": str(evidence)}, required_text=("TestFrontendSemanticRedraw",))
 
     def maintenance(self):
-        identity = native_identity(ROOT)
+        identity = self.maintenance_admission()
         if identity["os"] == "darwin":
             self.run("launchd-lifecycle", ["bash", "scripts/test-launchd.sh"], timeout=1200,
                      required_text=("TestNativeLaunchAgentLifecycle",))
@@ -156,6 +162,58 @@ class Acceptance:
             if result.get("state") != "passed" or result.get("cleanup") != "passed":
                 raise RuntimeError("native systemd scenario or exact cleanup did not pass")
 
+    def maintenance_admission(self):
+        record = {"state": "blocked", "reason": "verification_failed"}
+        self.stages["maintenance-admission"] = record
+        try:
+            if any(stage.get("cancelled") is True or stage.get("state") == "cancelled" or
+                   (type(stage.get("exit_code")) is int and (stage["exit_code"] < 0 or stage["exit_code"] in (130, 143)))
+                   for stage in self.stages.values()):
+                record["reason"] = "cancelled"
+                raise RuntimeError("maintenance refused after interrupted verification")
+            missing = [name for name in MAINTENANCE_PREREQUISITES if self.stages.get(name, {}).get("state") != "passed"]
+            if missing:
+                record.update(reason="prerequisites_not_passed", missing_prerequisites=missing)
+                raise RuntimeError("maintenance prerequisites did not pass")
+            record["reason"] = "runtime_identity_unavailable"
+            identity = native_identity(ROOT)
+            frozen = json.loads((self.public / "platform.json").read_text())
+            record["reason"] = "runtime_identity_changed"
+            if any(key not in identity or frozen.get(key) != identity[key] for key in IDENTITY_FIELDS):
+                raise RuntimeError("maintenance runtime identity differs from preflight")
+            record["reason"] = "source_verification_failed"
+            original = json.loads((self.public / "source.json").read_text())
+            current = source_identity(ROOT)
+            record["reason"] = "source_changed"
+            if original != current:
+                raise RuntimeError("maintenance source differs from preflight")
+            record.update(state="passed", reason="source_and_prerequisites_verified")
+            return identity
+        finally:
+            write_json(self.state, self.stages)
+
+    def linux_pipeline(self):
+        if native_identity(ROOT)["os"] != "linux":
+            raise RuntimeError("independent maintenance pipeline requires Linux")
+        failures = []
+        try:
+            self.product()
+        except Exception:
+            failures.append("product")
+        else:
+            try:
+                self.terminal()
+            except Exception:
+                failures.append("terminal")
+        # BaseException (including cancellation) deliberately bypasses this
+        # branch. Maintenance independently rechecks source and prerequisites.
+        try:
+            self.maintenance()
+        except Exception:
+            failures.append("maintenance")
+        if failures:
+            raise RuntimeError("Linux acceptance stages failed: " + ", ".join(failures))
+
     def finalize(self):
         source = self.public / "source.json"
         source_ok = source.exists() and json.loads(source.read_text()) == source_identity(ROOT)
@@ -176,7 +234,7 @@ class Acceptance:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("stage", choices=("preflight", "product", "terminal", "maintenance", "finalize"))
+    parser.add_argument("stage", choices=("preflight", "product", "terminal", "maintenance", "linux-pipeline", "finalize"))
     parser.add_argument("--evidence", required=True)
     arguments = parser.parse_args()
     def interrupted(_signum, _frame):
@@ -184,13 +242,18 @@ def main():
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, interrupted)
     acceptance = Acceptance(arguments.evidence)
-    if arguments.stage not in ("preflight", "finalize"):
-        if not (acceptance.public / "source.json").exists():
-            raise RuntimeError("preflight must freeze source before tests")
-        native_identity(ROOT)
-        acceptance.measured = json.loads((acceptance.public / "platform.json").read_text())["resources"]
-        os.environ.update(go_environment(acceptance.measured))
-    getattr(acceptance, arguments.stage)()
+    try:
+        if arguments.stage not in ("preflight", "finalize"):
+            if not (acceptance.public / "source.json").exists():
+                raise RuntimeError("preflight must freeze source before tests")
+            native_identity(ROOT)
+            acceptance.measured = json.loads((acceptance.public / "platform.json").read_text())["resources"]
+            os.environ.update(go_environment(acceptance.measured))
+        getattr(acceptance, arguments.stage.replace("-", "_"))()
+    except (KeyboardInterrupt, SystemExit):
+        acceptance.stages["runner-interruption"] = {"state": "cancelled"}
+        write_json(acceptance.state, acceptance.stages)
+        raise
 
 
 if __name__ == "__main__":

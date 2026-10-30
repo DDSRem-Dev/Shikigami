@@ -2,15 +2,15 @@
 
 ## 当前状态（2026-10-31）
 
-当前修复源为c10852f，[CI41104833762](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41104833762)正在执行；实际WSL2完整产品/systemd维护已通过；两Linux完整产品通过但首次daemon激活仍失败，原因继续调查。四目标compile/warm及两Linux native partial保存成功；Mac和完整平台终态仍待。四目标完整产品及实际WSL2验收已接入现有CI。首轮[41090262712](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41090262712)绑定原bf2e645；按用户要求改提交格式后对应c83c95a，git tree相同但不改写历史CI来源。第二轮[41093552523](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41093552523)绑定42eb93e。两轮已有失败，不能认定平台完成；Phase5复合项保持未勾选，路线图36/42。公开Homebrew四目标渠道验收见22，不能替代本矩阵。
+e2f7f41的[CI41109911804](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41109911804)四目标compile/Homebrew和实际WSL2完整矩阵通过。两原生Linux产品测试分别失败，未执行维护；Mac新源码终态尚待。两项测试时序修复及独立Linux维护准入已通过本地专项，待下一轮CI。此前c10852f的[CI41104833762](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41104833762)Mac双架构与WSL完整通过，两Linux产品链通过但首次安装失败；失败历史保留。Phase5完整复合项仍未勾选，路线图36/42，公开Homebrew渠道验收见22，不能替代本矩阵。
 
-| 环境 | 本批要求执行的范围 | 已取得结果（02:38 +08） |
+| 环境 | 本批要求执行的范围 | 已取得结果（03:22 +08） |
 |---|---|---|
-| ubuntu-24.04 / amd64 | 完整race、真实双端插件、E2E、内嵌插件、终端语义、原生systemd及用户服务、活动升级/回滚 | 首轮E2E失败、第二轮agent用例失败保留；588及c108全产品/E2E/embedded/terminal通过；c108修正路径后首次daemon激活仍失败，账户创建与清理通过 |
-| ubuntu-24.04-arm / arm64 | 同上，实际arm64内核/Go宿主 | c108产品/E2E/embedded/terminal通过；useradd37.682秒成功，首次daemon激活仍失败；588的useradd60秒超时原因仍未确认 |
-| macos-15 / arm64 | 完整产品/终端、实际LaunchAgent、上传下载活动升级 | 三轮有tmux/session失败；588另有GOMAX1下node期限失败，兼容性和资源策略已本地修复，待新CI |
-| macos-15-intel / amd64 | 同上，拒绝Rosetta替代 | 首轮bf2e645完整原生产品及LaunchAgent维护通过，tmux3.7c；58806be完整产品/维护亦通过；42eb接口目前404且未取得其Intel产物，不推断结论，不追认c108新源码 |
-| windows-2025的WSL2 / amd64 | 独立Ubuntu、真实Microsoft内核、Linux文件系统、systemd PID1及产品/维护矩阵 | c108完整产品/E2E/embedded/terminal及systemd维护通过，13生命周期操作、双角色四个活动升级/回滚边界及清理通过；前轮agent/sync失败保留 |
+| ubuntu-24.04 / amd64 | 完整race、真实双端插件、E2E、内嵌插件、终端语义、原生systemd及用户服务、活动升级/回滚 | 首轮E2E失败、第二轮agent用例失败保留；588及c108全产品/E2E/embedded/terminal通过；c108首次daemon激活失败，账户创建与清理通过；e2f退出事件断言失败，维护未执行，修复待新CI |
+| ubuntu-24.04-arm / arm64 | 同上，实际arm64内核/Go宿主 | c108产品/E2E/embedded/terminal通过；useradd37.682秒成功，首次daemon激活仍失败；588的useradd60秒超时原因仍未确认；e2f认证health测试失败、维护未执行，真实HTTP夹具修复待新CI |
+| macos-15 / arm64 | 完整产品/终端、实际LaunchAgent、上传下载活动升级 | c108完整产品/E2E/embedded/terminal与LaunchAgent全部通过，实际tmux3.8及p1/GOMAX2；旧tmux/节点失败保留 |
+| macos-15-intel / amd64 | 同上，拒绝Rosetta替代 | 首轮bf2e645完整原生产品及LaunchAgent维护通过，tmux3.7c；58806be完整产品/维护亦通过；c108亦完整通过；42eb接口404且未取得其Intel产物，不推断该轮结论 |
+| windows-2025的WSL2 / amd64 | 独立Ubuntu、真实Microsoft内核、Linux文件系统、systemd PID1及产品/维护矩阵 | c108完整产品/E2E/embedded/terminal及systemd维护通过，13生命周期操作、双角色四个活动升级/回滚边界及清理通过；e2f使用/var/lib新布局亦完整通过；前轮agent/sync失败保留 |
 
 首轮四Homebrew及四unsigned构建成功不代表五个完整平台成功。旧摘要未保留原始Output，缺确切断言行的失败仍待诊断，不能凭耗时猜测超时。完全重复源的41093194046/41093197337取消请求已接受、随后不可查询，不记为验证通过或已核实的cancelled结论。
 
@@ -98,3 +98,33 @@ Linux amd64/arm64全包race574.450/530.638秒、E2E187.125/177.919秒及embedded
 
 
 本次诊断含构建/清理109.055秒，初次installer没有单独计时；专属CID与image tag缺席已独立记录。21项平台工具回归1.078秒及四脚本AST/diff通过，覆盖任意深度祖先权限/owner/symlink拒绝、拒绝时零账户/缓存/目录创建、结果保留和固定诊断不泄露原始错误。架构/协议检查通过；新布局实际平台结果保持待验。
+
+
+### e2f7f41 实际缓存恢复
+
+修复提交`fix(ci): validate protected systemd acceptance paths`已推送master，CI41109911804于18:47:35Z触发。四目标compile完成；Linux amd64实际日志确认modules exact hit后恢复3.672秒、compile/linux-amd64/CGO0旧源warm fallback恢复6.478秒，随后新源warm于18:48:32.781Z保存成功。此为真实下载/提取和构建结果，不只API cache lookup命中；native运行中日志端点404/503，partial恢复与完整平台仍待实际证据。
+
+
+### c10852f Mac双架构完整终态
+
+两个Mac最终artifact均state=passed、source_unchanged=true、incomplete_stages为空，完整LaunchAgent生命周期与活动上传/下载升级均有具名PASS。arm64实际3CPU/7GiB、p1/GOMAX2，tmux3.8；build/lint336.485秒、全包race1505.223秒、E2E262.351秒、embedded36.763秒、terminal17.614秒、LaunchAgent生命周期154.793秒、上传130.567秒、下载137.406秒。此前空pane PID和GOMAX1下节点期限问题已有这轮实际平台正向验证。
+
+Intel为4CPU/14GiB、p2/GOMAX2；build/lint502.576秒、全包race886.896秒、E2E282.515秒、embedded83.209秒、terminal19.880秒、LaunchAgent生命周期181.984秒、上传133.896秒、下载167.273秒。旧源码失败和正常预算保持，不把arm64从失败轮到成功轮的耗时差直接归因为单一并发参数。Mac arm64整包race约25分钟仍是当前主要耗时，后续缓存实际复用效果单独记录；不以降低覆盖制造提速。
+
+GitHub API部分job.steps滞后、运行中日志404/503，Chrome页面也出现加载超时；根代理使用Chrome读取的阶段日志仅作为进度观察，完整结论以随后下载并核对的artifact为准，不用页面计时器替代stage精确seconds。c108最终为Mac双架构和WSL全通过，两Linux维护失败；e2f新源的/var/lib正向验收继续等待。
+
+
+### e2f7f41 原生partial恢复与新产品失败
+
+两Linux实际命中c108的native/对应架构/CGO1/partial：amd64于18:47:50.213→18:48:03.450完成恢复13.237秒，arm64于18:47:50.550→18:48:04.449完成13.898秒；非lookup推断。build/lint从c108的217.624/143.132秒降至16.766/12.900秒，覆盖未减；之后失败仍保存新源partial，没有错误提升为warm。整轮产品测试发生失败，不能将370.640/416.506秒与全通过轮直接比较来声称整体测试提速。
+
+本轮两原生Linux没有执行E2E或维护：amd64唯一失败为TestObservedExitEventsWithoutAutomaticRestart/kill_-TERM_$$，crash_events_test.go107先记录未知退出原因、152把随后CLAUDE_CRASHED判为重复；arm64唯一失败为TestAuthKeyHTTPRejectionCompletesLogin/health-event，auth_rejection_test.go25、15.25秒。原生/var/lib正向验收因此仍未发生。初查确认session测试把允许的未知→已知首次原因升级当成重复；node旧测试本机10次race均通过，原CI瞬时失败未复现。后续测试夹具修复与验证见下一节，保留原准入/事件/截止契约。
+
+
+### e2f7f41 WSL新布局正向验收与后续测试修复
+
+实际WSL2全阶段state=passed、source_unchanged=true、incomplete_stages为空；全包race665.037秒、E2E195.992秒、systemd255.314秒。13个生命周期操作、两角色四个活动升级/回滚边界、卸载数据保持及精确清理通过。/var/lib、/var、/均root-owned且无group/world写入，WSL的/opt也满足保护。本证据仅覆盖e2f新布局实际WSL，原生Linux两架构因产品测试失败尚未进入维护。
+
+下一批仅修测试与调度：真实tmux事件测试接受unknown→首次known，仍检查唯一crash、scope/顺序/正确原因和原超时；确定性补测不要求实际tmux必须提供信号。认证夹具改为真实Noise HTTP400，在LocalAPI订阅完成后放行，或先经独立SDK health observer确认再启动Node watcher；旧needs_login不足以作为认证结果屏障。原CI认证瞬时失败未直接复现，不能据此宣称已定位所有SDK时序原因。session最终专项race5.753秒、node最终两种时序包4.764秒及vet通过；更早初稿全包与20次认证重复另按实际范围记录于15。
+
+Linux普通产品失败后允许独立systemd维护；必须先通过preflight/build-lint/tool-tests/platform-tool-tests，再核对OS/arch/machine/Go/kernel/WSL与完整冻结源码。源码摘要覆盖tracked及非忽略untracked，新增Go输入/同提交变更均会拒绝，忽略生成物不算自定义摘要覆盖。信号取消/负退出码/130/143拒绝继续，固定blocked原因不当PASS；最终所有原必需阶段保持，失败不能被维护成功覆盖，Mac仍按成功链。27项平台工具检查1.200秒、actionlint/AST及三段WSL Bash检查通过。下一轮完整平台结果待新提交。

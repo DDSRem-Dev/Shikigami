@@ -17,6 +17,18 @@ import (
 )
 
 func TestUnknownExitIsNotRestartedAndCanBecomeKnown(t *testing.T) {
+	testUnknownExitUpgrade(t, true)
+}
+
+func TestUnknownSignalExitWithoutAutomaticRestart(t *testing.T) {
+	// The observation source explicitly supplies signal 15. Real tmux versions
+	// may retain no cause at all; the real-process test accepts that unknown
+	// outcome without assuming signal support from a version number.
+	testUnknownExitUpgrade(t, false)
+}
+
+func testUnknownExitUpgrade(t *testing.T, automaticRestart bool) {
+	t.Helper()
 	m, _ := managerFixture(t, 2)
 	value, err := m.Create(t.Context(), &pb.CreateSessionRequest{ProjectId: "proj_fixture", Name: "observation", RequestId: "observation"})
 	if err != nil {
@@ -47,7 +59,7 @@ func TestUnknownExitIsNotRestartedAndCanBecomeKnown(t *testing.T) {
 	m.operations.Lock()
 	original, opts := m.tmux, m.opts
 	m.tmux = fake
-	m.opts.AutoRestart = RestartPolicy{Enabled: true, MaxAttempts: 1, Backoff: time.Minute, StableWindow: time.Minute}
+	m.opts.AutoRestart = RestartPolicy{Enabled: automaticRestart, MaxAttempts: 1, Backoff: time.Minute, StableWindow: time.Minute}
 	m.mu.Lock()
 	m.bridges[value.Id] = bridge
 	m.mu.Unlock()
@@ -71,8 +83,12 @@ func TestUnknownExitIsNotRestartedAndCanBecomeKnown(t *testing.T) {
 		}
 	}
 	unknown := nextEvent(t, sub, pb.SessionEvent_CLAUDE_STOPPED)
-	if unknown.GetEvent().Data["reason_code"] != "EXIT_REASON_UNKNOWN" || unknown.GetEvent().Data["exit_code"] != "" {
+	if unknown.GetEvent().Data["reason_code"] != "EXIT_REASON_UNKNOWN" || unknown.GetEvent().Data["exit_code"] != "" || unknown.GetEvent().Data["exit_signal"] != "" || unknown.SessionId != value.Id || unknown.AttachmentId != sub.ID {
 		t.Fatal(unknown)
+	}
+	reason := "AUTO_RESTART_DISABLED"
+	if automaticRestart {
+		reason = "EXIT_REASON_UNKNOWN"
 	}
 	state, err := m.store.View()
 	if err != nil {
@@ -82,15 +98,21 @@ func TestUnknownExitIsNotRestartedAndCanBecomeKnown(t *testing.T) {
 	if err := state.Get(restartBucket, value.Id, &record); err != nil {
 		t.Fatal(err)
 	}
-	if record.Attempts != 0 || record.NextAttempt != 0 || record.LastExit != nil || record.ReasonCode != "EXIT_REASON_UNKNOWN" {
+	if record.Attempts != 0 || record.NextAttempt != 0 || record.LastExit != nil || record.LastSignal != 0 || record.ReasonCode != reason {
 		t.Fatalf("unknown exit was eligible for restart: %+v", record)
 	}
-	write("7", "")
-	if err := m.restartStep(t.Context(), map[string]stableProcess{}); err != nil {
-		t.Fatal(err)
+	exitCode, signal := "", "15"
+	if automaticRestart {
+		exitCode, signal = "7", ""
+	}
+	write(exitCode, signal)
+	for range 3 {
+		if err := m.restartStep(t.Context(), map[string]stableProcess{}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	known := nextEvent(t, sub, pb.SessionEvent_CLAUDE_CRASHED)
-	if known.GetEvent().Data["exit_code"] != "7" || known.Sequence != unknown.Sequence+1 {
+	if known.GetEvent().Data["exit_code"] != exitCode || known.GetEvent().Data["exit_signal"] != signal || known.Sequence != unknown.Sequence+1 || known.SessionId != value.Id || known.AttachmentId != sub.ID {
 		t.Fatalf("unknown observation was duplicated or never upgraded: unknown=%v known=%v", unknown, known)
 	}
 	// Reuse the same decode target as the background poller: the persisted
@@ -102,12 +124,18 @@ func TestUnknownExitIsNotRestartedAndCanBecomeKnown(t *testing.T) {
 	if err := state.Get(restartBucket, value.Id, &record); err != nil {
 		t.Fatal(err)
 	}
-	if record.NextAttempt == 0 || record.LastExit == nil || *record.LastExit != 7 {
-		t.Fatalf("known exit was not scheduled: %+v", record)
+	if automaticRestart {
+		if record.NextAttempt == 0 || record.LastExit == nil || *record.LastExit != 7 {
+			t.Fatalf("known exit was not scheduled: %+v", record)
+		}
+	} else if record.Attempts != 0 || record.NextAttempt != 0 || record.LastExit != nil || record.LastSignal != 15 || record.ReasonCode != reason {
+		t.Fatalf("disabled restart did not retain the observed signal without scheduling: %+v", record)
 	}
 	write("", "")
-	if err := m.restartStep(t.Context(), map[string]stableProcess{}); err != nil {
-		t.Fatal(err)
+	for range 3 {
+		if err := m.restartStep(t.Context(), map[string]stableProcess{}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	state, err = m.store.View()
 	if err != nil {
@@ -116,13 +144,19 @@ func TestUnknownExitIsNotRestartedAndCanBecomeKnown(t *testing.T) {
 	if err := state.Get(restartBucket, value.Id, &record); err != nil {
 		t.Fatal(err)
 	}
-	if record.NextAttempt != 0 || record.LastExit != nil || record.LastSignal != 0 || record.ReasonCode != "EXIT_REASON_UNKNOWN" {
+	if record.NextAttempt != 0 || record.LastExit != nil || record.LastSignal != 0 || record.ReasonCode != reason {
 		t.Fatalf("unknown exit retained a scheduled restart or stale cause: %+v raw=%s", record, state.Buckets[restartBucket][value.Id])
 	}
-	quiet, stop := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	quietDuration := 50 * time.Millisecond
+	if !automaticRestart {
+		quietDuration = 400 * time.Millisecond
+	}
+	quiet, stop := context.WithTimeout(t.Context(), quietDuration)
 	defer stop()
 	if extra, err := sub.Next(quiet); err == nil {
 		t.Fatalf("known-to-unknown repeated an ended-process event: %v", extra)
+	} else if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("attachment ended before the duplicate-observation window", err)
 	}
 }
 

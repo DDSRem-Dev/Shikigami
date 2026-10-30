@@ -1,8 +1,8 @@
 # 实施与验收记录
 
-**当前进度（2026-10-31）：36/42，剩余6个复合门槛。** 已完成官方节点key到期后的同身份重新认证，原daemon/凭据自动恢复，终端新输入、双向同步与TCP通过；完整认证矩阵仍有待验项。原生Intel在bf2e645及58806be两轮完整产品/LaunchAgent验收通过；58806be的Linux双架构和实际WSL产品链通过，维护阶段失败保留。tmux3.8与Mac并发调度已修复并本地验证；systemd原/tmp冲突修正后发现/opt在托管镜像中也可能不受保护，已复现并继续修复，详见[23](23-tsnet-external-acceptance.md)与[26](26-native-platform-acceptance.md)。
+**当前进度（2026-10-31）：36/42，剩余6个复合门槛。** 官方节点key到期后的同身份重新认证及终端、双向同步、TCP恢复已验，完整认证矩阵仍有待验项。c108的Mac双架构完整产品/LaunchAgent及实际WSL2完整维护通过；e2f的WSL2使用受保护/var/lib布局再次完整通过。两Linux新出现的产品测试失败已完成本地测试修复，原生systemd正向验收仍待下一轮，详见[23](23-tsnet-external-acceptance.md)与[26](26-native-platform-acceptance.md)。
 
-**当前CI：** c10852f的[41104833762](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41104833762)中，实际WSL2完整产品及systemd维护已通过；Linux双架构产品/E2E/终端通过，但首次daemon激活仍失败，账户创建及清理成功。隔离容器已复现/opt0777触发安装器祖先保护拒绝，下一修复改用受保护/var/lib并在构建前检查所有祖先，等待原生CI确认。四目标编译/warm缓存和两Linux的native partial缓存保存成功，后续restore命中与整轮平台结果尚待。已实测Mac排队显著缩短、Linux全包race约17–19分钟降至9分钟，隔离构建185.545→152.838秒且产物一致。16缓存、21平台、8构建工具检查与独立七类审查通过。两项c4长测及15:56未使用Auth Key自然到期保持冻结输入；本轮已回收约3.2GB完成验证的构建缓存/副本，认证节点因后续依赖保留。
+**当前CI：** e2f7f41的[41109911804](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41109911804)四目标编译/Homebrew及WSL完整矩阵通过；两Linux分别在session退出事件、node认证health等待失败，未运行维护，Mac新源码终态仍待。session修复允许未知原因升级为首次已知事件且继续拒绝重复；node夹具改为真实Noise注册HTTP400，以订阅/SDK health屏障明确两种时序，原CI瞬时失败未直接复现。专项race/vet通过，未改生产逻辑或放宽期限。Linux/WSL新增独立维护准入，普通产品失败后仍可验证systemd，但取消/前置或来源不符拒绝，最终失败不被覆盖；27项平台工具检查及七类审查通过，下一轮CI待提交。缓存已实际恢复：两Linux native约13.2/13.9秒，build/lint由217.624/143.132降至16.766/12.900秒；失败轮产品时长不作为整体提速证据。两项c4长测、15:56未使用Auth Key自然到期及后续认证身份保持冻结。
 
 以下是按各批源码范围保留的历史记录，当前状态以本摘要和原条目的最新部分进展为准。
 
@@ -1009,3 +1009,14 @@ m6专用agent正常重启后，同一节点/IP已online，既有server却永久R
 c10852f的CI41104833762已取得WSL完整产品及systemd维护通过；两Linux产品链通过、首次安装失败和cleanup通过分别保留。独占systemd容器冻结c108，模拟/opt0777后真实installer退出1，分类为system_prefix_ancestor_unprotected；整体诊断含构建和清理109.055秒，首次安装未单独计时。证据位于`/var/folders/1n/q373cln10fqb0gl9z1ds5d8m0000gn/T/shiki-native-initial.sje9gvp9/`，仅本地私有保存；CID901b50ad34476d6127fedeb6a222221ec6776b75a961f330ef996291f2c27750及专属镜像tag清理后缺席。未修改原主机/opt、HOME、服务或受保护长跑。
 
 CI专属根改为/var/lib并在任何账户/缓存/构建操作前核对全部祖先；失败结果继续可见，目录创建到归属登记屏蔽取消信号，恢复后由finally清理。新增安装器错误固定分类及固定目录诊断，原始stderr不上传。21项平台工具测试1.078秒、四文件AST和diff通过；架构/协议检查0.440秒通过，四份更新文档367条本地链接无断链，42条文字/顺序/状态保持、36/42。新原生正向结果仍需下一轮CI；本轮不重新构建容器正例或追认旧WSL证据。具体平台与缓存时间见[26](26-native-platform-acceptance.md)。
+
+
+## CI测试时序与独立维护验收（2026-10-31）
+
+c108的Mac双架构完整产品/LaunchAgent已通过，e2f的实际WSL2在/var/lib新布局完整通过：全包race665.037秒、E2E195.992秒、systemd255.314秒，13项生命周期与双角色四个活动升级/回滚边界、数据保持、精确清理及来源核验通过。e2f原生Linux两架构仅各有一个产品测试失败，E2E/维护未执行，不代表安装路径失败；实际缓存恢复及分阶段时长见[26](26-native-platform-acceptance.md)。
+
+退出事件测试保留四种真实进程场景、8秒总context及400毫秒静默窗口，允许unknown后首次已知信号/退出码，但检查scope、顺序、正确原因且最多一次crash。新增受控观察unknown→signal15→unknown确定性场景验证禁用自动重启时不计划重启、不重复事件。临时真实tmux观察包装取得旧断言红例1.098秒；最终测试不强迫所有tmux版本提供信号。最终3项顶层/4项子例race5.753秒及vet通过；早期全session race21.482秒属于初稿，不追认为最终全包证据。
+
+认证测试使用本地真实Noise/HTTP2控制面返回HTTP400；确认needs_login可以先于真实拒绝，改用已安装的LocalAPI订阅或独立SDK初始health快照屏障，分别验证订阅后与订阅前错误。退休watcher代次、Node、observer、HTTP transport和hijacked连接均清理，原30/15秒期限保持。四组认证×5共20次顶层race43.912秒；最终独立SDK oracle两种时序包4.764秒、vet通过。旧测试本机10次通过，未直接复现原CI瞬时失败；临时overlay移除watch拒绝分支时新用例16.15秒失败仅证明覆盖能力。报告`/tmp/shiki-auth-health-20261031/review.json`，session私有证据`/tmp/shiki-session-exit.IwZpAivb/`。
+
+Linux及WSL普通产品失败后可继续独立维护；前置四阶段须真通过，重验六字段原生身份、提交与所有受跟踪/非忽略输入，取消或来源变更拒绝执行。finalize原必需阶段保持，维护成功不能掩盖产品失败；Mac仍按原成功链执行。27项平台工具检查1.200秒、actionlint、Python AST、WSL内嵌Bash语法及独立七类审查通过。生产Go、协议、依赖和超时不变，完整平台等待新CI；08/15/16同步，原42条/36已勾选保持。

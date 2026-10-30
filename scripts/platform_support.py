@@ -67,15 +67,15 @@ def native_identity(repository):
 
 
 def source_identity(repository):
-    paths = subprocess.check_output(["git", "ls-files", "-z"], cwd=repository).split(b"\0")
+    paths = subprocess.check_output(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd=repository).split(b"\0")
     digests = {}
-    for raw in paths:
+    for raw in sorted(set(paths)):
         if not raw:
             continue
         relative = os.fsdecode(raw)
         path = repository / relative
-        if path.is_symlink() or not path.is_file():
-            raise RuntimeError("tracked source must be regular files")
+        if path.is_symlink() or not path.is_file() or path.resolve() != path:
+            raise RuntimeError("source inputs must be canonical regular files")
         digests[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
     return {"commit": command(["git", "rev-parse", "HEAD"], cwd=repository), "sha256": digests}
 

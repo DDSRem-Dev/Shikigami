@@ -13,7 +13,7 @@ import unittest
 from unittest.mock import patch
 
 sys.dont_write_bytecode = True
-from platform_support import GO_VERSION, hosted_guard, require_verbose_pass, test_events, validate_identity, safe_test_locations, public_systemd_result, InstallerFailure, safe_script_failure
+from platform_support import GO_VERSION, hosted_guard, require_verbose_pass, test_events, validate_identity, safe_test_locations, public_systemd_result, InstallerFailure, safe_script_failure, source_identity
 
 from platform_resources import GIB, parallelism, resources, go_environment, copy_build_cache, cgroup_limits
 import platform_resources
@@ -33,12 +33,47 @@ class PlatformAcceptanceTests(unittest.TestCase):
         self.root = Path(self.folder.name)
         self.log = self.root / "test.log"
 
+    def ready_acceptance(self, name="test"):
+        with patch.dict(os.environ, {"RUNNER_TEMP": str(self.root)}):
+            acceptance = ci.Acceptance(self.root / ("shiki-platform-" + name))
+        identity = {"os": "linux", "arch": "amd64", "machine": "x86_64", "go": GO_VERSION,
+                    "kernel": "test-kernel", "wsl": False}
+        source = {"commit": "frozen", "sha256": {"fixture": "hash"}}
+        (acceptance.public / "platform.json").write_text(json.dumps({**identity, "resources": {"probe_note": "not an identity field"}}))
+        (acceptance.public / "source.json").write_text(json.dumps(source))
+        acceptance.stages = {name: {"state": "passed"} for name in ci.MAINTENANCE_PREREQUISITES}
+        return acceptance, identity, source
+
     def test_hosted_guard_refuses_local_and_self_hosted(self):
         hosted_guard({"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted"})
         for env in ({}, {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "self-hosted"},
                     {"GITHUB_ACTIONS": "false", "RUNNER_ENVIRONMENT": "github-hosted"}):
             with self.assertRaises(RuntimeError):
                 hosted_guard(env)
+
+    def test_source_freeze_detects_untracked_inputs_but_not_ignored_artifacts(self):
+        repository = (self.root / "source").resolve()
+        repository.mkdir()
+        (repository / ".gitignore").write_text("bin/\n")
+        (repository / "input.go").write_text("package fixture\n")
+        def git(*args):
+            subprocess.run(["git", "-C", str(repository), *args], check=True, capture_output=True)
+        git("init", "-q")
+        git("add", ".")
+        git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false",
+            "-c", "core.hooksPath=/dev/null", "commit", "-qm", "fixture")
+        original = source_identity(repository)
+        (repository / "bin").mkdir()
+        (repository / "bin/artifact").write_text("build output")
+        self.assertEqual(source_identity(repository), original)
+        (repository / "added.go").write_text("package fixture\n")
+        added = source_identity(repository)
+        self.assertEqual(added["commit"], original["commit"])
+        self.assertNotEqual(added["sha256"], original["sha256"])
+        self.assertIn("added.go", added["sha256"])
+        (repository / "added.go").unlink()
+        (repository / "input.go").write_text("package changed\n")
+        self.assertNotEqual(source_identity(repository), original)
 
     def test_native_architecture_and_go_target_are_independently_checked(self):
         for operating_system in ("linux", "darwin"):
@@ -216,7 +251,7 @@ class PlatformAcceptanceTests(unittest.TestCase):
                     directory.mkdir()
                     (directory / "result.json").write_text(json.dumps({"state": "failed", "cleanup": "passed", "phase": "build-bundle-a", "cleanup_error": "SECRET"}))
                     raise RuntimeError("scenario failed")
-            with patch.object(acceptance, "run", side_effect=run), patch.object(ci, "native_identity", return_value={"os": "linux"}), \
+            with patch.object(acceptance, "run", side_effect=run), patch.object(acceptance, "maintenance_admission", return_value={"os": "linux"}), \
                     patch.object(ci, "command", return_value="/fixture"):
                 with self.assertRaisesRegex(RuntimeError, "scenario failed"):
                     acceptance.maintenance()
@@ -224,6 +259,105 @@ class PlatformAcceptanceTests(unittest.TestCase):
             self.assertEqual(summary["state"], "failed")
             self.assertEqual(summary["phase"], "build-bundle-a")
             self.assertNotIn("SECRET", json.dumps(summary))
+
+    def test_maintenance_admission_requires_actual_prerequisites_identity_and_source(self):
+        acceptance, identity, source = self.ready_acceptance()
+        acceptance.stages["product-tests"] = {"state": "failed", "exit_code": 1}
+        with patch.object(ci, "native_identity", return_value=identity), patch.object(ci, "source_identity", return_value=source):
+            self.assertEqual(acceptance.maintenance_admission(), identity)
+            self.assertEqual(acceptance.stages["product-tests"]["state"], "failed")
+            for name in ci.MAINTENANCE_PREREQUISITES:
+                for state in ("missing", "running", "failed", "skipped"):
+                    if state == "missing":
+                        acceptance.stages.pop(name, None)
+                    else:
+                        acceptance.stages[name] = {"state": state}
+                    with self.subTest(name=name, state=state), patch.object(acceptance, "run") as run:
+                        with self.assertRaisesRegex(RuntimeError, "prerequisites"):
+                            acceptance.maintenance()
+                        run.assert_not_called()
+                    self.assertEqual(acceptance.stages["maintenance-admission"]["reason"], "prerequisites_not_passed")
+                acceptance.stages[name] = {"state": "passed"}
+            for changed in ({**identity, "arch": "arm64"}, {**identity, "wsl": True}):
+                with patch.object(ci, "native_identity", return_value=changed), patch.object(acceptance, "run") as run:
+                    with self.assertRaisesRegex(RuntimeError, "runtime identity"):
+                        acceptance.maintenance()
+                    run.assert_not_called()
+            for changed in ({**source, "commit": "changed"}, {**source, "sha256": {"fixture": "modified"}}):
+                with patch.object(ci, "source_identity", return_value=changed), patch.object(acceptance, "run") as run:
+                    with self.assertRaisesRegex(RuntimeError, "source differs"):
+                        acceptance.maintenance()
+                    run.assert_not_called()
+            self.assertEqual(acceptance.stages["maintenance-admission"]["reason"], "source_changed")
+
+    def test_maintenance_admission_rejects_recorded_cancellation_and_signal_exits(self):
+        acceptance, identity, source = self.ready_acceptance()
+        for outcome in ({"state": "cancelled"}, {"state": "failed", "cancelled": True},
+                        *({"state": "failed", "exit_code": code} for code in (-15, -9, 130, 143))):
+            acceptance.stages["product-tests"] = outcome
+            with self.subTest(outcome=outcome), patch.object(acceptance, "run") as run, \
+                    patch.object(ci, "native_identity", return_value=identity), patch.object(ci, "source_identity", return_value=source):
+                with self.assertRaisesRegex(RuntimeError, "interrupted"):
+                    acceptance.maintenance()
+                run.assert_not_called()
+            self.assertEqual(acceptance.stages["maintenance-admission"]["reason"], "cancelled")
+
+    def test_linux_pipeline_continues_independent_maintenance_but_preserves_failure(self):
+        acceptance, identity, source = self.ready_acceptance()
+        def product():
+            acceptance.stages["product-tests"] = {"state": "failed", "exit_code": 1}
+            raise RuntimeError("product failed")
+        def maintenance():
+            acceptance.stages["systemd-lifecycle"] = {"state": "passed"}
+        with patch.object(ci, "native_identity", return_value=identity), \
+                patch.object(acceptance, "product", side_effect=product), \
+                patch.object(acceptance, "terminal") as terminal, \
+                patch.object(acceptance, "maintenance", side_effect=maintenance) as maintain:
+            with self.assertRaisesRegex(RuntimeError, "stages failed: product"):
+                acceptance.linux_pipeline()
+            maintain.assert_called_once()
+            terminal.assert_not_called()
+        for name in ("release-trust-tests", "release-tests", "e2e-tests", "embedded-plugins", "terminal-semantics"):
+            acceptance.stages[name] = {"state": "passed"}
+        with patch.object(ci, "source_identity", return_value=source), \
+                patch.dict(os.environ, {"SHIKI_PLATFORM_OS": "linux", "SHIKI_PLATFORM_JOB_STATUS": "success"}):
+            with self.assertRaisesRegex(RuntimeError, "incomplete"):
+                acceptance.finalize()
+        report = json.loads((acceptance.public / "result.json").read_text())
+        self.assertEqual(report["state"], "failed")
+        self.assertEqual(report["incomplete_stages"], ["product-tests"])
+
+    def test_linux_pipeline_success_order_terminal_failure_and_cancellation(self):
+        acceptance, identity, _ = self.ready_acceptance()
+        calls = []
+        with patch.object(ci, "native_identity", return_value=identity), \
+                patch.object(acceptance, "product", side_effect=lambda: calls.append("product")), \
+                patch.object(acceptance, "terminal", side_effect=lambda: calls.append("terminal")), \
+                patch.object(acceptance, "maintenance", side_effect=lambda: calls.append("maintenance")):
+            acceptance.linux_pipeline()
+        self.assertEqual(calls, ["product", "terminal", "maintenance"])
+        for interruption in (KeyboardInterrupt(), SystemExit(143)):
+            with patch.object(ci, "native_identity", return_value=identity), \
+                    patch.object(acceptance, "product", side_effect=interruption), \
+                    patch.object(acceptance, "maintenance") as maintain:
+                with self.assertRaises(type(interruption)):
+                    acceptance.linux_pipeline()
+                maintain.assert_not_called()
+        with patch.object(ci, "native_identity", return_value=identity), patch.object(acceptance, "product"), \
+                patch.object(acceptance, "terminal", side_effect=RuntimeError("terminal failed")), \
+                patch.object(acceptance, "maintenance") as maintain:
+            with self.assertRaisesRegex(RuntimeError, "stages failed: terminal"):
+                acceptance.linux_pipeline()
+            maintain.assert_called_once()
+
+    def test_interrupted_child_marks_stage_and_does_not_become_ordinary_failure(self):
+        acceptance, _, _ = self.ready_acceptance()
+        with self.assertRaises(KeyboardInterrupt):
+            acceptance.run("product-tests", [sys.executable, "-c", "raise SystemExit(143)"], timeout=5)
+        record = acceptance.stages["product-tests"]
+        self.assertEqual(record["exit_code"], 143)
+        self.assertTrue(record["cancelled"])
+        self.assertEqual(record["state"], "failed")
 
     def test_verbose_opt_in_runner_requires_named_real_pass(self):
         self.log.write_text("--- PASS: TestNative (0.01s)\nPASS\n")

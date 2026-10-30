@@ -162,6 +162,7 @@ jobs:
       - name: Verify terminal screen semantics
         run: python3 -B scripts/platform-ci.py terminal --evidence "$RUNNER_TEMP/shiki-platform"
       - name: Native installation, service lifecycle and active upgrade maintenance
+        if: ${{ !cancelled() && ((matrix.goos == 'linux' && (steps.product.outcome == 'success' || steps.product.outcome == 'failure')) || (matrix.goos == 'darwin' && success())) }}
         timeout-minutes: 55
         run: python3 -B scripts/platform-ci.py maintenance --evidence "$RUNNER_TEMP/shiki-platform"
       - name: Verify source identity and record final acceptance

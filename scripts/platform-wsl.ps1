@@ -106,9 +106,7 @@ git diff --exit-code -- pkg/protocol
 go mod verify
 go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 -scan=package ./...
 go -C test/diagnostics/terminalstate/analyzer run golang.org/x/vuln/cmd/govulncheck@v1.1.4 -scan=package ./...
-python3 -B scripts/platform-ci.py product --evidence "$RUNNER_TEMP/shiki-platform"
-python3 -B scripts/platform-ci.py terminal --evidence "$RUNNER_TEMP/shiki-platform"
-python3 -B scripts/platform-ci.py maintenance --evidence "$RUNNER_TEMP/shiki-platform"
+python3 -B scripts/platform-ci.py linux-pipeline --evidence "$RUNNER_TEMP/shiki-platform"
 '@
     Invoke-Private 'wsl.exe' @('--distribution', $distro, '--user', 'shikici', '--exec', 'bash', $acceptance)
     $result.state = 'passed'
