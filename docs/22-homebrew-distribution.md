@@ -1,6 +1,6 @@
 # Homebrew 分发与自动更新
 
-更新：2026-10-30。首个 Homebrew 版本 [v0.0.1-alpha.2](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.2) 已由 tag 工作流全自动发布并生成 [Formula/shikigami.rb](../Formula/shikigami.rb)。实际远端 tap 的 Linux arm64 安装、测试、重装和卸载已通过，结果与限制见下文；22公开资产及两平台独立暂存结果见[公开alpha.2证据](15-implementation-status.md#evidence-public-alpha2-release-20261030)；macOS完整brew安装仍受本机Xcode/CLT门槛阻止。完整交付门槛仍见 [08 路线图](08-roadmap.md)。
+更新：2026-10-30。首个 Homebrew 版本 [v0.0.1-alpha.2](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.2) 已由 tag 工作流全自动发布并生成 [Formula/shikigami.rb](../Formula/shikigami.rb)。实际远端 tap 的 Linux arm64 安装、测试、重装和卸载已通过，结果与限制见下文；22公开资产及两平台独立暂存结果见[公开alpha.2证据](15-implementation-status.md#evidence-public-alpha2-release-20261030)；四目标原生CI完整brew链已通过；用户macOS27本机仍有独立Xcode/CLT限制。完整交付门槛仍见 [08 路线图](08-roadmap.md)。
 
 ## 安装与使用边界
 
@@ -104,3 +104,16 @@ alpha.1 Formula只是未提交的准备fixture；用户要求的首个Homebrew a
 [scripts/test-homebrew-channel.py](../scripts/test-homebrew-channel.py)执行tap/install/test/reinstall/test/uninstall，核对本机架构、签名元数据、完整14成员和payload hash。安装/重装真实运行Formula验签。私有缓存/信任目录隔离；只回收登记且身份相符的测试对象，检查tap、包、服务和产品状态与基线一致。工具拒绝普通用户Mac及非GitHub托管环境，不升级本机Xcode或更改全局brew配置。
 
 准备阶段11项隔离回归、actionlint和语法检查通过；四目标实际运行待记录，不能提前视为分发或完整平台验收通过。
+
+2026-10-30实际结果：CI [41037444120](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41037444120)，验收源`56f60e737898469da9a9c47b08628554620914fc`，四个渠道job全部成功。固定公开Formula提交`85003591044fca15f82c9c220b2051766f1e47aa`，marker为`v0.0.1-alpha.2`，Formula SHA-256 `53fe01dcc5f9aa1d4c4dc5aab8d9d4ea05013631993835eb1ce9bb4d293f15ea`。
+
+| 原生目标 | 命令数 | 实际结果 |
+|---|---:|---|
+| darwin arm64 | 31 | 完整渠道与清理通过 |
+| darwin amd64 | 30 | 完整渠道与清理通过 |
+| linux amd64 | 31 | 完整渠道与清理通过 |
+| linux arm64 | 31 | 完整渠道与清理通过 |
+
+四份artifact均核对summary与state逐字相同，passed/completed_sequence=true，errors/cleanup_errors为空，两次cleanup_attempt无错误，baseline与final的tap/包/服务/受保护状态一致。所有stdout/stderr日志hash匹配；每平台安装和重装两次均保留14成员（13 payload及SHA256SUMS），Formula/独立公钥与可信checkout一致。私有缓存目录未上传。复核记录`/tmp/shiki-homebrew-ci-41037444120/verified-summary.json`，SHA-256 `ff7718cd19bfdafce52236df549be1107390f13124b6b7b3e277288ca81e59c9`；原始日志保存在该运行四个homebrew artifacts，保留14天，届满不能声称仍可下载。
+
+真实Ed25519验签由实际Formula install/reinstall执行，独立复核脚本验证成员/hash及证据，不自称第二套签名实现。brew test为stage-only首次/重复暂存，不代表服务激活或跨版本升级；后者另见24。Mac镜像已有无关tap未信任、brew developer command及Linux Landlock ABI8不能完全禁止网络的警告均保留，不称无警告或完全断网沙箱。用户Mac的macOS27工具前置失败仍为该环境事实，不阻止已在原生macOS15验证的渠道条目关闭，也不扩大为完整Intel产品或WSL平台验收。

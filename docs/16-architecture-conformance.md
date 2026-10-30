@@ -1,5 +1,7 @@
 # 架构与文档一致性检查
 
+**Homebrew 四目标原生渠道验收完成（2026-10-30）：** CI [41037444120](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41037444120) 的 macOS/Linux × arm64/amd64 四个真实渠道任务全部成功，公开alpha.2的 tap/install/test/reinstall/test/uninstall/untap、完整bundle及清理前后环境一致已独立核验。关闭Phase 5签名/分发原条目，当前33/42、9项待完成；完整产品平台、主机重启、Claude与长期资源条件仍独立保留。用户Mac未运行brew或更改Xcode/CLT；具体范围见[22](22-homebrew-distribution.md#四目标原生-ci验收)。
+
 **当前候选双平台长稳已启动（2026-10-30）：** 上一批修复与公开包验收已提交master c4c5a56，CI41029690521四目标构建及Linux全套测试成功、macOS全套测试仍运行。为补齐旧697未覆盖的新Stop自然轮换/停机排空，固定c4c5a56启动一次macOS原生和一次Linux arm64容器默认12h凭据轮换，均已先通过预检和正常清理，再进入正式观察首checkpoint。四份快照同为690文件，558项Go/proto/module输入与提交一致；TTL、2分钟恢复预算、实际恢复后30分钟尾部与原资源阈值未改。北京时间10月31日初始最早结束分别为Linux05:32:35、Mac05:35:08，最终仍需实际恢复尾部/退出/清理核验；现在只记运行中。官方未使用key自然到期仍独立计划15:56执行。七类复核通过，原42条/32勾选保持；详见[当前长稳启动](15-implementation-status.md#evidence-current-default-rotation-start-20261030)。
 
 **公开包升级、兼容与取消回收完成（2026-10-30）：** 原始公开alpha.1→alpha.2→alpha.1在macOS原生LaunchAgent、Linux容器真实systemd下的活动升级/回滚通过，两平台alpha.2新装/重复/卸载通过。实际混合CLI/agent/daemon、原插件匹配/拒绝和同schema双向重开矩阵双平台各92命令通过，来源/身份/状态/清理有证据，见[24](24-public-package-compatibility.md)。新增慢订阅回归发现并修复ReleaseFrontend的阻塞Send、最终envelope及取消回调竞争；统一1秒仅取消收尾预算，保持原Canceled与同连接健康流。最终native四包race/vet、Linux最终agent增量race/vet及架构检查通过，较早源码范围分开记录，见[15专项](15-implementation-status.md#evidence-frontend-cancellation-20261030)。上一提交67fb0f3的CI41024681916六任务成功；本批提交CI另行记录。自然到期任务仍待10月31日15:56，原42条/32勾选保持，物理设备、主机、真实Claude、其余认证/平台及当前候选长期门槛不外推。
@@ -1242,3 +1244,8 @@ v4普通/race分阶段profile均完整通过31.73/40.40秒：16次256KiB双向�
 ## 四目标 Homebrew CI 准备复核（2026-10-30）
 
 按01/07/11及22核对七类边界：目录/依赖仅新增scripts诊断与现有CI job，SDK/host/plugin归属不变；RPC/准入/能力/授权不变；产品持久状态/revision/去重不变，验收所有权在动作前登记、后续核对目录身份；进程生命周期有命令超时与finally/always清理，不激活产品服务；文件/终端/网络语义不变，公开bundle仍由真实公式验签并逐成员核验；CLI/TUI/配置与独立受管安装保持，禁止在本机执行完整brew；行为证据区分11项工具测试与尚待执行的四目标真实渠道结果。未发现本批新增生产架构偏差，历史清理失败不可被重试抹除。08/15/16同步，原42条文字与32/42保持，外部/平台/长期门槛不扩称完成。
+
+
+## 四目标 Homebrew 验收收尾复核（2026-10-30）
+
+七类全架构对照延续本批准备审查：目录及依赖/SDK-host-plugin不变，RPC/准入/能力/授权不变，产品状态/revision/去重不变，生命周期仅隔离stage与受控清理，文件与网络保持认证后消费，CLI/TUI/安装布局保持独立受管prefix，行为声明只使用四原生实际结果。独立核验四份artifact及全部日志hash、完整payload和baseline==final，无新增确定实现偏差。环境警告与本机工具限制保留，未将渠道验收当产品平台或服务激活验收。08/15/16同步关闭同一原条目，原42条文字顺序不变，33/42；默认12h及未使用key到期测试继续，双端/崩溃恢复下一批独立执行。
