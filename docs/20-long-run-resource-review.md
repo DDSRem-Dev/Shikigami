@@ -94,3 +94,11 @@ Homebrew alpha.2自动分发和隔离测试密钥演练已独立完成，结果�
 | 文件、终端、网络与限制 | 全量样本、峰值、失败历史和原阈值保留；TCP与自然轮换通过不外推无泄漏。 |
 | CLI/TUI、配置、安装与产物 | 固定公开tag比较；CLI/安装未调用路径单列，旧源码不冒充发行归档来源。 |
 | 行为证据与声明 | 已有行为专项不重复，缺失的heap/因果证据明确保留；本报告不关闭完整长期资源条目。 |
+
+## 2026-10-30 后续所有权调查
+
+重新核对 `/tmp/shiki-closed-profile-analysis-20261029/manifest.json` 的18份离线产物，逐项hash保持；manifest SHA256为 `130c96485be5eb92a157e35ece4e19dde7fcf429c686107b5bf50442c98aad13`。569源闭后agent的+228对象/+24,240B、daemon的+307对象/+61,664B不能由64KiB稀疏采样分摊成保留根，也不与顺序MemStats组成精确因果快照。runtime sudog/G/M及P521、HPACK、descriptor、JSON缓存是需区分的运行时来源。
+
+此前明确的诊断保留链 `bound Close → Runtime → Supervisor.logs` 已在 `test/diagnostics/memoryprofile/child_test.go` 的closeBeforeCollection中释放，并有weak正对照；旧mapping事件缓存竞争也已由PublishEvent与configureMapping/RemoveMapping共享锁和revision重验修复，现有 `mapping_events_lifetime_test.go` 覆盖。它们不能再次列为尚未处理的生产根因，也无需为这些旧结论再跑短窗口。
+
+本批转向可证伪的新假设：慢读HTTP2订阅被取消后，其订阅队列和整个请求是否释放。客户端cancel/Close与WatchLogs通过，ReleaseFrontend则真实复现阻塞Send保留订阅；进一步复现业务handler退出后Connect最终envelope仍受流控阻塞。修复与专项证据见15/16；这是新的取消契约反例，不用来解释旧固定mapping/TLS工作负载的+228对象，也不把有界释放回归叫作当前候选12小时或无泄漏证明。

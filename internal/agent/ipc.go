@@ -124,9 +124,12 @@ func (s *Service) Handler(server *connect.Server) http.Handler {
 		s.handlers.Add(1)
 		s.handlerMu.Unlock()
 		defer s.handlers.Done()
+		output := &frontendOutput{controller: http.NewResponseController(w)}
+		defer output.finish()
 		var once sync.Once
 		closeRead := func() { once.Do(func() { _ = r.Body.Close() }) }
-		handler.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), readCloserKey{}, closeRead)))
+		requestContext := context.WithValue(r.Context(), frontendOutputKey{}, output)
+		handler.ServeHTTP(w, r.WithContext(context.WithValue(requestContext, readCloserKey{}, closeRead)))
 		if r.URL.Path == agentrpc.AgentShutdownProcedure {
 			s.stateMu.Lock()
 			stopping := s.state == "stopping"
@@ -193,8 +196,12 @@ func (s *Service) Interceptor() connect.ServerInterceptor {
 			}
 			defer done()
 			boundContext := ctx
-			stop := context.AfterFunc(boundContext, func() { cancelRead(boundContext) })
-			defer stop()
+			output, _ := ctx.Value(frontendOutputKey{}).(*frontendOutput)
+			if output != nil {
+				stream = &frontendOutputStream{ServerStream: stream, ctx: boundContext, output: output}
+			}
+			stopCancellation := bindFrontendCancellation(boundContext, output)
+			defer stopCancellation()
 			ctx = context.WithValue(ctx, identityKey{}, Identity{FrontendID: frontend, ServerID: serverID})
 			if strings.HasPrefix(spec.Procedure, "/"+rpc.ShikiDaemonName+"/") {
 				if !ProxyAllowed(spec.Procedure) {

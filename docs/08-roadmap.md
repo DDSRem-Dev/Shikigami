@@ -1,5 +1,7 @@
 # 开发路线图
 
+**公开包升级、兼容与取消回收完成（2026-10-30）：** 原始公开alpha.1→alpha.2→alpha.1在macOS原生LaunchAgent、Linux容器真实systemd下的活动升级/回滚通过，两平台alpha.2新装/重复/卸载通过。实际混合CLI/agent/daemon、原插件匹配/拒绝和同schema双向重开矩阵双平台各92命令通过，来源/身份/状态/清理有证据，见[24](24-public-package-compatibility.md)。新增慢订阅回归发现并修复ReleaseFrontend的阻塞Send、最终envelope及取消回调竞争；统一1秒仅取消收尾预算，保持原Canceled与同连接健康流。最终native四包race/vet、Linux最终agent增量race/vet及架构检查通过，较早源码范围分开记录，见[15专项](15-implementation-status.md#evidence-frontend-cancellation-20261030)。上一提交67fb0f3的CI41024681916六任务成功；本批提交CI另行记录。自然到期任务仍待10月31日15:56，原42条/32勾选保持，物理设备、主机、真实Claude、其余认证/平台及当前候选长期门槛不外推。
+
 **未使用key撤销与审批实测、自然到期已调度（2026-10-30）：** 精确99bee22的CI41005895032六job成功，未开启opt-in仍不算通过。独立未使用single-use/1天key撤销后，新隔离节点1.932秒明确INVALID_AUTH_KEY，正常退出0并删key。审批临时开启后，新节点NODE_APPROVAL_REQUIRED且有效Token仍不能访问；管理台仅提供Remove，移除待批节点后仍禁入，但旧reason不证明明确管理员拒绝分类。保留状态显式重新申请并批准后自动online，Token/原daemon ID/能力及原session重验通过；专用节点与进程已清理，审批恢复原关闭，主Mac/VPS正常。另补CLI对有效待审批attempt的有界等待，状态仍denied，明确key拒绝仍终止。独立未使用key自然到期任务已注册，最早北京时间10月31日15:56执行，结果仍待。原42条及32/42保持，完整认证矩阵/平台/主机/长期门槛继续保留，详见[23](23-tsnet-external-acceptance.md)。
 
 **最终agent撤销恢复与CI/CLI补修（2026-10-30）：** 92fe17a的CI40998046799整体失败：Linux测试及四目标构建成功，macOS凭据检查在SDK活动时扫描缓存遭遇ENOENT，后续E2E未执行、终端专项跳过。已修正为SDK完全关闭后重开最终持久状态并严格扫描，未忽略文件错误；定向race三次通过。相同生产源码的candidate4再次由官方移除后，旧附件2→1、专用终端退出，主Mac与tmux保持；自身正确offline/NODE_CONTROL_UNAVAILABLE。最终agent经同一显式attempt的Chrome认证恢复online，Token/原daemon ID/能力重验及P2P连接通过，无诊断overlay。现场另发现CLI在active attempt的控制离线阶段提前退出，已补有界等待，CLI全包race40项/22.312秒通过，详见23。本轮仅补外部子项，不由控制失联断言明确撤销；保持32/42、10项部分完成与原42条要求，独立key撤销/到期、审批及其余门槛继续推进。
@@ -131,7 +133,7 @@
 | 启动策略配置展示 | 新增只读config startup，区分按需/登录/开机/未知；双平台四包race/vet与真实systemd四态/清理通过 | 本地展示缺口关闭；实际重启/登录持久化仍独立待验 |
 | 宿主回调与启动清理 | handler/进程实际join、Stop/Launch截止与Supervisor交接已修复；双平台相关race/vet及七类复核通过 | 此缺口关闭；资源稳定、默认12小时和外部门槛独立保留 |
 | 轮换夹具预检与采集器清理 | 同637源双平台各15轮启动/工作/正常清理通过；collector最终13项测试与独立审查通过 | 不等于12小时轮换；host修复由692/693源独立验收 |
-| 系统Tailscale非干扰与原生schema | 未登录真实系统tailscaled的21边界不干扰、内嵌tsnet启用未登录状态隔离、原生LaunchAgent跨schema恢复与实际撤权验证通过 | 已认证双节点、已有账户身份、原生重启登录与外部/发布门槛仍待 |
+| 系统Tailscale非干扰与原生schema | 未登录真实系统tailscaled的21边界不干扰、内嵌tsnet启用未登录状态隔离、原生LaunchAgent跨schema恢复与实际撤权验证通过 | 与已认证系统tailscaled共存、原生重启登录及其余外部/平台门槛仍待；独立tsnet双节点实际结果见23 |
 | 服务二次启动与恢复后撤权 | 同容器持久卷第二次PID1自动启动、状态/双向同步/TCP/配置快照恢复；跨schema恢复前后撤销Token真实RPC拒绝通过 | 原生物理重启/登录、外部账号及自动恢复未由本批验证；历史正式迁移首发无对象 |
 | 下载与映射/连接/转发代际 | 固定版本HTTPS先验签后下载；缓存所有权、锁外预检与提交重验完成；同源双平台受影响验证及真实native下载→暂存通过 | 正式公钥/Release下载认证已完成，直接fetch仍拒绝GitHub重定向；资源/外部门槛保留 |
 | 节点授权与端口准入 | lease请求回调解绑、宿主首帧/分类门、worker短查询与Watch隔离及Stop共享完成；同源双平台验证通过 | 不解释旧TLS内存增长；资源/外部门槛保持 |
@@ -148,7 +150,7 @@
 | 请求生命周期与内存诊断 | 共享pool修复及完整回归/补验通过；新增延后profile导出的唯一Linux配对完成，保留全部高点与清理证据 | 已确认并修复诊断Close回调持有；历史差值尚不能定量归因，短窗口不作为无泄漏证明；不追加此实验，见[观测开销](15-implementation-status.md#evidence-memory-observer-validation) |
 | 默认凭据轮换 | macOS原12小时通过；旧Linux失败保留，697源Linux12h30m/4368轮、四角色轮换/恢复尾部及清理已独立通过 | 完整已有记录与当前alpha覆盖差异分析已完成；生产heap/object归因及当前版本长稳仍待 |
 | 端口分配与混合负载 | 单连接限流隔离修复、双平台五包race/vet、普通32轮完整混合负载及默认128准入/单槽恢复/清理通过 | 仅限定源码/环境/负载证据；资源稳定、生产长稳及外部网络仍待 |
-| 服务安装与升级 | 原生LaunchAgent、真实systemd生命周期及安装529补验通过；同容器二次PID1启动与开发schema升级/拒写/有限恢复后撤销Token实际RPC拒绝通过 | 自动状态恢复并未提供；外部登录、其他原生平台及重启/登录持久化待验收；历史正式迁移首发无对象 |
+| 服务安装与升级 | 原生LaunchAgent、真实systemd生命周期及安装529补验通过；同容器二次PID1启动与开发schema升级/拒写/有限恢复后撤销Token实际RPC拒绝通过 | 自动状态恢复并未提供；外部身份跨升级、其他原生平台及重启/登录持久化待验收；两公开版本同schema升级/回滚已通过24，不能称历史schema迁移 |
 
 ## 阶段概览
 
@@ -172,10 +174,10 @@
 | 原条目 | 本地/容器已具备或仍可推进 | 关闭整项仍需 |
 |---|---|---|
 | Phase 0 tsnet认证原型 | 官方双端登录、进程身份保持、key首用/复用拒绝与交互取消已验；peer撤销旧流回收已有本地与官方复验证据，主节点保持正常，见23 | 控制失联分类、最终agent撤销/重新认证、未使用key撤销及审批等待/移除/批准已验；自身明确撤销/管理员拒绝分类、key自然到期及其余11认证矩阵 |
-| Phase 0 恢复、版本与多设备 | 崩溃恢复、合成版本矩阵、多客户端竞争已验 | 物理多设备；首发无历史版本的事实保留，现有公开alpha.1→alpha.2组合可补验 |
+| Phase 0 恢复、版本与多设备 | 崩溃恢复、合成矩阵、多客户端竞争已验；公开alpha.1/alpha.2真实混合业务/插件与状态组合双平台通过，见24 | 物理多设备完整体验及未覆盖平台条件 |
 | Phase 4 多设备体验 | 两个独立agent的映射/接管/冲突已有证据 | 物理多设备完整体验 |
 | Phase 4 安装器与服务 | 原生LaunchAgent、容器systemd、二次PID1启动及未登录system tailscaled非干扰已验；本地启动策略配置展示已完成双平台和真实systemd四态验证 | 外部账号、原生VPS及重启/登录持久化 |
-| Phase 4 升级回滚与卸载 | Linux systemd与原生macOS LaunchAgent开发schema升级/旧版拒写/有限恢复/撤销Token实际RPC均已验 | 公开alpha.1→alpha.2实际包升级/回滚及兼容组合；外部登录、其他原生平台完整场景 |
+| Phase 4 升级回滚与卸载 | 原开发schema迁移/拒写/恢复证据保留；公开alpha.1→alpha.2实际活动升级/回滚、重复安装/卸载及兼容矩阵双平台通过，见24 | 外部登录状态跨升级、主机重启/重新登录及其他原生平台完整场景 |
 | Phase 5 平台兼容 | macOS ARM、Linux ARM容器及翻译环境专项已有证据 | 原生Intel、WSL等完整平台 |
 | Phase 5 长稳、资源与性能 | macOS原12小时通过，Linux578源失败保留；697源Linux12h30m/4368轮及恢复/清理已独立通过 | 完整已有记录与源码差异已分析；生产heap/object归因、当前候选长时/资源与负载证据仍待，不能跨源码追认 |
 | Phase 5 审查、安全与恢复测试 | 四处恢复偏差已修复并完成738源双平台相关验证；743源syncack与四目标CI打包入口已补验；744源真实systemd的13生命周期/4活动升级回滚组合首轮通过 | 后续明确的恢复/安全缺口、资源问题与最终候选验收；既有受控故障结果不扩大为系统掉电证明 |
@@ -186,24 +188,24 @@
 
 ## 剩余工作分工（2026-10-30）
 
-当前10项是复合验收门槛，以下工作包与原项多对多对应，不新增原始checkbox、不将32/42当代码完成率。完成概览和详细执行条件见[19计划盘点](19-local-acceptance-closure.md#plan-inventory-20261030)。原计划盘点未启动新实验；后续官方tsnet实际运行及当前剩余条件见23，尚未发布包含登录修复的新版本。
+当前10项是复合验收门槛，以下工作包（含本批已关闭的局部工作）与原项多对多对应，不新增原始checkbox、不将32/42当代码完成率。完成概览和详细执行条件见[19计划盘点](19-local-acceptance-closure.md#plan-inventory-20261030)。原计划盘点未启动新实验；后续官方tsnet实际运行及当前剩余条件见23，尚未发布包含登录修复的新版本。
 
 | 我可自主推进 | 对应原项 | 结束条件/限制 |
 |---|---|---|
-| 使用公开alpha.1/alpha.2的实际包做升级、回滚、重复安装及兼容组合 | Phase0恢复/版本；Phase4升级回滚；Phase5审查/分发 | 原生macOS现有服务环境和Linux容器中保存身份/状态/撤销记录，活动终端/同步/转发及清理有证据；相同schema不冒充schema迁移，服务升级不冒充Homebrew跨版升级 |
-| 按已有生产heap/profile及所有权线索调查残余资源 | Phase5长稳/资源；审查 | 先明确对象、持有者、释放点和可证伪假设，再做必要诊断；未发现新根因不改代码，不循环追加短测 |
+| 本批已完成：公开alpha.1/alpha.2实际包升级、回滚、重复安装及兼容组合 | Phase0恢复/版本；Phase4升级回滚；Phase5审查/分发 | 双平台真实服务与混合版本均通过，详见24；同schema不冒充迁移，服务升级不冒充Homebrew跨版升级，tsnet外部身份跨升级另验 |
+| 按新证据继续调查生产heap/profile及所有权；本批18产物复核及慢流取消缺口已处理 | Phase5长稳/资源；审查 | 先明确对象、持有者、释放点和可证伪假设，再做必要诊断；未发现新根因不改代码，不循环追加短测 |
 | 固定当前候选的长时/恢复/性能验收方案并执行必要场景 | Phase5长稳/资源；审查 | 明确新Stop等触发路径、默认凭据轮换、恢复尾部、资源指标和清理；历史12小时不重写，时长通过不等于无泄漏 |
 | 按证据矩阵补关键恢复/认证/数据分支与可用原生CI平台专项 | Phase5审查；平台；Phase4运维 | 只补实际缺口或变更影响；先核对重复Stop、超过宿主预算排空、提交时进程退出等与契约的关系；现有runner可用范围内执行，交叉编译不算原生 |
 | 跟踪已启动CI、处理实际失败，维护平台支持与验收声明 | Phase5审查；支持声明 | 对应源码/平台/证据，不能由本地通过关闭用户环境门槛；最终声明依赖其余条件 |
 
 | 需要用户提供条件 | 对应原项 | 用户配合后可由我执行的工作 |
 |---|---|---|
-| 已提供官方tailnet及Chrome控制台；仍需独立未使用的到期/撤销测试key、审批/节点撤销操作及真实Claude登录 | Phase0认证；Phase4登录/运维；Phase5安全/支持 | 其余认证矩阵和Claude闭环；首次登录、key首用/复用、进程身份与P2P/DERP已通过 |
+| 已提供官方tailnet、Chrome控制台、独立测试key和审批/撤销授权；仍需真实Claude登录及尚未具备的认证场景条件 | Phase0认证；Phase4登录/运维；Phase5安全/支持 | 其余认证矩阵和Claude闭环；未使用key撤销、审批等待/移除/重新批准已验，自然到期任务已调度，无需再次索取同批key或授权 |
 | 已提供原生Debian amd64 VPS；主机重启/系统安装及重新登录范围仍需确定 | Phase4服务/升级；Phase5平台/支持 | 当前已运行普通用户隔离daemon；开机/登录启动、自然网络切换和主机重启恢复仍待；进程重启不能替代 |
 | 第二台物理客户端、原生Intel Mac/WSL等剩余环境 | Phase0多设备/版本；Phase4多设备；Phase5平台/支持 | 路径映射、接管竞争、离线冲突、真实双设备体验及各平台安装/升级/卸载；现有原生CI能补的部分先自主完成 |
 | 满足macOS27的Xcode/CLT，或明确系统工具升级范围 | Phase5分发/平台 | 原生macOS完整brew install/test/reinstall/uninstall；此前直接Formula方法和Linux成功不替代 |
 
-已结束的原12小时、完整资源记录分析、隔离密钥演练、alpha.2发布/Homebrew自动化不再列为等待。纯文档提交9d28dd6的[CI40923247799](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40923247799)及54feb47的CI40924428349现已确认成功，和Release40912019720分开记录；没有新的12小时任务在本批启动。
+已结束的原12小时、完整资源记录分析、隔离密钥演练、alpha.2发布/Homebrew自动化及本批双平台公开包验收不再列为等待。纯文档提交9d28dd6的[CI40923247799](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40923247799)及54feb47的CI40924428349现已确认成功，和Release40912019720分开记录；没有新的12小时任务在本批启动。
 
 ## Phase 0：初始化和可行性验证
 
@@ -323,6 +325,7 @@
   - 安装器、服务渲染、NodeControl/bootstrap、内嵌产物及隔离smoke已实现；macOS27 arm64原生LaunchAgent与Linux arm64容器真实systemd/systemd --user均通过安装、实际应用就绪、停启、崩溃自动恢复、升级/回滚和卸载保留数据。保留未勾选：11的完整安装要求还涉及外部登录/真实账号、可信发行来源、原生VPS和重启/登录持久化。
   - 本批按11补齐停止旧服务前的磁盘预检、停止后新清单复核和备份父目录fsync；双平台整包race、真实16MiB tmpfs及fsync跟踪通过。529文件快照原生上传升级/回滚90.41秒、真实systemd 13次边界补验通过，见[安装空间验收](15-implementation-status.md#evidence-install-space-validation)；不把历史下载/取消结果标成新源码验证。
 - [ ] 重复安装/升级/回滚、自定义 config、非交互登录、依赖检查和卸载保留数据。
+  - 2026-10-30公开alpha.1/alpha.2双平台真实服务升级/回滚、重复安装和各92命令兼容矩阵已通过；同批慢流取消三类缺口修复及分源双平台检查通过，见[24](24-public-package-compatibility.md)与[取消回收专项](15-implementation-status.md#evidence-frontend-cancellation-20261030)。外部身份、物理主机/平台和当前候选长稳仍独立待验。
   - 2026-10-29确认的Stage落盘遗漏、中断回滚早期失败启动未提交版本及遗留服务临时文件阻塞已修复；真实syscall前后对照、9个EIO新进程恢复、13条父/子同测红绿及同源双平台相关包通过。服务管理器/物理持久化/正式发行仍保留原门槛，见[合并验收](15-implementation-status.md#evidence-recovery-conformance-validation)。
   - 2026-10-29原生macOS27 arm64/真实UID501 HOME与GUI domain完成开发A529/B630的1→2→旧A拒写→停写仅sync恢复→A→B，并完成既有基线双向同步及30次RPC撤权检查。第四轮包含最终B host/worker身份/哈希与全记录代际清理，daemon退出0、无fallback、job/plist/staging/自有session/runtime无残留，独立复核通过；前三轮失败/缺证据范围保留。不代表daemon schema迁移、任意B新写后恢复旧备份、重启登录或历史正式发行。见[原生schema报告](15-implementation-status.md#evidence-schema-macos-validation)。
   - 新增真实Linux systemd用户服务的开发schema1→2→旧程序拒写2→显式恢复sync子树1→再次升级2及新文件同步验收，第三次尝试通过并独立复核；前两次夹具失败保留。恢复不触碰host/auth/项目文件，撤销记录保留，但未以撤销Token另发RPC；这是停写且B无新业务修改条件下的测试操作，不是产品自动恢复能力。见[跨schema服务报告](15-implementation-status.md#evidence-schema-service-upgrade-validation)。
@@ -357,6 +360,7 @@
   - 默认时长验收工具已通过普通独立宿主双平台短预检（76.29/82.09秒），明确natural_rotation_passed=false；macOS原真实12小时运行已于2026-10-29 02:37:12完成自然到期、30分钟恢复尾部及清理验收（4216轮/应用与collector退出0），独立复核通过；Linux原长跑已于替换身份观测阶段失败、完整恢复/尾部待验。两侧分别使用原冻结源码，不覆盖随后修复。普通/race诊断定位tunnel逐Read分配热点，已改每流读缓冲+每DATA独立payload，保留发送所有权；32KiB分块基准约减少85%分配字节，RSS未同比下降。双平台真实port集成及优化后一分钟混合完整尾部167.10/173.64秒通过，不代替长稳/容量验收。见[默认轮换](15-implementation-status.md#evidence-default-rotation-validation)、[内存诊断](15-implementation-status.md#evidence-memory-profile-diagnostic)和取证工具。
   - 本批同527文件快照普通构建五窗口实验双平台319.58/320.33秒完成，各80次文件更新/160次TCP及等时空闲、归档和清理通过；Agent后段post-GC heap仍增长约76,326/68,164 B/min，内存增长未归因；当时待做的同采样空载对照现已完成，见[545文件配对报告](15-implementation-status.md#evidence-memory-idle-control-diagnostic)，仍不算无泄漏。见[多窗口内存诊断](15-implementation-status.md#evidence-memory-windows-diagnostic)。
 - [ ] 代码审查、依赖扫描、关键恢复/认证/数据操作分支测试；覆盖率数字不能替代行为验收。
+  - 2026-10-30公开alpha.1/alpha.2双平台真实服务升级/回滚、重复安装和各92命令兼容矩阵已通过；同批慢流取消三类缺口修复及分源双平台检查通过，见[24](24-public-package-compatibility.md)与[取消回收专项](15-implementation-status.md#evidence-frontend-cancellation-20261030)。外部身份、物理主机/平台和当前候选长稳仍独立待验。
   - 2026-10-29当前安装恢复/新Stop的真实systemd组合遗漏已补：744源首轮13生命周期与4活动升级回滚通过，正常poweroff/精确清理及源工具核对完成；原断言/预算保持，无产品修改。并行架构审查修正旧状态/待办，故障、长稳及外部证明范围分别保留，见[服务补验](15-implementation-status.md#evidence-install-systemd-recovery-validation)。
   - 2026-10-29补齐新Stop修复后遗漏的真实syncack整包：743同源双平台race/vet各4顶层+7子用例通过，无skip；四种ACK丢失后的正常宿主重启保留未知journal/stage及旧baseline，无二次上传。使用既有测试、生产5秒Stop与原夹具预算，不把该组合补验当作重复Stop或长稳/资源通过，见[Stop与ACK补验](15-implementation-status.md#evidence-sync-stop-ack-integration-validation)。
   - 2026-10-29补齐CI四目标真实打包入口：独立741源容器中精确run block串行首轮通过，4归档/56成员/24静态目标及正常清理独立复核；保留既有全包编译和release单文件测试路径。无产品修改，远端CI、目标原生执行和签名分发未由本批验证，见[打包入口](15-implementation-status.md#evidence-release-ci-validation)。

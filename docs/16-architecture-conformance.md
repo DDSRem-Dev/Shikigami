@@ -1,5 +1,7 @@
 # 架构与文档一致性检查
 
+**公开包升级、兼容与取消回收完成（2026-10-30）：** 原始公开alpha.1→alpha.2→alpha.1在macOS原生LaunchAgent、Linux容器真实systemd下的活动升级/回滚通过，两平台alpha.2新装/重复/卸载通过。实际混合CLI/agent/daemon、原插件匹配/拒绝和同schema双向重开矩阵双平台各92命令通过，来源/身份/状态/清理有证据，见[24](24-public-package-compatibility.md)。新增慢订阅回归发现并修复ReleaseFrontend的阻塞Send、最终envelope及取消回调竞争；统一1秒仅取消收尾预算，保持原Canceled与同连接健康流。最终native四包race/vet、Linux最终agent增量race/vet及架构检查通过，较早源码范围分开记录，见[15专项](15-implementation-status.md#evidence-frontend-cancellation-20261030)。上一提交67fb0f3的CI41024681916六任务成功；本批提交CI另行记录。自然到期任务仍待10月31日15:56，原42条/32勾选保持，物理设备、主机、真实Claude、其余认证/平台及当前候选长期门槛不外推。
+
 **未使用key撤销与审批实测、自然到期已调度（2026-10-30）：** 精确99bee22的CI41005895032六job成功，未开启opt-in仍不算通过。独立未使用single-use/1天key撤销后，新隔离节点1.932秒明确INVALID_AUTH_KEY，正常退出0并删key。审批临时开启后，新节点NODE_APPROVAL_REQUIRED且有效Token仍不能访问；管理台仅提供Remove，移除待批节点后仍禁入，但旧reason不证明明确管理员拒绝分类。保留状态显式重新申请并批准后自动online，Token/原daemon ID/能力及原session重验通过；专用节点与进程已清理，审批恢复原关闭，主Mac/VPS正常。另补CLI对有效待审批attempt的有界等待，状态仍denied，明确key拒绝仍终止。独立未使用key自然到期任务已注册，最早北京时间10月31日15:56执行，结果仍待。原42条及32/42保持，完整认证矩阵/平台/主机/长期门槛继续保留，详见[23](23-tsnet-external-acceptance.md)。
 
 **最终agent撤销恢复与CI/CLI补修（2026-10-30）：** 92fe17a的CI40998046799整体失败：Linux测试及四目标构建成功，macOS凭据检查在SDK活动时扫描缓存遭遇ENOENT，后续E2E未执行、终端专项跳过。已修正为SDK完全关闭后重开最终持久状态并严格扫描，未忽略文件错误；定向race三次通过。相同生产源码的candidate4再次由官方移除后，旧附件2→1、专用终端退出，主Mac与tmux保持；自身正确offline/NODE_CONTROL_UNAVAILABLE。最终agent经同一显式attempt的Chrome认证恢复online，Token/原daemon ID/能力重验及P2P连接通过，无诊断overlay。现场另发现CLI在active attempt的控制离线阶段提前退出，已补有界等待，CLI全包race40项/22.312秒通过，详见23。本轮仅补外部子项，不由控制失联断言明确撤销；保持32/42、10项部分完成与原42条要求，独立key撤销/到期、审批及其余门槛继续推进。
@@ -1211,3 +1213,19 @@ v4普通/race分阶段profile均完整通过31.73/40.40秒：16次256KiB双向�
 ## 审批验收与pending等待最终复核（2026-10-30）
 
 独立七类审查通过：仅CLI helper及其测试增加合法未到期审批attempt的等待，目录/插件依赖、SDK-host归属、RPC/能力/授权、持久schema/revision/去重、node/agent进程和I/O限额、安装与发行布局均保持。不得用URL将denied改为online；测试断言URL发布时仍denied，明确INVALID_AUTH_KEY依然终止。原5秒RPC、CLI等待/父context上界和单BeginLogin保持。官方待批、移除后禁入与批准后自动online/应用重新认证各自独立记录，控制台无Reject及旧SDK reason不被写成明确管理员拒绝。授权临时设置已恢复、专用进程/控制台节点已清理，原节点业务复查成功。到期runner已独立审查：提前门槛零key访问/零进程，到期单次独占、hash固定、finally删除/自有PID回收、异常不得计通过；激活runs0不冒充真实到期测试。调度冻结CLI5不追认本批helper修复，三份进度与原42条/32勾选保持一致。
+
+## 2026-10-30 公开包验收与前端取消批次复核
+
+本批全架构七类检查以01/04/06/07/09/10/11/13/14为基准，并由独立review复核；实际公开包证据与范围见24，取消红绿与源码范围见15。
+
+| 范围 | 发现、处理与验证 |
+|---|---|
+| 目录/依赖/SDK归属 | 产品改动限agent IPC与独立取消helper；插件仍在plugins/sync和plugins/port，host与SDK边界不变。跨进程发行验收位于test/diagnostics，架构/协议文档测试通过。 |
+| RPC/准入/版本/授权 | UID、instance、frontend、路由及能力检查保持。派生调用取消只设置对应HTTP2响应的流级deadline，真实同连接健康订阅通过；公开混合版本按实际握手及原manifest判定。 |
+| 状态/原子性/revision/去重 | 新guard仅运行态，无持久schema或去重变化；公开包同schema重开不冒充迁移，future副本拒写不覆盖正常状态。 |
+| 进程/启停/取消/恢复 | 独立审查推动补齐最终envelope及AfterFunc停止竞争；无发送goroutine/全连接close，幂等期限与finish锁防迟到访问。真实LaunchAgent/systemd升级与正常清理证据保持独立。 |
+| 文件/终端/网络/限制 | 不改变半关闭、输入不重放、冲突暂停和后台任务所有权。1秒只为已取消RPC收尾，原Canceled语义断言不降低；健康长流不限时。 |
+| CLI/TUI/配置/安装/产物 | 公共发行包不重建，认证后运行原helper/插件；双平台重复安装保持状态。新取消修复在master，尚未发布。 |
+| 行为/证据/声明 | 保留三种取消红绿、夹具失败和冻结源差异；18离线资源产物复核，不用RSS猜根因。08/15/16同步局部进度，原42条文字/顺序、32/42与外部/平台/长期门槛不变。 |
+
+独立review对最终生产diff无剩余必须修改项；最终native四包race/vet、Linux最终agent增量race/vet、架构及双平台公开版本矩阵已通过，精确范围见15终态记录，未运行的opt-in、真实Claude、主机重启/登录与其他物理平台不计通过。

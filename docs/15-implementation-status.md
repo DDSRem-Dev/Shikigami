@@ -1,5 +1,7 @@
 # 实施与验收记录
 
+**公开包升级、兼容与取消回收完成（2026-10-30）：** 原始公开alpha.1→alpha.2→alpha.1在macOS原生LaunchAgent、Linux容器真实systemd下的活动升级/回滚通过，两平台alpha.2新装/重复/卸载通过。实际混合CLI/agent/daemon、原插件匹配/拒绝和同schema双向重开矩阵双平台各92命令通过，来源/身份/状态/清理有证据，见[24](24-public-package-compatibility.md)。新增慢订阅回归发现并修复ReleaseFrontend的阻塞Send、最终envelope及取消回调竞争；统一1秒仅取消收尾预算，保持原Canceled与同连接健康流。最终native四包race/vet、Linux最终agent增量race/vet及架构检查通过，较早源码范围分开记录，见[15专项](15-implementation-status.md#evidence-frontend-cancellation-20261030)。上一提交67fb0f3的CI41024681916六任务成功；本批提交CI另行记录。自然到期任务仍待10月31日15:56，原42条/32勾选保持，物理设备、主机、真实Claude、其余认证/平台及当前候选长期门槛不外推。
+
 **未使用key撤销与审批实测、自然到期已调度（2026-10-30）：** 精确99bee22的CI41005895032六job成功，未开启opt-in仍不算通过。独立未使用single-use/1天key撤销后，新隔离节点1.932秒明确INVALID_AUTH_KEY，正常退出0并删key。审批临时开启后，新节点NODE_APPROVAL_REQUIRED且有效Token仍不能访问；管理台仅提供Remove，移除待批节点后仍禁入，但旧reason不证明明确管理员拒绝分类。保留状态显式重新申请并批准后自动online，Token/原daemon ID/能力及原session重验通过；专用节点与进程已清理，审批恢复原关闭，主Mac/VPS正常。另补CLI对有效待审批attempt的有界等待，状态仍denied，明确key拒绝仍终止。独立未使用key自然到期任务已注册，最早北京时间10月31日15:56执行，结果仍待。原42条及32/42保持，完整认证矩阵/平台/主机/长期门槛继续保留，详见[23](23-tsnet-external-acceptance.md)。
 
 **最终agent撤销恢复与CI/CLI补修（2026-10-30）：** 92fe17a的CI40998046799整体失败：Linux测试及四目标构建成功，macOS凭据检查在SDK活动时扫描缓存遭遇ENOENT，后续E2E未执行、终端专项跳过。已修正为SDK完全关闭后重开最终持久状态并严格扫描，未忽略文件错误；定向race三次通过。相同生产源码的candidate4再次由官方移除后，旧附件2→1、专用终端退出，主Mac与tmux保持；自身正确offline/NODE_CONTROL_UNAVAILABLE。最终agent经同一显式attempt的Chrome认证恢复online，Token/原daemon ID/能力重验及P2P连接通过，无诊断overlay。现场另发现CLI在active attempt的控制离线阶段提前退出，已补有界等待，CLI全包race40项/22.312秒通过，详见23。本轮仅补外部子项，不由控制失联断言明确撤销；保持32/42、10项部分完成与原42条要求，独立key撤销/到期、审批及其余门槛继续推进。
@@ -895,3 +897,26 @@ Release于`2026-10-29T17:30:47Z`（北京时间2026-10-30 01:30:47）公开，�
 ## 审批待批、移除与批准恢复（2026-10-30）
 
 用户授权的临时手动审批已完成并恢复原关闭：新节点待批无地址且有效Token仍被拒绝；控制台Remove待批节点后仍不得访问，但SDK旧approval reason不能代表明确管理员拒绝。保留目录同agent显式取消/重新申请，经Chrome批准后online并通过Token/原daemon ID/能力和session重验。专用agent退出0、PID不存在且控制台节点已删除，原主节点业务正常。CLI5在待审批新attempt URL返回前早退已单独修复；细节、证据范围和回归见[23](23-tsnet-external-acceptance.md#官方节点审批待批移除与批准恢复2026-10-30)。独立自然到期任务已装载但未执行，32/42保持。
+
+<a id="evidence-frontend-cancellation-20261030"></a>
+## 前端释放与真实HTTP2慢订阅回收（2026-10-30）
+
+依据13的ReleaseFrontend契约和14的流取消契约，使用真实受限UDS/HTTP2、小接收窗口及同一连接上的独立健康订阅进行定向所有权验证。不是RSS窗口或用人工channel冒充网络阻塞。
+
+发现并修复三种有确定反例的路径：
+
+- WatchEvents的Send被真实流控阻塞时，Registry取消派生context不能解除net/http响应写，订阅队列继续保留。
+- 最后一个业务Send刚好填满接收窗口时，业务handler虽返回，Connect最终error envelope仍阻塞，整个HTTP请求未结束。
+- Done已关闭、回调尚未执行时，退出路径停止AfterFunc可漏掉取消写期限；用公开Context.AfterFunc hook确定性延迟回调，移除同步兜底的同测试overlay再次失败。
+
+实现仅调整agent请求生命周期：每响应独立output guard，取消后阻止新Send，设置1秒流级收尾write deadline，覆盖业务输出及Connect终态；取消回调幂等，停止回调后同步核对context已取消并兜底，HTTP handler退出时锁内关闭writer所有权。没有新Send goroutine、不关闭共享HTTP2连接、不修改后台sync/listener所有权；1秒只约束已取消RPC的收尾，健康长流没有新增超时。初版立即reset会破坏原Canceled语义，原测试断言保持并修正为统一收尾预算。
+
+真实Events的cancel、Close、ReleaseFrontend、终态窗口耗尽，以及Logs的cancel/Close均验证订阅数回基线、业务和HTTP handler退出、同一连接健康流继续。确定性测试另覆盖回调停止竞争、重复取消不延长截止、finish后不访问writer、正常完成不设deadline。修前红证据保留于 `/tmp/shiki-subscription-lifetime-race.log`、`/tmp/shiki-subscription-final-status-probe.log`、`/tmp/shiki-subscription-callback-red.log`；最终定向race绿见 `/tmp/shiki-subscription-callback-final-green.log`。
+
+最终五输入hash冻结于 `/tmp/shiki-subscription-final-source-v2.json`。最终native四包race/vet全部通过：agent36.635秒、connection2.264秒、client11.070秒、plugin5.102秒，命令退出0，冻结hash保持。最终同测红证据另保存在 `/tmp/shiki-subscription-exact-final-tests-red.log`：最终测试不变，仅overlay回原ipc，两个释放分支均失败；去除同步兜底的独立overlay也失败。最终定向race及整包结果见 `/tmp/shiki-subscription-final-verification.json`，定向verbose无skip；非verbose整包日志不宣称逐项无skip。
+
+Linux最终5文件与native冻结完全相同；agent整包race30.044秒、vet及architecture0.036秒通过，同组还完成公开包矩阵7.43秒。证据 `/tmp/shiki-subscription-linux-final-20261030-DoRHUa/`：整体退出0、45.389秒、691项源hash保持、精确容器/镜像已清理；manifest SHA256 `fd5b2c34f67f5f55103de4be9815b1e92ac30d2b387f169e792d3f1f73e1121b`，日志 `b3ef11573c7603b91c8f20f6d220e8af762f8fce88a206627be61762220fffae`。其余三个包生产源码未变，采用前组各自通过证据，没有无依据重复。
+
+较早native四包race34.613/2.469/11.245/4.896秒属于最后兜底修正前，不追认为最终源码。Linux首组四包race31.358/2.167/4.135/4.589秒及vet/architecture也属于兜底前；该组后续公开包矩阵被Docker bind所有者与父进程argv误匹配阻塞，未计通过，源与容器清理已核验。后组已用容器原生私有状态目录通过矩阵并对最终修改独立补验；没有重启旧检查或将旧源追认为新源。
+
+该缺口来自独立生命周期假设，不解释569源的+228对象；18份历史profile复核、已修旧根与长稳边界见20。原12小时不会追认为当前修复长稳，公开alpha.2也不包含本修复。

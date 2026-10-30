@@ -83,8 +83,24 @@ func TestNativeLaunchAgentUpgradeWithActiveTransfers(t *testing.T) {
 		}
 		evidence.record("normal-cleanup", map[string]any{"failed": t.Failed(), "recorded_identities": len(evidence.processes)})
 	})
-	first, firstPin := buildLaunchdBundle(t, ctx, repository, fixture, "launchd-active-a")
-	second, secondPin := buildLaunchdBundle(t, ctx, repository, fixture, "launchd-active-b")
+	first, firstPin, firstVersion, second, secondPin, secondVersion := launchdLifecycleBundles(t, ctx, repository, fixture)
+	if os.Getenv("SHIKI_INSTALL_TEST_BUNDLES") != "" {
+		// Keep every fixture process under the private runtime tree so the
+		// exact-path cleanup guard can reclaim our daemon and remote workers.
+		copyBundle := func(source, name, version, pin string) string {
+			destination := filepath.Join(fixture, name)
+			if err := os.CopyFS(destination, os.DirFS(source)); err != nil {
+				t.Fatal("copy authenticated prebuilt bundle", err)
+			}
+			if _, err := install.Verify(destination, version, pin); err != nil {
+				t.Fatal("verify private prebuilt copy", err)
+			}
+			return destination
+		}
+		first = copyBundle(first, "prebuilt-a", firstVersion, firstPin)
+		second = copyBundle(second, "prebuilt-b", secondVersion, secondPin)
+	}
+	evidence.record("bundles", map[string]any{"first_version": firstVersion, "first_directory": first, "first_checksums_sha256": firstPin, "second_version": secondVersion, "second_directory": second, "second_checksums_sha256": secondPin, "prebuilt": os.Getenv("SHIKI_INSTALL_TEST_BUNDLES") != ""})
 	prefix := filepath.Join(fixture, "install")
 	configuration := filepath.Join(fixture, "client.yaml")
 	cfg := config.DefaultClient()
@@ -114,6 +130,10 @@ func TestNativeLaunchAgentUpgradeWithActiveTransfers(t *testing.T) {
 		})
 	}
 	activate := func(t *testing.T, bundle, pin, version string) install.Result {
+		// Exercise the installer shipped in the target bundle. Retain the new
+		// helper for its readiness and rollback operations, as a real upgrade does.
+		helper = filepath.Join(bundle, "shiki-install")
+		t.Logf("activating version=%s with its own installer=%s", version, helper)
 		args := append([]string{"install"}, installArgs...)
 		args = append(args, "--bundle", bundle, "--checksums-sha256", pin, "--version", version)
 		result, err := launchdInstallResult(ctx, environment, helper, args...)
@@ -124,7 +144,7 @@ func TestNativeLaunchAgentUpgradeWithActiveTransfers(t *testing.T) {
 		return result
 	}
 	launchdActivityAbsent(t, ctx, domain, target, service) // immediately before first activation
-	activate(t, first, firstPin, "launchd-active-a")
+	activate(t, first, firstPin, firstVersion)
 	agentPID := launchdPID(t, ctx, target, prefix)
 	evidence.process("agent-a", agentPID)
 	cli := func(args ...string) []byte {
@@ -233,7 +253,7 @@ func TestNativeLaunchAgentUpgradeWithActiveTransfers(t *testing.T) {
 			phase.boundary = func(boundary string) {
 				evidence.control(control, boundary+".ready")
 				if index == 0 {
-					result := activate(t, second, secondPin, "launchd-active-b")
+					result := activate(t, second, secondPin, secondVersion)
 					backup = result.Backup
 					if backup == "" {
 						t.Fatal("upgrade omitted backup")
@@ -243,7 +263,7 @@ func TestNativeLaunchAgentUpgradeWithActiveTransfers(t *testing.T) {
 					}
 				} else {
 					result, err := launchdInstallResult(ctx, environment, helper, "rollback", "--prefix", prefix, "--non-interactive")
-					if err != nil || result.Version != "launchd-active-a" {
+					if err != nil || result.Version != firstVersion {
 						t.Fatal("native rollback failed", result, err)
 					}
 					ready(t, result)
