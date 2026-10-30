@@ -1,5 +1,7 @@
 # 架构与文档一致性检查
 
+**双主机验收发现并修复终端接管提示（2026-10-30，整轮仍待）：** Mac＋VPS独立普通用户/状态/TLS测试已启动。真实CLI暴露接管后仍显示observer，现等待有序CONTROL_CHANGED确认后报告controller，保留输入代次与提前输入丢弃；超时回调join及缓存释放同步补齐。客户端、CLI、UI和架构race/vet已通过；修复后真实观察/接管提示与正常detach均通过。重绘节流和Dashboard过早按键两处夹具问题单独修正，失败不改记成功；其余并发/冲突/崩溃矩阵仍待，保持33/42。详见[25](25-multihost-acceptance.md)。
+
 **Homebrew 四目标原生渠道验收完成（2026-10-30）：** CI [41037444120](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41037444120) 的 macOS/Linux × arm64/amd64 四个真实渠道任务全部成功，公开alpha.2的 tap/install/test/reinstall/test/uninstall/untap、完整bundle及清理前后环境一致已独立核验。关闭Phase 5签名/分发原条目，当前33/42、9项待完成；完整产品平台、主机重启、Claude与长期资源条件仍独立保留。用户Mac未运行brew或更改Xcode/CLT；具体范围见[22](22-homebrew-distribution.md#四目标原生-ci验收)。
 
 **当前候选双平台长稳已启动（2026-10-30）：** 上一批修复与公开包验收已提交master c4c5a56，CI41029690521四目标构建及Linux全套测试成功、macOS全套测试仍运行。为补齐旧697未覆盖的新Stop自然轮换/停机排空，固定c4c5a56启动一次macOS原生和一次Linux arm64容器默认12h凭据轮换，均已先通过预检和正常清理，再进入正式观察首checkpoint。四份快照同为690文件，558项Go/proto/module输入与提交一致；TTL、2分钟恢复预算、实际恢复后30分钟尾部与原资源阈值未改。北京时间10月31日初始最早结束分别为Linux05:32:35、Mac05:35:08，最终仍需实际恢复尾部/退出/清理核验；现在只记运行中。官方未使用key自然到期仍独立计划15:56执行。七类复核通过，原42条/32勾选保持；详见[当前长稳启动](15-implementation-status.md#evidence-current-default-rotation-start-20261030)。
@@ -1249,3 +1251,10 @@ v4普通/race分阶段profile均完整通过31.73/40.40秒：16次256KiB双向�
 ## 四目标 Homebrew 验收收尾复核（2026-10-30）
 
 七类全架构对照延续本批准备审查：目录及依赖/SDK-host-plugin不变，RPC/准入/能力/授权不变，产品状态/revision/去重不变，生命周期仅隔离stage与受控清理，文件与网络保持认证后消费，CLI/TUI/安装布局保持独立受管prefix，行为声明只使用四原生实际结果。独立核验四份artifact及全部日志hash、完整payload和baseline==final，无新增确定实现偏差。环境警告与本机工具限制保留，未将渠道验收当产品平台或服务激活验收。08/15/16同步关闭同一原条目，原42条文字顺序不变，33/42；默认12h及未使用key到期测试继续，双端/崩溃恢复下一批独立执行。
+
+
+## 双主机终端提示修复与验收工具复核（2026-10-30）
+
+全架构七类对照01/05/06/07/12/13/14：生产改动仅客户端终端状态提示与已有超时生命周期，插件业务仍在plugins，公共SDK与host依赖方向不变，跨宿主诊断位于test；RPC/准入/能力/授权无新增或回退，接管必须流内确认；持久状态/schema/revision/去重不变，诊断只读指定sync恢复元数据；进程/取消保留有限超时、timer join与旧输入作废，精确所有权清理和操作系统回收分开；文件/终端/TCP的协议、限额和默认loopback不变；CLI正确显示实际已确认模式，TUI夹具按真实界面就绪后驱动，安装与产物契约不变；证据区分三轮失败、局部复验、完整矩阵待验和旧c4长稳，不能因编译或工具测试关闭多设备/恢复复合条目。
+
+独立review确认BeforeRaw不直接授权输入，pending仍按序进入原CONTROL_CHANGED循环；修正超时回调竞争、缓存旧槽保留并补实际PTY正负行为测试。最终internal/client整包race17.257秒，CLI24.145秒、UI2.859秒、architecture1.375秒race与对应vet通过。helper源码层的范围/所有权约束通过单独测试；成功hard-crash与失败cleanup的历史worker覆盖不同，最终root另查所有观察身份和OS资源。08/15/16同步保持33/42，原42项文字/顺序不变。

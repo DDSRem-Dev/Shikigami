@@ -1,5 +1,7 @@
 # 实施与验收记录
 
+**双主机验收发现并修复终端接管提示（2026-10-30，整轮仍待）：** Mac＋VPS独立普通用户/状态/TLS测试已启动。真实CLI暴露接管后仍显示observer，现等待有序CONTROL_CHANGED确认后报告controller，保留输入代次与提前输入丢弃；超时回调join及缓存释放同步补齐。客户端、CLI、UI和架构race/vet已通过；修复后真实观察/接管提示与正常detach均通过。重绘节流和Dashboard过早按键两处夹具问题单独修正，失败不改记成功；其余并发/冲突/崩溃矩阵仍待，保持33/42。详见[25](25-multihost-acceptance.md)。
+
 **Homebrew 四目标原生渠道验收完成（2026-10-30）：** CI [41037444120](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41037444120) 的 macOS/Linux × arm64/amd64 四个真实渠道任务全部成功，公开alpha.2的 tap/install/test/reinstall/test/uninstall/untap、完整bundle及清理前后环境一致已独立核验。关闭Phase 5签名/分发原条目，当前33/42、9项待完成；完整产品平台、主机重启、Claude与长期资源条件仍独立保留。用户Mac未运行brew或更改Xcode/CLT；具体范围见[22](22-homebrew-distribution.md#四目标原生-ci验收)。
 
 **当前候选双平台长稳已启动（2026-10-30）：** 上一批修复与公开包验收已提交master c4c5a56，CI41029690521四目标构建及Linux全套测试成功、macOS全套测试仍运行。为补齐旧697未覆盖的新Stop自然轮换/停机排空，固定c4c5a56启动一次macOS原生和一次Linux arm64容器默认12h凭据轮换，均已先通过预检和正常清理，再进入正式观察首checkpoint。四份快照同为690文件，558项Go/proto/module输入与提交一致；TTL、2分钟恢复预算、实际恢复后30分钟尾部与原资源阈值未改。北京时间10月31日初始最早结束分别为Linux05:32:35、Mac05:35:08，最终仍需实际恢复尾部/退出/清理核验；现在只记运行中。官方未使用key自然到期仍独立计划15:56执行。七类复核通过，原42条/32勾选保持；详见[当前长稳启动](15-implementation-status.md#evidence-current-default-rotation-start-20261030)。
@@ -958,3 +960,8 @@ Linux最早自然到期为北京时间10/31 05:02:34.914992，初始最早终点
 ## 四目标 Homebrew 原生验收终态（2026-10-30）
 
 四渠道CI及独立证据复核均通过，来源、123条命令、八次完整bundle检查、两次清理及前后环境一致见[22](22-homebrew-distribution.md#四目标原生-ci验收)。本批仅关闭原Phase5签名/分发项，33/42、9项待完成。用户Mac未执行brew；本机工具前置失败、完整服务/平台与长期资源门槛独立保留。生产源码不变，未创建新tag或Release。
+
+
+## 双主机终端提示修复与有限恢复验收（2026-10-30，进行中）
+
+来源与逐轮真实结果见[25](25-multihost-acceptance.md)。c4候选双端真实CLI/agent/daemon已接通，第一轮节流夹具失败、第二轮模式提示产品缺陷、第三轮真实CLI修复已验证但Dashboard夹具早按键失败；均保留失败且各轮正常停止。有限文件/终端/转发/撤权及两次部分传输SIGKILL仍待整轮结果，不提前关闭Phase0/4多设备或Phase5恢复条目。旧tsnet三节点已按用户要求移除，专用进程/账户/home与旧私有状态已精确回收；预约expiry和c4长稳独立保留，详见23。

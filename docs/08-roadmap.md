@@ -1,5 +1,7 @@
 # 开发路线图
 
+**双主机验收发现并修复终端接管提示（2026-10-30，整轮仍待）：** Mac＋VPS独立普通用户/状态/TLS测试已启动。真实CLI暴露接管后仍显示observer，现等待有序CONTROL_CHANGED确认后报告controller，保留输入代次与提前输入丢弃；超时回调join及缓存释放同步补齐。客户端、CLI、UI和架构race/vet已通过；修复后真实观察/接管提示与正常detach均通过。重绘节流和Dashboard过早按键两处夹具问题单独修正，失败不改记成功；其余并发/冲突/崩溃矩阵仍待，保持33/42。详见[25](25-multihost-acceptance.md)。
+
 **Homebrew 四目标原生渠道验收完成（2026-10-30）：** CI [41037444120](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41037444120) 的 macOS/Linux × arm64/amd64 四个真实渠道任务全部成功，公开alpha.2的 tap/install/test/reinstall/test/uninstall/untap、完整bundle及清理前后环境一致已独立核验。关闭Phase 5签名/分发原条目，当前33/42、9项待完成；完整产品平台、主机重启、Claude与长期资源条件仍独立保留。用户Mac未运行brew或更改Xcode/CLT；具体范围见[22](22-homebrew-distribution.md#四目标原生-ci验收)。
 
 **四目标原生 Homebrew 验收已接入 CI（2026-10-30，待实际运行）：** 在现有 CI 增加 macOS/Linux × arm64/amd64 原生 runner，读取当前可信 Formula 固定其公开来源，执行真实 tap/install/test/reinstall/test/uninstall，并核验完整签名 bundle 及清理前后环境一致。仅一次性 GitHub 托管环境可运行，不在用户 Mac 安装或更新 Homebrew/Xcode。11项隔离工具测试通过，实际四目标结果尚待，分发条目不预先勾选，仍32/42。上一候选 c4c5a56 和文档提交 a8112d9 的 CI 均已成功；12h 与未使用key自然到期任务继续独立运行。详见[22](22-homebrew-distribution.md#四目标原生-ci验收)。

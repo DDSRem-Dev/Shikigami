@@ -1,5 +1,7 @@
 # 官方 tsnet 外部验收
 
+**当前运行环境：** 已完成验收的三专用节点与相关测试进程正在按用户要求回收；预约未使用key到期任务独立保留。以下online/连接结果是对应批次的历史证据，不代表节点仍在线。整体路线图现33/42（Homebrew渠道已关闭），完整认证项仍未关闭。
+
 2026-10-30：用户已提供官方 tailnet、已登录的 Chrome，以及家庭宽带 Mac 与不同网络的 VPS。首次真实网络批次已关闭08的Phase 2首条；当前32/42，10项部分完成。其余认证矩阵和平台门槛不随此项关闭。后续官方节点移除暴露旧流残留，peer生命周期修复已有本地回归证据；第三次重新认证已online，随后不含诊断代码的最终构建重启及应用重连通过；官方再次移除已验证旧附件回收与主节点不受影响；自身状态分类与显式恢复的本地修复及分层回归已完成；旧63924ce诊断构建已重新认证并恢复应用连接，candidate4 clean重启同地址online。最终候选已完成两个独立的官方控制面受控断网场景：已有终端保持及控制恢复、无持有终端时显式connect复用授权。首轮混入主动连接重配的失败记录保留，最新补验已完成最终agent再次撤销恢复和独立未使用Auth Key撤销，99bee22六job CI通过；独立自然到期调度待执行，审批待批/移除/批准及恢复原设置已实测，完整认证矩阵未关闭。
 
 ## 来源与隔离范围
@@ -170,3 +172,12 @@ CLI根因是nodeLoginActive没有覆盖仍有有效attempt的offline/NODE_CONTRO
 CLI修复仅将denied/NODE_APPROVAL_REQUIRED且login_id非空、expires在未来的attempt纳入原有有界等待，等待URL或online；输出仍denied、业务仍禁止，INVALID_AUTH_KEY等明确拒绝即使附有效attempt字段也立即终止。无重复BeginLogin、自动Cancel或新注册，不改变原wait与父context截止。真实UDS交互/AuthKey序列修前均提前退出，日志/tmp/shiki-cli-approval-pending-red.log；最终CLI整包race40项23.867秒通过，无skip/race/失败，日志`/tmp/shiki-cli-approval-pending-race.log`，两文件源码与审查清单`/tmp/shiki-cli-approval-verification.json`；独立七类审查通过，新提交CI须另按实际结果判断。自然到期调度继续使用已冻结CLI5，不为这一等待分支修改既有试验。
 
 最终正常TERM专用agent退出0且精确PID不存在，删除控制台专用审批测试节点，保留本地隔离证据；将手动审批恢复关闭并重新加载确认，主Mac/once均查询原session成功，见approval-cleanup.json。未改变node-key180天期限、自动更新、ACL或主Mac/VPS服务。
+
+
+## 本批清理状态（2026-10-30）
+
+按用户要求回收已完成的测试环境：通过用户Chrome精确移除`shiki-test-mac-goeshw8f`、`shiki-test-once-goeshw8f`、`shiki-test-vps-goeshw8f`，最终管理台显示Add your first device且无machine行；恢复操作前标签页。此为资源清理，不将其充作新的撤销/认证验收。两个本机agent按各自配置正常停止，VPS专用transient service停止后自动消失，旧daemon及插件退出；只关闭专用tmux会话并精确终止测试HTTP进程，未停止共享tmux server。
+
+未使用key自然到期任务自包含于`next-unused-expired`，不依赖上述三节点，保留整目录、预约launchd、GUI/网络/代理及冻结输入。当前c4双平台默认12h运行、快照及容器继续保留，签名私钥备份不是测试垃圾。状态目录/账户/构建残留的最终回收另记，不能将停止进程当全部文件清理完成。若今后继续官方网络验收，需要明确重新授权的测试节点，不能声称旧三节点仍online。
+
+文件/账户清理已完成：本机run-goeshw8f的28个旧测试顶层项删除，仅next-unused-expired保留；VPS专用用户/同名组及/home/shiki-tsnet-test删除，UID1000无进程，死tmux socket目录删除。旧构建证据目录的115个条目删除，仅candidate4/host-build.json与candidate5/cli-build.json作为expiry来源记录保留。历史原始临时日志不再可用，正文中的脱敏结论与固定来源不改变，不虚称仍可从旧路径取证。停止清理回执摘要SHA-256为`27be4c705cd72b68f84e02bf5a0ff8419443d16200b199060f9334941a533aaf`；原系统SSH/Web/RustDesk监听及进程保持，7897实际TCP可连接，expiry冻结输入hash和c4进程身份复核保持。

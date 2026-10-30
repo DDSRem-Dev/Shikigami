@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -69,8 +70,8 @@ func (c *Client) Terminal(ctx context.Context, serverID, sessionID string, optio
 	defer cancel(nil)
 	remote := c.Remote(serverID)
 	device, _ := os.Hostname()
-	timeout := time.AfterFunc(5*time.Second, func() { cancel(connect.NewError(connect.CodeDeadlineExceeded, "terminal READY timed out")) })
-	defer timeout.Stop()
+	stopReadyTimeout := terminalTimeout(5*time.Second, func() { cancel(connect.NewError(connect.CodeDeadlineExceeded, "terminal READY timed out")) })
+	defer stopReadyTimeout()
 	var stream rpc.ShikiDaemonTerminalStreamClientStream
 	var ready *pb.TerminalOutput
 	admissionDeadline := time.Now().Add(time.Second)
@@ -105,8 +106,11 @@ func (c *Client) Terminal(ctx context.Context, serverID, sessionID string, optio
 		case <-timer.C:
 		}
 	}
-	timeout.Stop()
+	stopReadyTimeout()
 	defer stream.Close()
+	if call.Err() != nil {
+		return terminalCause(call, call.Err())
+	}
 	if ready.SessionId != sessionID || ready.AttachmentId == "" || ready.Sequence == 0 || ready.GetEvent() == nil || ready.GetEvent().Type != pb.SessionEvent_READY {
 		return connect.NewError(connect.CodeDataLoss, "invalid terminal READY frame")
 	}
@@ -115,9 +119,25 @@ func (c *Client) Terminal(ctx context.Context, serverID, sessionID string, optio
 		return connect.NewError(connect.CodeDataLoss, "invalid terminal mode")
 	}
 	state := TerminalState{SessionID: sessionID, AttachmentID: ready.AttachmentId, Mode: mode, ControlRevision: ready.GetEvent().Data["control_revision"]}
+	var pending []*pb.TerminalOutput
 	if options.TakeControl && mode != "controller" {
 		if _, e = remote.TakeControl(call, &pb.TakeControlRequest{SessionId: sessionID, AttachmentId: ready.AttachmentId, ExpectedControlRevision: state.ControlRevision, RequestId: rand.Text()}); e != nil {
 			return e
+		}
+		// The unary result does not establish the stream's current control
+		// generation. Wait for its ordered confirmation before describing this
+		// attachment to the user; replay all buffered frames through the normal
+		// event loop so only CONTROL_CHANGED enables input and synchronizes size.
+		stopConfirmationTimeout := terminalTimeout(5*time.Second, func() {
+			cancel(connect.NewError(connect.CodeDeadlineExceeded, "terminal control confirmation timed out"))
+		})
+		state, pending, e = awaitTerminalControl(stream, state, ready.Sequence)
+		stopConfirmationTimeout()
+		if e != nil {
+			return terminalCause(call, e)
+		}
+		if call.Err() != nil {
+			return terminalCause(call, call.Err())
 		}
 	}
 	if options.BeforeRaw != nil {
@@ -253,7 +273,15 @@ func (c *Client) Terminal(ctx context.Context, serverID, sessionID string, optio
 		defer close(receiverDone)
 		defer close(outputs)
 		for {
-			message, err := stream.Receive()
+			var message *pb.TerminalOutput
+			var err error
+			if len(pending) > 0 {
+				message = pending[0]
+				pending[0] = nil
+				pending = pending[1:]
+			} else {
+				message, err = stream.Receive()
+			}
 			if err != nil {
 				if !errors.Is(err, io.EOF) {
 					cancel(err)
@@ -338,6 +366,50 @@ func (c *Client) Terminal(ctx context.Context, serverID, sessionID string, optio
 		}
 	}
 }
+
+// awaitTerminalControl preserves the bounded, ordered output preceding a
+// takeover confirmation without entering raw mode or accepting terminal input.
+func awaitTerminalControl(stream rpc.ShikiDaemonTerminalStreamClientStream, state TerminalState, sequence uint64) (TerminalState, []*pb.TerminalOutput, error) {
+	var pending []*pb.TerminalOutput
+	var bytes int
+	for {
+		message, err := stream.Receive()
+		if err != nil {
+			return state, nil, err
+		}
+		if message.SessionId != state.SessionID || message.AttachmentId != state.AttachmentID || message.Sequence != sequence+1 {
+			return state, nil, connect.NewError(connect.CodeDataLoss, "terminal attachment or sequence changed")
+		}
+		sequence = message.Sequence
+		bytes += proto.Size(message)
+		if len(pending) == 64 || bytes > 1<<20 {
+			return state, nil, connect.NewError(connect.CodeResourceExhausted, "terminal output queue is full; detach and redraw required")
+		}
+		pending = append(pending, message)
+		if event := message.GetEvent(); event != nil {
+			switch event.Type {
+			case pb.SessionEvent_READY:
+				return state, nil, connect.NewError(connect.CodeDataLoss, "terminal READY repeated")
+			case pb.SessionEvent_CLAUDE_CRASHED:
+				return state, nil, &ClaudeExitError{SessionID: state.SessionID, ExitCode: event.Data["exit_code"], ExitSignal: event.Data["exit_signal"]}
+			case pb.SessionEvent_CLAUDE_STOPPED:
+				if event.Data["reason_code"] == "EXIT_REASON_UNKNOWN" {
+					return state, nil, &ClaudeExitError{SessionID: state.SessionID, ReasonCode: "EXIT_REASON_UNKNOWN"}
+				}
+			case pb.SessionEvent_CONTROL_CHANGED:
+				if event.Data["controller_attachment_id"] == state.AttachmentID {
+					revision := event.Data["control_revision"]
+					if revision == "" || revision == state.ControlRevision {
+						return state, nil, connect.NewError(connect.CodeDataLoss, "invalid terminal control confirmation")
+					}
+					state.Mode, state.ControlRevision = "controller", revision
+					return state, pending, nil
+				}
+			}
+		}
+	}
+}
+
 func terminalCause(ctx context.Context, e error) error {
 	if cause := context.Cause(ctx); cause != nil {
 		if errors.Is(cause, ErrDetached) {
@@ -357,5 +429,20 @@ func ParseDetachKey(value string) (byte, error) {
 		return 29, nil
 	default:
 		return 0, fmt.Errorf("unsupported detach key %q; use ctrl-q, ctrl-], or none", value)
+	}
+}
+
+// terminalTimeout returns an idempotent stop that joins an already-started
+// callback. A completed admission must never be canceled by a late timer.
+func terminalTimeout(after time.Duration, expire func()) func() {
+	done := make(chan struct{})
+	timer := time.AfterFunc(after, func() { defer close(done); expire() })
+	var stopped sync.Once
+	return func() {
+		stopped.Do(func() {
+			if !timer.Stop() {
+				<-done
+			}
+		})
 	}
 }

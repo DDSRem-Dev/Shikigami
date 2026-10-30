@@ -26,6 +26,7 @@ type frontendProbe struct {
 	released    map[string]bool
 	omitControl atomic.Bool
 	terminal    func(context.Context, rpc.ShikiDaemonTerminalStreamServerStream) error
+	takeControl func(context.Context, *pb.TakeControlRequest) (*pb.Empty, error)
 }
 
 func (p *frontendProbe) Handshake(context.Context, *apb.HandshakeRequest) (*apb.HandshakeResponse, error) {
@@ -83,6 +84,12 @@ func (r *frontendRemote) GetSystemInfo(ctx context.Context, _ *pb.Empty) (*pb.Sy
 }
 func (r *frontendRemote) TerminalStream(ctx context.Context, s rpc.ShikiDaemonTerminalStreamServerStream) error {
 	return r.p.terminal(ctx, s)
+}
+func (r *frontendRemote) TakeControl(ctx context.Context, request *pb.TakeControlRequest) (*pb.Empty, error) {
+	if r.p.takeControl == nil {
+		return nil, connect.NewError(connect.CodeUnimplemented, "take control unavailable")
+	}
+	return r.p.takeControl(ctx, request)
 }
 func frontendFixture(t *testing.T, p *frontendProbe) func() *Client {
 	t.Helper()
