@@ -10,7 +10,9 @@ import sys
 import time
 
 sys.dont_write_bytecode = True
-from platform_support import command, native_identity, source_identity, test_events, write_json, require_verbose_pass
+from platform_support import command, native_identity, source_identity, test_events, write_json, require_verbose_pass, public_systemd_result
+
+from platform_resources import resources, go_environment
 
 ROOT = Path(__file__).resolve().parent.parent
 REQUIRED_INTEGRATION = (
@@ -91,7 +93,15 @@ class Acceptance:
     def preflight(self):
         if (self.public / "source.json").exists():
             raise RuntimeError("refusing to reuse acceptance evidence from an earlier run")
-        write_json(self.public / "platform.json", native_identity(ROOT))
+        identity = native_identity(ROOT)
+        identity["resources"] = resources()
+        environment = go_environment(identity["resources"])
+        os.environ.update(environment)
+        if os.environ.get("GITHUB_ENV") and not identity["wsl"]:
+            with Path(os.environ["GITHUB_ENV"]).open("a") as stream:
+                for key, value in environment.items():
+                    stream.write(f"{key}={value}\n")
+        write_json(self.public / "platform.json", identity)
         write_json(self.public / "source.json", source_identity(ROOT))
         self.stages["preflight"] = {"state": "passed"}
         write_json(self.state, self.stages)
@@ -128,15 +138,23 @@ class Acceptance:
                          required_text=("TestNativeLaunchAgentUpgradeWithActiveTransfers",))
         else:
             self.run("systemd-modules", ["go", "mod", "download"], timeout=300)
-            self.run("systemd-lifecycle", ["sudo", "--preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT",
-                     "python3", "-B", ROOT / "scripts/platform-systemd.py", "--source", ROOT,
-                     "--go", command(["go", "env", "GOROOT"]) + "/bin/go",
-                     "--modules", command(["go", "env", "GOMODCACHE"]),
-                     "--evidence", self.private / "systemd"], timeout=2100)
-            result = json.loads((self.private / "systemd/result.json").read_text())
+            result = None
+            try:
+                self.run("systemd-lifecycle", ["sudo", "--preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT",
+                         "python3", "-B", ROOT / "scripts/platform-systemd.py", "--source", ROOT,
+                         "--go", command(["go", "env", "GOROOT"]) + "/bin/go",
+                         "--modules", command(["go", "env", "GOMODCACHE"]),
+                         "--cache", command(["go", "env", "GOCACHE"]),
+                         "--parallelism", str(self.measured["package_parallelism"]),
+                         "--gomaxprocs", os.environ["GOMAXPROCS"],
+                         "--evidence", self.private / "systemd"], timeout=2100)
+            finally:
+                report = self.private / "systemd/result.json"
+                value = json.loads(report.read_text()) if report.is_file() else {"phase": "helper-result-missing"}
+                result = public_systemd_result(value)
+                write_json(self.public / "systemd.json", result)
             if result.get("state") != "passed" or result.get("cleanup") != "passed":
                 raise RuntimeError("native systemd scenario or exact cleanup did not pass")
-            write_json(self.public / "systemd.json", result)
 
     def finalize(self):
         source = self.public / "source.json"
@@ -170,6 +188,8 @@ def main():
         if not (acceptance.public / "source.json").exists():
             raise RuntimeError("preflight must freeze source before tests")
         native_identity(ROOT)
+        acceptance.measured = json.loads((acceptance.public / "platform.json").read_text())["resources"]
+        os.environ.update(go_environment(acceptance.measured))
     getattr(acceptance, arguments.stage)()
 
 

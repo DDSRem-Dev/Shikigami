@@ -12,7 +12,10 @@ import unittest
 from unittest.mock import patch
 
 sys.dont_write_bytecode = True
-from platform_support import GO_VERSION, hosted_guard, require_verbose_pass, test_events, validate_identity
+from platform_support import GO_VERSION, hosted_guard, require_verbose_pass, test_events, validate_identity, safe_test_locations, public_systemd_result
+
+from platform_resources import GIB, parallelism, resources, go_environment, copy_build_cache, cgroup_limits
+import platform_resources
 
 SPEC = importlib.util.spec_from_file_location("native_systemd", Path(__file__).with_name("platform-systemd.py"))
 systemd = importlib.util.module_from_spec(SPEC)
@@ -74,6 +77,152 @@ class PlatformAcceptanceTests(unittest.TestCase):
         self.log.write_text("build failed\n")
         with self.assertRaises(RuntimeError):
             test_events(self.log)
+
+    def test_failed_output_exports_only_known_locations_elapsed_and_fixed_kind(self):
+        secret = "shiki_FAKE_CREDENTIAL_NEVER_PUBLISH"
+        events = [
+            {"Action": "output", "Package": "example", "Test": "TestRequired", "Output":
+             f"    core_test.go:73: readiness timeout: {secret} https://login.invalid/secret\n"
+             "-----BEGIN PRIVATE KEY-----\nSECRET_PRIVATE_BODY\n-----END PRIVATE KEY-----\n"
+             f"    unknown_secret_test.go:12: {secret}\n"
+             f"    /home/private/core_test.go:74: {secret}\n"
+             f"    core_test.go:999999: {secret}\n"
+             f"    core_test.go:75: an arbitrary error {secret}\n"},
+            {"Action": "fail", "Package": "example", "Test": "TestRequired", "Elapsed": 3.123456},
+            {"Action": "fail", "Package": "example"},
+        ]
+        self.log.write_text("\n".join(json.dumps(item) for item in events))
+        result = test_events(self.log, validate=False)
+        self.assertEqual(result["tests"], [{"package": "example", "test": "TestRequired", "outcome": "fail",
+                         "elapsed_seconds": 3.123, "source_locations": [
+                             {"file": "core_test.go", "line": 73, "kind": "condition_timeout"},
+                             {"file": "core_test.go", "line": 75, "kind": "test_output"}]}])
+        public = json.dumps(result)
+        for forbidden in (secret, "https://", "PRIVATE", "SECRET", "unknown_secret", "/home", "arbitrary", "999999"):
+            self.assertNotIn(forbidden, public)
+        with self.assertRaises(RuntimeError):
+            test_events(self.log, ["TestRequired"])
+
+    def test_locations_are_bounded_and_dynamic_elapsed_is_not_published(self):
+        output = "\n".join(f"core_test.go:{i}: arbitrary secret suffix" for i in range(1, 80))
+        self.assertEqual(len(safe_test_locations(output, {"core_test.go": 100})), 20)
+        for elapsed in ("secret elapsed", float("nan"), float("inf"), -1, 100000, True):
+            events = [
+                {"Action": "output", "Package": "example", "Test": "TestRequired", "Output": output},
+                {"Action": "fail", "Package": "example", "Test": "TestRequired", "Elapsed": elapsed},
+                {"Action": "fail", "Package": "example"},
+            ]
+            self.log.write_text("\n".join(json.dumps(item) for item in events))
+            item = test_events(self.log, validate=False)["tests"][0]
+            self.assertEqual(len(item["source_locations"]), 20)
+            self.assertNotIn("elapsed_seconds", item)
+            self.assertNotIn("secret", json.dumps(item))
+
+    def test_concurrency_uses_measured_memory_and_cpu_with_conservative_fallback(self):
+        for cpu, memory, packages, procs in ((4, 16, 2, 2), (3, 7, 2, 1), (2, 8, 2, 1), (4, 4, 1, 2), (1, 8, 1, 1)):
+            value = parallelism(cpu, memory * GIB)
+            self.assertEqual((value["package_parallelism"], value["gomaxprocs"]), (packages, procs))
+            self.assertEqual(go_environment(value)["GOFLAGS"], f"-p={packages} -mod=readonly -buildvcs=false")
+        fallback = parallelism(8, 16 * GIB, detected=False)
+        self.assertEqual(fallback, {"package_parallelism": 1, "gomaxprocs": 1, "selection": "probe_unavailable"})
+        with patch.object(platform_resources.platform, "system", return_value="Linux"), \
+                patch.object(platform_resources.os, "sysconf", side_effect=PermissionError("private path")):
+            measured = resources()
+        self.assertFalse(measured["probe_complete"])
+        self.assertEqual(measured["selection"], "probe_unavailable")
+        self.assertEqual(measured["package_parallelism"], 1)
+        for value in ({"package_parallelism": 4, "gomaxprocs": 2}, {"package_parallelism": 2, "gomaxprocs": 8}):
+            with self.assertRaises(ValueError):
+                go_environment(value)
+
+    def test_fractional_cpu_and_ancestor_memory_limits_are_conservative(self):
+        root = self.root / "cgroup"
+        current = root / "job/child"
+        current.mkdir(parents=True)
+        (root / "cpu.max").write_text("max 100000")
+        (root / "memory.max").write_text(str(8 * GIB))
+        (root / "job/cpu.max").write_text("150000 100000")
+        (current / "cpu.max").write_text("max 100000")
+        (current / "memory.max").write_text("max")
+        membership = self.root / "membership"
+        membership.write_text("0::/job/child\n")
+        cpus, memory = cgroup_limits(4, 16 * GIB, root, membership)
+        self.assertEqual(cpus, 1)
+        self.assertEqual(memory, 8 * GIB)
+        self.assertEqual(parallelism(cpus, memory)["package_parallelism"], 1)
+        membership.write_text("0::/../../outside\n")
+        with self.assertRaises(ValueError):
+            cgroup_limits(4, 16 * GIB, root, membership)
+
+    def test_cache_deadline_removes_an_incomplete_entry(self):
+        source, destination = self.root / "cache-large", self.root / "copy-large"
+        source.mkdir()
+        (source / "entry").write_bytes(b"x" * (2 * 1024 * 1024))
+        # Expire after the first 1 MiB write, before the second chunk. No large
+        # real copy or sleep is needed to verify the partial-entry cleanup.
+        with patch.object(platform_resources.time, "monotonic", side_effect=[0, 0, 0, 0, 31, 31]):
+            value = copy_build_cache(source, destination)
+        self.assertFalse(value["complete"])
+        self.assertEqual(value["stop_reason"], "time_limit")
+        self.assertEqual(value["copied_bytes"], 0)
+        self.assertFalse((destination / "entry").exists())
+        self.assertEqual((source / "entry").stat().st_size, 2 * 1024 * 1024)
+
+    def test_cache_copy_is_bounded_and_does_not_change_source_bytes_or_modes(self):
+        source, destination = self.root / "cache", self.root / "copy"
+        (source / "ab").mkdir(parents=True)
+        original = source / "ab/entry"
+        original.write_bytes(b"known Go cache entry")
+        original.chmod(0o640)
+        before = (original.read_bytes(), original.stat().st_mode)
+        result = copy_build_cache(source, destination)
+        self.assertTrue(result["complete"])
+        self.assertEqual(result["copied_bytes"], len(before[0]))
+        self.assertEqual((destination / "ab/entry").read_bytes(), before[0])
+        self.assertEqual((original.read_bytes(), original.stat().st_mode), before)
+        for folder, kwargs, reason in (("limited-bytes", {"byte_limit": 1}, "byte_limit"),
+                                       ("limited-time", {"time_limit": 0}, "time_limit")):
+            result = copy_build_cache(source, self.root / folder, **kwargs)
+            self.assertFalse(result["complete"])
+            self.assertEqual(result["stop_reason"], reason)
+            self.assertEqual(result["copied_bytes"], 0)
+            self.assertEqual((original.read_bytes(), original.stat().st_mode), before)
+        (source / "unsafe").symlink_to(original)
+        with self.assertRaises(ValueError):
+            copy_build_cache(source, self.root / "symlink-copy")
+
+    def test_systemd_failure_summary_drops_exception_body_and_unknown_values(self):
+        raw = {"state": "failed", "cleanup": "passed", "phase": "build-bundle-a", "error_kind": "TimeoutExpired",
+               "cleanup_error": "SECRET shiki_private https://login.invalid/private", "Output": "PRIVATE KEY BODY",
+               "source_locations": [{"file": "test-systemd.py", "line": 225, "message": "SECRET"},
+                                    {"file": "unknown_secret.py", "line": 3}],
+               "active_upgrade_boundaries": ["agent-upgrade", "SECRET"],
+               "build_cache_copy": {"copied_bytes": 100, "seconds": 0.5, "complete": True, "stop_reason": "complete", "path": "/private/secret"}}
+        public = public_systemd_result(raw)
+        self.assertEqual(public["state"], "failed")
+        self.assertEqual(public["source_locations"], [{"file": "test-systemd.py", "line": 225}])
+        self.assertNotIn("runtime", public)  # No claim before the helper confirms its PID1 gate.
+        for secret in ("SECRET", "shiki_private", "https://", "PRIVATE KEY", "/private", "unknown_secret"):
+            self.assertNotIn(secret, json.dumps(public))
+
+    def test_systemd_nonzero_exit_still_exports_safe_failed_result(self):
+        with patch.dict(os.environ, {"RUNNER_TEMP": str(self.root), "GOMAXPROCS": "2"}):
+            acceptance = ci.Acceptance(self.root / "shiki-platform-test")
+            acceptance.measured = {"package_parallelism": 2, "gomaxprocs": 2}
+            def run(label, _args, **_kwargs):
+                if label == "systemd-lifecycle":
+                    directory = acceptance.private / "systemd"
+                    directory.mkdir()
+                    (directory / "result.json").write_text(json.dumps({"state": "failed", "cleanup": "passed", "phase": "build-bundle-a", "cleanup_error": "SECRET"}))
+                    raise RuntimeError("scenario failed")
+            with patch.object(acceptance, "run", side_effect=run), patch.object(ci, "native_identity", return_value={"os": "linux"}), \
+                    patch.object(ci, "command", return_value="/fixture"):
+                with self.assertRaisesRegex(RuntimeError, "scenario failed"):
+                    acceptance.maintenance()
+            summary = json.loads((acceptance.public / "systemd.json").read_text())
+            self.assertEqual(summary["state"], "failed")
+            self.assertEqual(summary["phase"], "build-bundle-a")
+            self.assertNotIn("SECRET", json.dumps(summary))
 
     def test_verbose_opt_in_runner_requires_named_real_pass(self):
         self.log.write_text("--- PASS: TestNative (0.01s)\nPASS\n")

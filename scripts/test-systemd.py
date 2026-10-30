@@ -190,8 +190,8 @@ def inside(layout=None):
     evidence.mkdir(mode=0o700)
     env = {**os.environ, "PATH": f"{go_bin}:/usr/bin:/bin", "HOME": str(home), "TMPDIR": str(build / "tmp"),
            "GOCACHE": layout["cache"], "GOPATH": layout["gopath"], "GOMODCACHE": layout["modules"],
-           "GOTOOLCHAIN": "local", "GOPROXY": "off", "GOSUMDB": "off", "GOMAXPROCS": "2",
-           "GOFLAGS": "-p=1 -mod=readonly -buildvcs=false"}
+           "GOTOOLCHAIN": "local", "GOPROXY": "off", "GOSUMDB": "off", "GOMAXPROCS": str(layout.get("gomaxprocs", 2)),
+           "GOFLAGS": f"-p={layout.get('parallelism', 1)} -mod=readonly -buildvcs=false"}
     os.chown(layout["cache"], uid, gid)
     for directory in (work, build):
         directory.mkdir()

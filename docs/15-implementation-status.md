@@ -1,6 +1,6 @@
 # 实施与验收记录
 
-**当前批次（2026-10-31，36/42）：** 原生四目标和实际WSL2的完整产品/终端/安装维护矩阵已实现，9项工具检查、actionlint与语法检查通过，首轮CI41090262712运行中，真实完整平台结果尚待，详见[26](26-native-platform-acceptance.md)。认证状态的两处确定缺口已修复：显式Self.Expired不受BackendState限制；非空AuthURL使旧应用授权退役，而单纯控制失联保持已有有效peer通道。修前红、针对race34.610秒、node整包40项无skip/race322.712秒及vet通过，独立授权生命周期审查通过。官方m6候选两端已构建核验；Mac首轮登记后触发LOGIN_EXPIRED，第二轮两端实际online，当前不计完整认证通过，见[23](23-tsnet-external-acceptance.md#独立认证环境重建与状态修复2026-10-31)。保护两项c4长测及预约key到期任务；专用新认证状态有后续依赖，暂保留而非提前清理。
+**当前批次（2026-10-31，36/42）：** 原生四目标和实际WSL2的完整产品/终端/安装维护矩阵已实现，17项工具检查、actionlint与语法检查通过，首轮CI41090262712与42eb93e轮已有真实失败，完整平台尚未通过，详见[26](26-native-platform-acceptance.md)。认证状态的两处确定缺口已修复：显式Self.Expired不受BackendState限制；非空AuthURL使旧应用授权退役，而单纯控制失联保持已有有效peer通道。修前红、针对race34.610秒、node整包40项无skip/race322.712秒及vet通过，独立授权生命周期审查通过。官方m6候选两端已构建核验；Mac首轮登记后触发LOGIN_EXPIRED，第二轮两端实际online，当前不计完整认证通过，见[23](23-tsnet-external-acceptance.md#独立认证环境重建与状态修复2026-10-31)。VPS进程更新后另一处连接停在REMOTE_TRUST_OR_PROTOCOL_REJECTED，当前保留失败并调查。保护两项c4长测及预约key到期任务；专用新认证状态有后续依赖，暂保留而非提前清理。
 
 **本批收尾：36/42，剩余6项（2026-10-30）。** 四目标原生Homebrew已验；Mac/VPS最终10阶段矩阵157.31秒、两类8MiB真实强杀恢复、条件竞争、后台冲突/TUI和撤A保B通过，操作系统账户/目录/转发清理已独立核验。结合公开包版本/既有ACK专项与[CI41047781448](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41047781448)十任务全成功，新增关闭Phase0恢复/版本/多设备、Phase4多设备体验、Phase5审查/扫描/关键分支三条；连同本批Homebrew共减少四条门槛。原42条文字/顺序保留，详情及失败记录见[25](25-multihost-acceptance.md)。完整认证、主机生命周期/外部身份升级、其余原生平台、资源性能长稳及最终支持声明六项继续待验。以下较早批次计数是当时记录，不代表当前进度。
 
@@ -988,3 +988,5 @@ Linux最早自然到期为北京时间10/31 05:02:34.914992，初始最早终点
 m6专用agent正常重启后，同一节点/IP已online，既有server却永久REMOTE_INCOMPATIBLE。确定根因为启动早期本地node未授权的FailedPrecondition被当成远端协议拒绝，重连episode永久停止。现以不可序列化的本地typed cause识别该准入等待，显示auth_required/NODE_AUTH_REQUIRED，每秒仅重查本地准入，不耗远端网络重连预算；恢复后仍重新验证Token、daemon ID和能力。远端返回相同文案不得伪装本地等待，不自动BeginLogin、不扩TLS fallback、不重放旧流。
 
 真实node.NewRPCPool的修前测试失败；修后agent五项race2.638秒、node三项race38.906秒与两包vet通过。冻结719文件的新候选m7双平台构建通过，agent整包race37.341秒、68顶层/187含子项、零skip/fail通过，94文件hash未变；干净m7 Mac正常重启后无需显式connect即同IP online、同daemon和凭据代次ready/tailscale-direct；此前node322.712秒不追认为本次新cause的覆盖。官方m6显式重新connect可恢复同daemon，已通过shell终端回显、双端插件ready、明确初始方向后的文件上传及loopback TCP真实回显。当前只是诊断基线，尚未完成节点key过期。
+
+2026-10-31官方节点key单次短期到期已实际发生：官方回读期限后SDK进入NeedsLogin但Self.Expired=false，旧终端和TCP已关闭。已修复组合证据分类（仅NeedsLogin、已知self公钥及非零期限且超过期限1秒，或显式Self.Expired），11项定向race与vet通过；CLI对有效expired/uninitialized尝试继续原有界等待，最终整包race42顶层/183含子项、28.607秒、零skip通过。干净m8重启后SDK不再提供旧期限，实际为needs_login；CLI9仅替换前端，Chrome重新认证与完整业务恢复仍待，不把本地覆盖追认外部通过，详见[23](23-tsnet-external-acceptance.md)。CI优化已实现四原生并发、按资源选择p1/p2、隔离用户复用私有缓存副本及安全失败行号；17项工具检查和独立七类审查通过，实际收益待新CI，旧失败保留，见[26](26-native-platform-acceptance.md)。原42条及36/42保持。

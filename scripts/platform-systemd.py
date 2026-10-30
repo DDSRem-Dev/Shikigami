@@ -23,7 +23,8 @@ import tempfile
 import time
 
 sys.dont_write_bytecode = True
-from platform_support import hosted_guard, write_json
+from platform_support import hosted_guard, write_json, safe_script_failure
+from platform_resources import copy_build_cache, go_environment
 
 UNIT = Path("/etc/systemd/system/shiki-daemon.service")
 ENABLED = Path("/etc/systemd/system/multi-user.target.wants/shiki-daemon.service")
@@ -80,11 +81,12 @@ def validate_layout(layout):
         raise ValueError("native home must belong to the dedicated account")
     if not re.fullmatch(r"127\.0\.0\.1:[0-9]{1,5}", layout["address"]) or not 1024 <= int(layout["address"].split(":")[1]) <= 65535:
         raise ValueError("acceptance listener must use an unprivileged loopback port")
+    go_environment({"package_parallelism": layout["parallelism"], "gomaxprocs": layout["gomaxprocs"]})
     if layout["build_timeout"] != 900:
         raise ValueError("unexpected native build time budget")
 
 
-def preflight(source, go, modules, evidence):
+def preflight(source, go, modules, cache, evidence):
     hosted_guard()
     if os.geteuid() != 0 or Path("/proc/1/comm").read_text().strip() != "systemd":
         raise RuntimeError("native maintenance requires root under real systemd PID 1")
@@ -94,9 +96,9 @@ def preflight(source, go, modules, evidence):
         detected = run(["systemd-detect-virt", "--container"], check=False).stdout.strip()
         if detected != "wsl" or "microsoft" not in os.uname().release.lower():
             raise RuntimeError("container execution is not native platform acceptance")
-    for path in (source, go, modules):
+    for path in (source, go, modules, cache):
         if not path.is_absolute() or path.is_symlink() or not path.exists() or path.resolve() != path:
-            raise ValueError("source, Go and module cache require existing canonical paths")
+            raise ValueError("source, Go and caches require existing canonical paths")
     if go.name != "go" or not (source / "scripts/test-systemd.py").is_file():
         raise ValueError("unexpected Go executable or source tree")
     if UNIT.exists() or UNIT.is_symlink() or ENABLED.exists() or ENABLED.is_symlink() or UNIT.with_name(UNIT.name + ".d").exists():
@@ -216,16 +218,18 @@ def cleanup(root, username, account, *, created, group, tmux_owned=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("source", "go", "modules", "evidence"):
+    for name in ("source", "go", "modules", "cache", "evidence"):
         parser.add_argument("--" + name, type=Path, required=True)
+    parser.add_argument("--parallelism", type=int, choices=(1, 2), required=True)
+    parser.add_argument("--gomaxprocs", type=int, choices=(1, 2), required=True)
     args = parser.parse_args()
-    preflight(args.source, args.go, args.modules, args.evidence)
+    preflight(args.source, args.go, args.modules, args.cache, args.evidence)
     owner = args.evidence.parent.stat()
     root = Path(tempfile.mkdtemp(prefix="shiki-platform-systemd-", dir="/tmp"))
     os.chmod(root, 0o755)  # private descendants; service/build paths need traversal
     username = "shikici" + str(os.getpid())
     account, group, created, tmux_owned = None, None, False, False
-    result = {"state": "failed", "cleanup": "pending", "runtime": "native systemd PID 1",
+    result = {"state": "failed", "cleanup": "pending", "phase": "setup-account", "runtime": "native systemd PID 1",
               "transport": "loopback TLS fixture; external connectivity not asserted",
               "claude": "explicit shell fixture; no real Claude login"}
     def interrupted(_signum, _frame):
@@ -265,18 +269,23 @@ def main():
             os.chown(root / name, account.pw_uid, account.pw_gid)
         # The runner's HOME can be 0700. Never chmod it or share its writable
         # cache with another UID: copy only modules into this run's owned tree.
+        result["phase"] = "copy-modules"
         shutil.copytree(args.modules, root / "modules")
         run(["chown", "-R", f"{account.pw_uid}:{account.pw_gid}", root / "modules"], timeout=120)
+        result["phase"] = "copy-build-cache"
+        result["build_cache_copy"] = copy_build_cache(args.cache, root / "cache")
+        run(["chown", "-R", f"{account.pw_uid}:{account.pw_gid}", root / "cache"], timeout=120)
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             address = "127.0.0.1:" + str(listener.getsockname()[1])
         layout = dict(root=str(root), user=username, uid=account.pw_uid, gid=account.pw_gid,
                       evidence=str(args.evidence / "scenario"), source=str(args.source),
                       go_bin=str(args.go.parent), modules=str(root / "modules"), address=address, build_timeout=900,
-                      transport=result["transport"])
+                      transport=result["transport"], parallelism=args.parallelism, gomaxprocs=args.gomaxprocs)
         layout.update({name: str(root / child) for name, child in {
             "home": "home", "work": "work", "build": "build", "cache": "cache", "gopath": "gopath",
             "config": "config", "state": "state", "prefix": "install", "commands": "commands"}.items()})
+        result["phase"] = "check-layout"
         validate_layout(layout)
         # Confirm the ordinary build account can reach immutable shared modules/Go.
         run(["runuser", "-u", username, "--", "test", "-r", root / "modules/cache/download"])
@@ -284,6 +293,24 @@ def main():
         spec = importlib.util.spec_from_file_location("systemd_scenario", args.source / "scripts/test-systemd.py")
         scenario = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(scenario)
+        original_phase = scenario.phase
+        phases = {
+            "Building isolated release systemd-test-a": "build-bundle-a",
+            "Building isolated release systemd-test-b": "build-bundle-b",
+            "Activating rendered daemon unit through real installer": "activate-daemon",
+            "Checking actual stop/restart, SIGKILL recovery and worker reap": "service-recovery",
+            "Checking three-crash guard, explicit recovery and return to service ownership": "crash-guard",
+            "Starting ordinary-user active transfer probe": "active-transfer-probe",
+            "Checking user-service upgrade, rollback, uninstall and preserved credentials": "agent-maintenance",
+            "Checking service-managed upgrade, rollback and preserved identity": "daemon-maintenance",
+            "Checking uninstall preserves data, credentials and tmux": "uninstall-retention",
+            "Service lifecycle PASS; active daemon/agent/tmux/workers remain for systemd shutdown": "scenario-complete",
+        }
+        def phase(message):
+            result["phase"] = phases.get(message, "service-scenario")
+            original_phase(message)
+        scenario.phase = phase
+        result["phase"] = "service-scenario"
         scenario.inside(layout)
         raw = json.loads((args.evidence / "scenario/evidence.json").read_text())
         # Fixed fields only. Never export readiness/config/token or raw journals.
@@ -292,6 +319,9 @@ def main():
                       uid=account.pw_uid, systemd=raw["systemd"], go=raw["go"], platform=raw["platform"],
                       uninstall_retains_data=raw["uninstall_preserves_config_state_project_token_tmux"],
                       crash_loop_guard=raw["user_agent_crash_loop"]["reason"])
+    except BaseException as error:
+        result.update(safe_script_failure(error))
+        raise
     finally:
         for sig in (signal.SIGINT, signal.SIGTERM):
             signal.signal(sig, signal.SIG_IGN)

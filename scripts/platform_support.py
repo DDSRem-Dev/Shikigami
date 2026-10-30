@@ -1,9 +1,12 @@
 """Small, secret-free validation helpers for disposable native CI acceptance."""
 import hashlib
+from functools import lru_cache
 import json
+import math
 import os
 from pathlib import Path
 import platform
+import re
 import subprocess
 
 
@@ -77,25 +80,102 @@ def source_identity(repository):
     return {"commit": command(["git", "rev-parse", "HEAD"], cwd=repository), "sha256": digests}
 
 
+@lru_cache(maxsize=1)
+def known_test_files():
+    """Only tracked source basenames and real line bounds may leave private logs."""
+    root = Path(__file__).resolve().parent.parent
+    paths = subprocess.check_output(["git", "ls-files", "-z", "--", "*_test.go"], cwd=root).split(b"\0")
+    result = {}
+    for raw in paths:
+        if not raw:
+            continue
+        path = root / os.fsdecode(raw)
+        if path.is_symlink() or not path.is_file() or not re.fullmatch(r"[A-Za-z0-9_]+_test\.go", path.name):
+            continue
+        result[path.name] = max(result.get(path.name, 0), len(path.read_bytes().splitlines()))
+    return result
+
+
+# Values and prefixes are fixed in source. Never publish any suffix of a match.
+FAILURE_KINDS = (
+    ("readiness timeout:", "condition_timeout"),
+    ("terminal timed out waiting for ", "terminal_marker"),
+    ("terminal output exceeded test bound", "terminal_bound"),
+    ("waiting for ", "process_or_terminal_wait"),
+    ("concurrent startup:", "concurrent_start"),
+    ("startup JSON:", "startup_json"),
+    ("agent not ready:", "agent_not_ready"),
+    ("build command entrypoints:", "build"),
+    ("build plugin:", "build"),
+    ("expected protocol JSON:", "protocol_json"),
+    ("context deadline exceeded", "context_deadline"),
+    ("context canceled", "context_cancelled"),
+)
+LOCATION = re.compile(r"^[ \t]*([A-Za-z0-9_]+_test\.go):([1-9][0-9]{0,5}):[ \t]*(.*)$")
+
+
+def safe_test_locations(output, known):
+    if not isinstance(output, str):
+        return []
+    result = []
+    for line in output.splitlines():
+        match = LOCATION.fullmatch(line)
+        if match is None:
+            continue
+        name, number, message = match.groups()
+        line_number = int(number)
+        if name not in known or line_number > known[name]:
+            continue
+        # A failed test can also emit t.Log/cleanup output at a source location.
+        # The neutral default makes no claim that every location is an assertion.
+        kind = next((value for prefix, value in FAILURE_KINDS if message.startswith(prefix)), "test_output")
+        location = {"file": name, "line": line_number, "kind": kind}
+        if location not in result:
+            result.append(location)
+        if len(result) == 20:
+            break
+    return result
+
+
 def test_events(path, required=(), *, validate=True):
-    """Retain only named Go outcomes; Output is deliberately never published."""
-    tests, packages = {}, {}
+    """Keep outcomes and bounded source locations; never publish raw Output."""
+    tests, packages, locations, elapsed = {}, {}, {}, {}
+    known = known_test_files()
     with path.open() as stream:
         for line in stream:
             try:
                 event = json.loads(line)
             except ValueError:
                 continue  # Tool build errors are still reflected by the exit code.
+            if not isinstance(event, dict):
+                continue
             action = event.get("Action")
+            package = event.get("Package", "")
+            key = (package, event.get("Test", ""))
+            if action == "output" and key[1]:
+                observed = locations.setdefault(key, [])
+                for location in safe_test_locations(event.get("Output"), known):
+                    if location not in observed and len(observed) < 20:
+                        observed.append(location)
             if action not in ("pass", "fail", "skip"):
                 continue
-            package = event.get("Package", "")
             if "Test" in event:
-                tests[(package, event["Test"])] = action
+                tests[key] = action
+                value = event.get("Elapsed")
+                if type(value) in (int, float) and math.isfinite(value) and 0 <= value <= 86400:
+                    elapsed[key] = round(value, 3)
             else:
                 packages[package] = action
-    result = {"packages": packages, "tests": [{"package": package, "test": name, "outcome": outcome}
-                                             for (package, name), outcome in sorted(tests.items())]}
+    results = []
+    for (package, name), outcome in sorted(tests.items()):
+        item = {"package": package, "test": name, "outcome": outcome}
+        key = (package, name)
+        if key in elapsed:
+            item["elapsed_seconds"] = elapsed[key]
+        if outcome == "fail":
+            item["source_locations"] = locations.get(key, [])
+        results.append(item)
+    result = {"packages": packages, "tests": results}
     if validate:
         missing = [name for name in required if not any(test == name and outcome == "pass" for (_, test), outcome in tests.items())]
         if missing:
@@ -119,3 +199,54 @@ def require_verbose_pass(path, names):
             raise RuntimeError("required opt-in test did not pass: " + name)
         if any(line.startswith(prefix + name + " (") for prefix in ("--- SKIP: ", "--- FAIL: ") for line in lines):
             raise RuntimeError("required opt-in test failed or skipped: " + name)
+
+
+SYSTEMD_PHASES = frozenset(("setup-account", "copy-modules", "copy-build-cache", "check-layout", "service-scenario",
+                           "build-bundle-a", "build-bundle-b", "activate-daemon", "service-recovery", "crash-guard",
+                           "active-transfer-probe", "agent-maintenance", "daemon-maintenance", "uninstall-retention",
+                           "scenario-complete", "helper-result-missing", "unknown"))
+SCRIPT_NAMES = frozenset(("platform-systemd.py", "platform_support.py", "platform_resources.py", "test-systemd.py", "systemd_activity.py"))
+ERROR_KINDS = frozenset(("AssertionError", "TimeoutExpired", "RuntimeError", "ValueError", "FileNotFoundError",
+                         "PermissionError", "KeyboardInterrupt", "OSError", "CalledProcessError", "other"))
+
+
+def safe_script_failure(error):
+    import traceback
+    root = Path(__file__).resolve().parent
+    locations = []
+    for frame in traceback.extract_tb(error.__traceback__):
+        file = Path(frame.filename)
+        if file.parent.resolve() == root and file.name in SCRIPT_NAMES:
+            locations.append({"file": file.name, "line": frame.lineno})
+    kind = type(error).__name__
+    return {"error_kind": kind if kind in ERROR_KINDS else "other", "source_locations": locations[-20:]}
+
+
+def public_systemd_result(value):
+    """Fixed fields only, including on failure; cleanup_error stays private."""
+    result = {"state": "passed" if value.get("state") == "passed" else "failed",
+              "cleanup": value.get("cleanup") if value.get("cleanup") in ("passed", "failed") else "unknown",
+              "phase": value.get("phase") if value.get("phase") in SYSTEMD_PHASES else "unknown",
+              "scope": "native systemd acceptance", "transport": "loopback TLS fixture; no external acceptance"}
+    if value.get("runtime") == "native systemd PID 1":
+        result["runtime"] = "native systemd PID 1"
+    if "error_kind" in value:
+        result["error_kind"] = value["error_kind"] if value["error_kind"] in ERROR_KINDS else "other"
+    result["source_locations"] = [
+        {"file": item["file"], "line": item["line"]} for item in value.get("source_locations", [])
+        if isinstance(item, dict) and item.get("file") in SCRIPT_NAMES and type(item.get("line")) is int and 1 <= item["line"] <= 10000
+    ][:20]
+    if type(value.get("operations")) is int and 0 <= value["operations"] <= 100:
+        result["operations"] = value["operations"]
+    allowed = {"agent-upgrade", "agent-rollback", "daemon-upgrade", "daemon-rollback"}
+    result["active_upgrade_boundaries"] = sorted(name for name in value.get("active_upgrade_boundaries", []) if name in allowed)
+    if value.get("uninstall_retains_data") is True:
+        result["uninstall_retains_data"] = True
+    cache = value.get("build_cache_copy")
+    if isinstance(cache, dict):
+        metrics = {key: cache[key] for key in ("copied_bytes", "copied_files", "seconds", "byte_limit", "time_limit_seconds")
+                   if type(cache.get(key)) in (int, float) and math.isfinite(cache[key]) and 0 <= cache[key] <= 2**53}
+        metrics["complete"] = cache.get("complete") is True
+        metrics["stop_reason"] = cache.get("stop_reason") if cache.get("stop_reason") in ("complete", "time_limit", "byte_limit") else "unknown"
+        result["build_cache_copy"] = metrics
+    return result

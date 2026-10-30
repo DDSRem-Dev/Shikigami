@@ -69,7 +69,7 @@ jobs:
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: 4
       matrix:
         include:
           - runner: ubuntu-24.04
@@ -118,10 +118,6 @@ jobs:
       - name: Scan dependencies across all packages
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 -scan=package ./...
       - name: Scan independent terminal analyzer dependencies
-        env:
-          GOMAXPROCS: '2'
-          GOFLAGS: '-p=1 -mod=readonly -buildvcs=false'
-          GOTOOLCHAIN: local
         run: go -C test/diagnostics/terminalstate/analyzer run golang.org/x/vuln/cmd/govulncheck@v1.1.4 -scan=package ./...
       - name: Complete native product, integration and end-to-end suite
         run: python3 -B scripts/platform-ci.py product --evidence "$RUNNER_TEMP/shiki-platform"
