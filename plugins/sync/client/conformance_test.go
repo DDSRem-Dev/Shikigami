@@ -150,9 +150,8 @@ func TestAuthoritativeRemovalStopsTaskAndArchivesWithoutDeletingFiles(t *testing
 		_, err := w.GetSyncState(context.Background(), scopeFor(m))
 		return connect.CodeOf(err) == connect.CodeNotFound
 	})
-	if probe.Watches.Load() != 0 {
-		t.Fatal("removed task retained remote watch")
-	}
+	// Local removal cancels the stream; the remote handler observes cancellation asynchronously.
+	waitFor(t, func() bool { return probe.Watches.Load() == 0 })
 	snapshot, err := w.store.View()
 	if err != nil {
 		t.Fatal(err)

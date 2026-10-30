@@ -1,8 +1,8 @@
 # 实施与验收记录
 
-**当前进度（2026-10-31）：36/42，剩余6个复合门槛。** 官方节点key到期后的同身份重新认证及终端、双向同步、TCP恢复已验，完整认证矩阵仍有待验项。896b的Linux双架构与WSL2完整产品/systemd矩阵通过；e2f的Mac双架构已完整通过，但896b的Intel新出现登录准备超时，Mac ARM仍运行。另确认并修复ARM64 race网络栈依赖的原子操作错误，已通过本地验证，完整平台待新CI，详见[23](23-tsnet-external-acceptance.md)与[26](26-native-platform-acceptance.md)。
+**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** c1e5ece同源的macOS Intel/ARM、Linux双架构及真实WSL2完整产品/服务矩阵全部通过，平台兼容条目已勾选。官方节点key到期后的同身份重新认证与业务恢复已有证据；完整认证、主机生命周期/外部身份升级、长稳资源及最终支持声明仍待。三核受限并行与异步watch收尾测试已本地验证，后续CI验证这一执行策略，详见[23](23-tsnet-external-acceptance.md)与[26](26-native-platform-acceptance.md)。
 
-**当前CI：** 896b986的[41115363744](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41115363744)四目标编译及Linux双架构/WSL完整矩阵通过，两个原生Linux旧失败用例与受保护/var/lib安装均实际通过；Mac Intel唯一失败位于peer用例登录准备，原CI瞬时原因未复现，Mac ARM仍待。缓存由partial实际提升warm，两Linuxbuild/lint为17.717/13.500秒。性能分析另复现gVisor旧ARM64 race CAS错误，现固定最早包含上游修复的可构建Go快照；同配置节点用例32.48→1.81秒，44顶层node race51.200秒、CAS红绿、全包build/vet、模块校验及漏洞扫描通过。Go1.26.10/Tailscale1.98.10和原超时保持，新依赖完整平台待下一轮；不把ARM修复当成Intel超时已定位。三份进度同步、36/42保持，长测与预约key/认证身份继续冻结。
+**当前CI：** [41119194452](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41119194452)绑定c1e5ece，已completed/success、13/13任务通过。主代理独立核对五平台全部必需阶段、同源、清理及无未完成项；Intel旧失败用例1.88秒通过，旧瞬时原因未直接复现。实际Mac ARM节点测试合计375.41→43.57秒，Epoch40.70→1.06秒、Address36.71→1.24秒，原45秒预算保持；首次冷缓存与后续warm轮分开记录，四原生warm均已保存。最后一批只调整三核CI资源和异步watch测试观察，生产Go/依赖保持c1e；45顶层node专项、同步10次、权限专项、27工具及七类审查通过，完整新CI待提交。三份进度已同步37/42，原42条文字/顺序保持；预约key、冻结长测和认证身份未改。
 
 以下是按各批源码范围保留的历史记录，当前状态以本摘要和原条目的最新部分进展为准。
 
@@ -80,16 +80,16 @@
 更新：2026-10-29。目标保持为路线图中的完整 Phase 0–5；本文件记录当前证据，不缩减首版范围。逐项完成状态及复合条目剩余门槛已同步 [08 路线图](./08-roadmap.md)，架构复核详见 [16 一致性检查](./16-architecture-conformance.md)；后续每批必须同步三份文件。实现从仅含设计文档的干净工作树开始，实际 module 确认为 `github.com/DDSRem-Dev/Shikigami`。
 
 <!-- active-parallel-work:start -->
-**当前工作与验收边界（2026-10-30）：**
+**当前工作与验收边界（2026-10-31）：**
 
 | 工作 | 当前状态 | 后续条件 |
 | --- | --- | --- |
 | 原697源Linux默认12小时 | 终态通过；740组5920资源样本/12代际及到公开alpha源码差异已完成分析 | 生产heap/object归因、当前候选长期覆盖仍待，不从RSS推断无泄漏 |
 | 发行密钥轮换/撤信 | 临时测试密钥12步演练及异常清理通过，真实签名身份保持 | 显式旧钥仍可认证旧钥签名；在线撤销未提供，生产身份操作需独立记录 |
 | GPL与Homebrew alpha.2 | GPL-3.0-only正文与自动生成/验签/CAS更新实现完成；本地/容器分发验收见22 | Release40912019720、自动Formula8500359、22公开资产认证及Linux远端tap完整链通过；四目标原生渠道CI41037444120已通过；本机工具限制与完整产品平台门槛独立保留 |
-| 完整交付门槛 | 当前36/42、6项待完成 | 外部账号、完整产品平台、主机生命周期与长期资源依路线图推进 |
+| 完整交付门槛 | 当前37/42、5项待完成；同源五平台已验 | 外部账号、主机生命周期、长期资源与最终支持依路线图推进 |
 
-36/42是原始复合条目的验收数，不是代码完成率；历史批次中的旧计数保持当时范围。独立工作并行推进，不重复已通过检查。
+37/42是原始复合条目的验收数，不是代码完成率；历史批次中的旧计数保持当时范围。独立工作并行推进，不重复已通过检查。
 <!-- active-parallel-work:end -->
 
 **本地收尾与目录清理（2026-10-29）：** 当前候选541份Go/proto/全部module执行输入逐hash仍与`.5`一致；已知syncack整包及真实systemd组合遗漏已经补验，不重复运行。完成[当前候选验收矩阵与后续条件](./19-local-acceptance-closure.md)，明确原697源终态先核四角色轮换、30分钟尾部、资源和清理，再依据具体结果补当前候选证据；未发现新的确定资源保留根，不把短测或旧源通过当无泄漏。发布准备中旧容量与撤销Token待办已按后续结果更正。普通/内嵌构建共用严格元数据入口，显式`SHIKI_COMMIT`/`SHIKI_BUILT_AT`注入、缺省unknown；8项Python回归通过，涵盖两入口六程序参数一致、真实buildinfo探针链接/输出及非法输入在构建前拒绝，不宣称六产品重打包。独立架构测试通过；七类复核未发现本批新增生产偏差。按用户最终授权共删除96份源码目录Markdown（scripts中89份及其他子目录7份），未归档；源码目录仅保留根README/AGENTS，既有dist交付快照保持。docs原有验收摘要保留，旧报告链接改指已有摘要锚点；465条相对链接及锚点无断链。三个诊断runner移除已删报告复制依赖，保留源码/工具冻结与hash门禁；实际准备代码9个隔离场景及3份完整脚本语法通过，不运行服务/负载。原42条要求/顺序及29勾选不变；资源、原生平台、外部账号和正式发布门槛仍未完成，原697长测独立继续。18:17检查点2657轮/7小时35分31秒，未轮换，无OOM/重启；本批不改旧`.5`归档、签名状态或unknown元数据。
@@ -1033,3 +1033,24 @@ CPU诊断冻结896b源、独立overlay及状态：本机两核race同一连接�
 同GOMAX2/p1/race、原45秒期限和相同业务用例，新候选1.81秒、包3.436秒；这轮overlay未命中规范/private路径，因此仅比较真实原用例总时长，不报告其分阶段收益。冻结896源+独立最终modfile的node整包44顶层/132含子项，51.200秒零fail/skip；主树新增CAS三分支race1.533秒通过。主树全包build39.847秒、vet22.515秒、go mod verify3.356秒、包级govulncheck4.029秒全部通过。工具完整记录位于`/var/folders/1n/q373cln10fqb0gl9z1ds5d8m0000gn/T/shiki-ci-dependency-tnkdjc05/`，性能/候选证据位于`/var/folders/1n/q373cln10fqb0gl9z1ds5d8m0000gn/T/shiki-node-perf-896b986-79uy476y/`。独立tidy会把可选负载诊断UI专用mod依赖引入根图，已排除，原sum历史行保留合法。
 
 Intel登录失败未复现：冻结896旧依赖本机4次通过、随后110秒整组截止，不记为case失败复现；候选依赖的两次phase诊断2.01/2.08秒，四次登录URL等待160–162ms、online349–398ms，原15/45秒不变。无法从公开安全行判断Intel失败属于哪一阶段，不改生产/增加重试；`/tmp/shiki-peer-login-896b-20261031/review.json`保留范围与清理。新依赖完整CI和Intel复验待下一轮；七类审查通过，42条/36勾选保持，既有长测不跨源码追认。
+
+
+## 三核CI受限并行与远端收尾观察（2026-10-31）
+
+c1e5ece包含ARM64 race CAS修复后，重新验证三核调度：实际3CPU且至少6GiB选择两个Go包并行、各GOMAXPROCS=1；两核/低内存仍p1，四核仍p2/GOMAX2，探测失败仍保守回退。原588三核p2/GOMAX1的node超时发生在已确认的旧CAS缺陷下，不能把当时临时p1/GOMAX2规避永久当作修复后的CPU要求。实际新三核时长与完整维护仍须新CI确认；本机18逻辑CPU/64GiB上的Go参数验证不是内核三核/7GiB模拟。
+
+独立验证保留全部过程：第一轮私有HOME/TMPDIR过长，触发既有100字节配置/Unix socket限制及tmux长度拒绝，228.138秒精确终止、源码未改；第二轮短路径源c1e完整432.598秒，47包PASS、2包FAIL、16无测试，631顶层PASS/2FAIL/3skip。setgid权限分支受临时目录继承gid0而进程gid20影响，macOS静默清除非所属组的setgid位；仅将新的独占状态根规范为当前用户/组后，该权限/owner专项1.347秒全过。没有放宽产品权限检查或路径限制。3skip分别为root system-prefix、opt-in资源回收和独立终端analyzer，仍不当PASS，完整平台有各自专用门槛。
+
+另一失败为sync移除测试：本地GetSyncState已NotFound后立即断言远端HTTP处理器Watches=0，把异步取消传播当成跨进程原子操作。现在使用同包已有5秒waitFor观察远端退出；本地删除、归档、冲突证据及双端文件不删断言保持，未修改生产取消或重试。定向race重复10次包2.998秒零fail/skip通过；最终测试源仅增加该观察修正。末轮显式GOFLAGS=-p=2、GOMAX1、短HOME/TMPDIR及UID501/GID20，node整包45顶层/136含子项50.995秒（wall55.356）零fail/skip，冻结源保持。早期轮主go test是p2，测试内go build默认p1；两种构建调度如实区分，不把旧轮耗时当最终策略精确基准。
+
+27项平台工具1.214秒、两Python AST/diff及七类审查通过。旧全套两失败没有改记一次同源全绿；对应修正专项已过，最终五平台CI负责完整闭环。独占5个运行状态根按UID/开放引用清理，冻结源码与安全/私有证据保留在`/var/folders/1n/q373cln10fqb0gl9z1ds5d8m0000gn/T/shiki-ci-p2-gomax1-c1e5ece-aojc7z8w/`。此前性能诊断17对象/745文件67,297,128字节与peer-login冻结源6,193,001字节已精确删除，历史路径仅作已执行记录，相关summary/hash/profile/清理收据仍保留；未触碰认证身份、原长跑与预约到期任务。
+
+
+<a id="evidence-native-platform-c1e-20261031"></a>
+## 同源五平台兼容验收闭环（2026-10-31）
+
+CI41119194452绑定c1e5eceb76e0e380949d0619c4babe731900311c，最终completed/success、13/13任务成功；四构建、四Homebrew及五完整平台均通过。主代理逐一核对source.commit、source_unchanged=true、incomplete_stages为空、所有必需阶段passed、原生systemd cleanup passed及Mac三项LaunchAgent具名PASS；结果、逐阶段时间和精确平台身份见26，独立收据为`/var/folders/1n/q373cln10fqb0gl9z1ds5d8m0000gn/T/shiki-ci-41119194452.y7ilv6bt/root-platform-verification.json`。
+
+仅关闭原始“macOS Intel/ARM、Linux、WSL客户端与Linux daemon兼容性验证”一项，36→37；Phase0–5计数10/11、7/7、6/6、6/6、4/6、4/6。00–14契约及原42条文字/顺序不变。artifact明确external_accounts与physical_restart_login为not tested，这些属于认证/安装/升级/最终支持的独立门槛；不宣称全部OS发行版、真实Claude、物理重启、自然切网或长稳通过。旧896 Intel单次登录失败保留，本轮同用例1.88秒正向通过不等于定位其旧瞬时根因。
+
+实际ARM节点用例合计375.41→43.57秒（44→45顶层，新增CAS回归），Epoch40.70→1.06秒、Address36.71→1.24秒、PeerRemoval108.21→11.55秒；原45秒预算保持。全产品顶层用例elapsed合计1098.77→777.64秒（635→636），不同于包含编译/调度的stage时长，不将冷缓存成本归为测试回退。新依赖四原生warm均真实保存；最后一批三核资源选择与sync测试观察不修改生产Go/依赖，后续CI为执行策略提供单独验证。

@@ -155,7 +155,8 @@ class PlatformAcceptanceTests(unittest.TestCase):
             self.assertNotIn("secret", json.dumps(item))
 
     def test_concurrency_uses_measured_memory_and_cpu_with_conservative_fallback(self):
-        for cpu, memory, packages, procs in ((4, 16, 2, 2), (3, 7, 1, 2), (2, 8, 1, 2), (4, 4, 1, 2), (1, 8, 1, 1)):
+        for cpu, memory, packages, procs in ((4, 16, 2, 2), (3, 7, 2, 1), (3, 6, 2, 1),
+                                              (3, 5, 1, 2), (2, 8, 1, 2), (4, 4, 1, 2), (1, 8, 1, 1)):
             value = parallelism(cpu, memory * GIB)
             self.assertEqual((value["package_parallelism"], value["gomaxprocs"]), (packages, procs))
             self.assertEqual(go_environment(value)["GOFLAGS"], f"-p={packages} -mod=readonly -buildvcs=false")

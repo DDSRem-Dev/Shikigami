@@ -2,15 +2,15 @@
 
 ## 当前状态（2026-10-31）
 
-当前[CI41115363744](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41115363744)绑定896b986：原生Linux双架构与WSL2完整通过；Mac Intel在登录准备有一个新失败，Mac ARM仍运行。此前e2f的Mac双架构与WSL完整通过，两Linux产品失败已在896b正向复验。另已确认并本地修复旧gVisor的ARM64 race CAS缺陷，固定Go1.26兼容的最早上游Go快照，完整平台待新CI。Phase5复合项保持未勾选，路线图36/42；物理环境、主机重启登录与外部账号仍独立验收。
+c1e5ece的[CI41119194452](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41119194452)已completed/success、13/13任务成功，同源五平台完整通过。主代理独立核验全部必需阶段、来源一致性及清理；平台兼容原项已关闭，路线图37/42。三核受限并行与异步watch收尾候选只改CI/测试，实际新调度时长仍由后续CI验证。旧失败及未验外部账号、真实Claude、物理重启登录/自然切网与长稳边界保持。
 
 | 环境 | 本批要求执行的范围 | 已取得结果（截至本批） |
 |---|---|---|
-| ubuntu-24.04 / amd64 | 完整race、真实双端插件、E2E、内嵌插件、终端语义、原生systemd及用户服务、活动升级/回滚 | 首轮E2E失败、第二轮agent用例失败保留；588及c108全产品/E2E/embedded/terminal通过；c108首次安装/e2f退出事件旧失败保留；896b全产品/E2E/terminal及systemd维护、数据保持和清理完整通过 |
-| ubuntu-24.04-arm / arm64 | 同上，实际arm64内核/Go宿主 | 896b产品及systemd维护完整通过，真实HTTP拒绝用例通过；c108首次安装/e2f认证health失败历史保留，588的useradd60秒超时原因仍未知 |
-| macos-15 / arm64 | 完整产品/终端、实际LaunchAgent、上传下载活动升级 | c108与e2f完整产品及LaunchAgent全部通过，实际tmux3.8及p1/GOMAX2；896b当前运行，旧失败保留 |
-| macos-15-intel / amd64 | 同上，拒绝Rosetta替代 | bf2e645/588/c108/e2f完整产品及LaunchAgent通过；896b唯一peer-lifetime登录准备超时，后续维护未执行，原CI原因未复现 |
-| windows-2025的WSL2 / amd64 | 独立Ubuntu、真实Microsoft内核、Linux文件系统、systemd PID1及产品/维护矩阵 | c108/e2f/896b完整产品及systemd维护通过，13生命周期操作、双角色四个活动升级/回滚边界及清理通过；历史失败保留 |
+| ubuntu-24.04 / amd64 | 完整race、真实双端插件、E2E、内嵌插件、终端语义、原生systemd及用户服务、活动升级/回滚 | 首轮E2E失败、第二轮agent用例失败保留；588及c108全产品/E2E/embedded/terminal通过；c108首次安装/e2f退出事件旧失败保留；896b与c1e全产品/E2E/terminal及systemd维护、数据保持和清理完整通过 |
+| ubuntu-24.04-arm / arm64 | 同上，实际arm64内核/Go宿主 | 896b与c1e产品及systemd维护完整通过，真实HTTP拒绝用例通过；c108首次安装/e2f认证health失败历史保留，588的useradd60秒超时原因仍未知 |
+| macos-15 / arm64 | 完整产品/终端、实际LaunchAgent、上传下载活动升级 | c108与e2f完整产品及LaunchAgent全部通过，实际tmux3.8及p1/GOMAX2；896b亦完整通过；c1e新依赖完整通过，旧失败保留 |
+| macos-15-intel / amd64 | 同上，拒绝Rosetta替代 | bf2e645/588/c108/e2f完整产品及LaunchAgent通过；896b唯一peer-lifetime登录准备超时历史保留；c1e同用例1.88秒及完整产品/服务均通过，旧瞬时原因未复现 |
+| windows-2025的WSL2 / amd64 | 独立Ubuntu、真实Microsoft内核、Linux文件系统、systemd PID1及产品/维护矩阵 | c108/e2f/896b/c1e完整产品及systemd维护通过，13生命周期操作、双角色四个活动升级/回滚边界及清理通过；历史失败保留 |
 
 首轮四Homebrew及四unsigned构建成功不代表五个完整平台成功。旧摘要未保留原始Output，缺确切断言行的失败仍待诊断，不能凭耗时猜测超时。完全重复源的41093194046/41093197337取消请求已接受、随后不可查询，不记为验证通过或已核实的cancelled结论。
 
@@ -141,3 +141,31 @@ WSL896b全阶段PASS，来源未变且无未完成项：build205.913秒、产品
 耗时独立定位发现旧gVisor ARM64 race CAS错误：预期old值被new覆盖、存储寄存器未初始化；固定模块zip与已编译指令一致，最小直接调用和新增CAS回归均确定性失败。上游PR14585于09-09合并，选择第一份含修复的可构建Go快照v0.0.0-20260909230408-9b1144b679cb，保持Go1.26.10/Tailscale1.98.10。默认非race走标准sync/atomic，不据此宣称默认产品同样忙循环；新网络栈版本还包含其他变更，完整平台需重验。
 
 本机同GOMAX2/p1/race的原连接用例32.48→1.81秒；后者未插入phase overlay，仅报告原用例总时长。候选node整包44顶层/132含子项51.200秒零fail/skip，主树新增CAS回归1.533秒通过（旧依赖0.612秒红）；全包build39.847/vet22.515/模块校验3.356/漏洞扫描4.029秒通过。Intel旧失败本机未复现，候选两次phase诊断通过仅属局部证据；预算与重试不变，下一轮须实际通过Intel与其余完整矩阵。进度仍36/42，长稳与外部环境不跨新依赖追认。
+
+
+### 三核并行候选与本地验证边界
+
+旧896 Mac ARM在缓存命中后build55.665秒，但产品仍1229.703秒、E2E262.776秒，Launch158.834/上传131.404/下载134.758秒全部通过；两个45秒用例Epoch40.70秒、Address36.71秒体现旧race缺陷下的慢点。c1e实际Linux ARM已通过且Epoch16.57→0.96秒、Address11.07→5.94秒、PeerRemoval30.97→20.54秒；新依赖冷构建和实际用例时长分别记录，不以整包含编译的时间直接比较。
+
+CAS修复后候选恢复3CPU且至少6GiB的p2/GOMAX1；两核/低内存保持p1，四核保持p2/GOMAX2。固定c1e的本地完整轮记录47包通过/2包失败/16无测试，432.598秒；两失败分别为隔离目录gid导致macOS清除setgid，以及同步测试把本地移除与远端HTTP退出当成瞬时一致。前者在仅自身短目录的当前UID/GID环境修正后专项通过；后者改用已有5秒waitFor，10次race通过，保留归档与文件完整断言。最终环境明确GOFLAGS=-p2/GOMAX1，node45顶层/136项50.995秒零fail/skip及27工具1.214秒通过。此前长临时路径无效轮/早期测试内go build p1、三项实际skip均在15保留，不能称一次最终全套零失败。
+
+本机18逻辑CPU/64GiB不等于真实三核7GiB，候选的实际性能及完整产品/LaunchAgent维护必须由新CI确认。资源检测、cgroup限制、原阶段/用例/截止和源码/清理门槛均保持；原生macOS与Windows/WSL外部平台结论以同源artifact为准。
+
+
+### c1e5ece 同源五平台最终结果
+
+全13任务最终成功，API更新时间2026-10-30T20:42:28Z。每个平台source_unchanged=true、incomplete_stages为空，完整必需阶段及清理均通过，主代理独立收据见15。以下均为实际stage秒数；Mac维护列依次为生命周期/活动上传/活动下载，Linux为systemd整场景。
+
+| 平台 | build/lint | 全包race | E2E | 服务维护 |
+|---|---:|---:|---:|---|
+| Linux amd64 | 211.438 | 571.905 | 187.961 | 241.264 |
+| Linux arm64 | 149.566 | 508.999 | 175.595 | 217.019 |
+| WSL2 amd64 | 220.521 | 598.848 | 185.257 | 235.234 |
+| macOS Intel | 398.965 | 762.550 | 258.319 | 156.399 / 130.166 / 130.190 |
+| macOS ARM | 327.356 | 1158.014 | 274.208 | 168.641 / 144.614 / 140.533 |
+
+全部Go1.26.10；原生Linux实测kernel7.0.0-1017-azure、x86_64/aarch64、4CPU约16GiB/p2/GOMAX2；WSL实测6.18.54.1-microsoft-standard-WSL2、x86_64、4CPU约8GiB/p2/GOMAX2；Mac实测Darwin24.6.0，Intel x86_64/4CPU14GiB/p2/GOMAX2，ARM arm64/3CPU7GiB/p1/GOMAX2。runner分别ubuntu-24.04/ubuntu-24.04-arm、windows-2025独占WSL2、macos-15-intel/macos-15；不外推其他OS发行版或物理重启。
+
+Mac ARM关键实际用例896→c1e：Epoch40.70→1.06秒、Address36.71→1.24秒、PeerRemoval108.21→11.55秒、HTTP拒绝2.64→0.24秒，原45秒期限未改。node顶层elapsed合计375.41→43.57秒（44→45），全产品顶层1098.77→777.64秒（635→636）；合计不是含编译stage的替代。Intel旧失败outbound/removed本轮1.88秒通过、同组9.06秒，完整平台通过；旧失败原因未直接复现，不据ARM专属CAS修复推断Intel根因。
+
+新依赖首次四原生modules/build均实际冷miss，成功后四平台warm真实保存，Intel20:30:53Z、ARM20:40:58Z完成；后续同依赖可恢复。关闭平台单项至37/42不降低其余五个复合门槛；最后一批资源策略与watch观察修正保留同一生产Go/依赖，下一CI另记录真实三核并行结果。

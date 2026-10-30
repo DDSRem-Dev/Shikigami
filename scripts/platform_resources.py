@@ -13,9 +13,9 @@ GIB = 1024 ** 3
 def parallelism(cpu_count, memory_bytes, *, detected=True):
     if not detected or cpu_count < 1 or memory_bytes < 1:
         return {"package_parallelism": 1, "gomaxprocs": 1, "selection": "probe_unavailable"}
-    # Embedded-node acceptance needs two runnable Go threads within its existing
-    # deadline. Do not split a 2/3-CPU runner into two GOMAXPROCS=1 processes.
-    packages = 2 if cpu_count >= 4 and memory_bytes >= 6 * GIB else 1
+    # Three CPUs allow two GOMAXPROCS=1 packages with runner headroom.
+    # Keep two-CPU and memory-constrained hosts at one package.
+    packages = 2 if cpu_count >= 3 and memory_bytes >= 6 * GIB else 1
     return {"package_parallelism": packages, "gomaxprocs": max(1, min(2, cpu_count // packages)),
             "selection": "measured_resources"}
 
