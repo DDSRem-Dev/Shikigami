@@ -85,8 +85,9 @@ func (h *helper) frontendOp(ctx context.Context, r request) (any, error) {
 }
 
 var rpcMethods = map[string]map[string]bool{
-	"agent":  methodSet("GetStatus GetPreferences SetPreferences ListServers ListMappings PutMapping RemoveMapping GetSyncState ListConflicts ResolveConflict CreateForward StopForward ListForwards ListPlugins ManagePlugin"),
-	"remote": methodSet("GetSystemInfo ListProjects CreateProject GetProject DeleteProject CreateSession GetSession GetSessionScreen TakeControl DeleteSession StatFile DeleteFile"),
+	"agent":       methodSet("GetStatus GetPreferences SetPreferences ListServers ListMappings PutMapping RemoveMapping GetSyncState ListConflicts ResolveConflict CreateForward StopForward ListForwards ListPlugins ManagePlugin"),
+	"file-direct": methodSet("StatFile"),
+	"remote":      methodSet("GetSystemInfo ListProjects CreateProject GetProject DeleteProject CreateSession GetSession GetSessionScreen TakeControl DeleteSession"),
 }
 
 func methodSet(s string) map[string]bool {
@@ -98,26 +99,38 @@ func methodSet(s string) map[string]bool {
 }
 func (h *helper) rpc(ctx context.Context, r request) (any, error) {
 	a, err := args[struct {
-		Frontend string          `json:"frontend"`
-		Service  string          `json:"service"`
-		ServerID string          `json:"server_id"`
-		Method   string          `json:"method"`
-		Message  json.RawMessage `json:"message"`
+		ExpectedDaemonID string          `json:"expected_daemon_id"`
+		Frontend         string          `json:"frontend"`
+		Service          string          `json:"service"`
+		ServerID         string          `json:"server_id"`
+		Method           string          `json:"method"`
+		Message          json.RawMessage `json:"message"`
 	}](r)
 	if err != nil || !rpcMethods[a.Service][a.Method] {
 		return nil, invalid()
 	}
-	f, err := h.front(ctx, a.Frontend)
-	if err != nil {
-		return nil, err
-	}
-	var client any = f.Agent()
-	if a.Service == "remote" {
-		if a.ServerID == "" {
-			return nil, invalid()
+	var client any
+	if a.Service == "file-direct" {
+		remote, close, err := h.directFiles(ctx, a.Frontend, a.ServerID, a.ExpectedDaemonID)
+		if err != nil {
+			return nil, err
 		}
-		client = f.Remote(a.ServerID)
+		defer close()
+		client = remote
+	} else {
+		f, err := h.front(ctx, a.Frontend)
+		if err != nil {
+			return nil, err
+		}
+		client = f.Agent()
+		if a.Service == "remote" {
+			if a.ServerID == "" {
+				return nil, invalid()
+			}
+			client = f.Remote(a.ServerID)
+		}
 	}
+
 	method := reflect.ValueOf(client).MethodByName(a.Method)
 	if !method.IsValid() {
 		return nil, invalid()

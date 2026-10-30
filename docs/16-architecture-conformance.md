@@ -1,5 +1,7 @@
 # 架构与文档一致性检查
 
+**取消错误修复与条件提交工具补齐（2026-10-30）：** CI41039024257捕获请求已取消时发送层偶发返回EOF；共享连接层现保留Canceled/DeadlineExceeded，正常显式关闭仍EOF。确定性12分支先红后绿，connection整包race2.482秒、启动IPC专项race1.532秒及vet通过。双主机前五轮失败保留；条件文件原语改用独立认证TLS/H2且核对同一daemon，普通同步仍走agent和插件，前端raw文件代理限制不变。新两平台产品构建固定为local.multihost.3，完整矩阵和最终CI仍待，不重启旧c4长测。33/42保持，详见[25](25-multihost-acceptance.md)。
+
 **双主机验收发现并修复终端接管提示（2026-10-30，整轮仍待）：** Mac＋VPS独立普通用户/状态/TLS测试已启动。真实CLI暴露接管后仍显示observer，现等待有序CONTROL_CHANGED确认后报告controller，保留输入代次与提前输入丢弃；超时回调join及缓存释放同步补齐。客户端、CLI、UI和架构race/vet已通过；修复后真实观察/接管提示与正常detach均通过。重绘节流和Dashboard过早按键两处夹具问题单独修正，失败不改记成功；其余并发/冲突/崩溃矩阵仍待，保持33/42。详见[25](25-multihost-acceptance.md)。
 
 **Homebrew 四目标原生渠道验收完成（2026-10-30）：** CI [41037444120](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41037444120) 的 macOS/Linux × arm64/amd64 四个真实渠道任务全部成功，公开alpha.2的 tap/install/test/reinstall/test/uninstall/untap、完整bundle及清理前后环境一致已独立核验。关闭Phase 5签名/分发原条目，当前33/42、9项待完成；完整产品平台、主机重启、Claude与长期资源条件仍独立保留。用户Mac未运行brew或更改Xcode/CLT；具体范围见[22](22-homebrew-distribution.md#四目标原生-ci验收)。
@@ -1258,3 +1260,7 @@ v4普通/race分阶段profile均完整通过31.73/40.40秒：16次256KiB双向�
 全架构七类对照01/05/06/07/12/13/14：生产改动仅客户端终端状态提示与已有超时生命周期，插件业务仍在plugins，公共SDK与host依赖方向不变，跨宿主诊断位于test；RPC/准入/能力/授权无新增或回退，接管必须流内确认；持久状态/schema/revision/去重不变，诊断只读指定sync恢复元数据；进程/取消保留有限超时、timer join与旧输入作废，精确所有权清理和操作系统回收分开；文件/终端/TCP的协议、限额和默认loopback不变；CLI正确显示实际已确认模式，TUI夹具按真实界面就绪后驱动，安装与产物契约不变；证据区分三轮失败、局部复验、完整矩阵待验和旧c4长稳，不能因编译或工具测试关闭多设备/恢复复合条目。
 
 独立review确认BeforeRaw不直接授权输入，pending仍按序进入原CONTROL_CHANGED循环；修正超时回调竞争、缓存旧槽保留并补实际PTY正负行为测试。最终internal/client整包race17.257秒，CLI24.145秒、UI2.859秒、architecture1.375秒race与对应vet通过。helper源码层的范围/所有权约束通过单独测试；成功hard-crash与失败cleanup的历史worker覆盖不同，最终root另查所有观察身份和OS资源。08/15/16同步保持33/42，原42项文字/顺序不变。
+
+## 取消分类与双主机文件原语补验复核（2026-10-30）
+
+对照01/02/04/06/07/09/10/13/14七类复核：生产目录和host/SDK/plugin依赖不变；仅共享连接发送层在已关闭且caller context已终止时重建其取消分类，无新RPC/能力/授权；不改持久状态、revision或去重；正常Close仍EOF，取消/超时分类保留，不重放调用；文件、终端、TCP默认与限额不变；CLI/TUI/安装产物无新契约。诊断工具位于test，file-direct只允许协商、StatFile和WriteFile，来自已认证agent唯一server记录，核对daemon身份、版本、能力、TLS名称/CA及本轮私有Token，普通同步仍使用真实插件。工具race1.680秒覆盖认证/身份/版本/能力/HTTP1拒绝、私有文件与路由隔离；不以工具测试代替双主机业务成功。CI取消竞态有确定性修前12失败和修后同测证据，旧CI失败保留。当前33/42，长测源码范围和未完成外部条件独立保留。

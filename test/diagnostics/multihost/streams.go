@@ -158,29 +158,34 @@ func (h *helper) terminalOp(ctx context.Context, r request) (any, error) {
 }
 func (h *helper) fileStream(ctx context.Context, r request) (any, error) {
 	a, err := args[struct {
-		Frontend     string `json:"frontend"`
-		ServerID     string `json:"server_id"`
-		ProjectID    string `json:"project_id"`
-		Path         string `json:"path"`
-		BaseRevision string `json:"base_revision"`
-		Content      string `json:"content"`
-		MappingID    string `json:"mapping_id"`
-		ConflictID   string `json:"conflict_id"`
-		Generation   string `json:"generation"`
-		Side         string `json:"side"`
+		Service          string `json:"service"`
+		ExpectedDaemonID string `json:"expected_daemon_id"`
+		Frontend         string `json:"frontend"`
+		ServerID         string `json:"server_id"`
+		ProjectID        string `json:"project_id"`
+		Path             string `json:"path"`
+		BaseRevision     string `json:"base_revision"`
+		Content          string `json:"content"`
+		MappingID        string `json:"mapping_id"`
+		ConflictID       string `json:"conflict_id"`
+		Generation       string `json:"generation"`
+		Side             string `json:"side"`
 	}](r)
 	if err != nil {
 		return nil, invalid()
 	}
-	f, err := h.front(ctx, a.Frontend)
-	if err != nil {
-		return nil, err
-	}
 	if r.Op == "upload" {
-		if len(a.Content) > 64<<10 {
+		if a.Service != "file-direct" || len(a.Content) > 64<<10 {
 			return nil, invalid()
 		}
-		stream, err := f.Remote(a.ServerID).WriteFile(ctx)
+		remote, close, err := h.directFiles(ctx, a.Frontend, a.ServerID, a.ExpectedDaemonID)
+		if err != nil {
+			return nil, err
+		}
+		defer close()
+		call, cancel := context.WithCancel(ctx)
+		defer cancel()
+		stream, err := remote.WriteFile(call)
 		if err != nil {
 			return nil, err
 		}
@@ -200,6 +205,10 @@ func (h *helper) fileStream(ctx context.Context, r request) (any, error) {
 		}
 		b, err := (protojson.MarshalOptions{UseProtoNames: true, EmitUnpopulated: true}).Marshal(info)
 		return json.RawMessage(b), err
+	}
+	f, err := h.front(ctx, a.Frontend)
+	if err != nil {
+		return nil, err
 	}
 	sides := map[string]ppb.ReadConflictFileRequest_Side{"local": ppb.ReadConflictFileRequest_LOCAL, "remote": ppb.ReadConflictFileRequest_REMOTE}
 	side, ok := sides[a.Side]

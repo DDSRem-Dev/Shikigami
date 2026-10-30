@@ -8,7 +8,7 @@ A为原生macOS27.0.1 arm64、UID501；B为已有Debian VPS原生amd64上的新�
 
 初始六程序/双插件manifest固定于`c4c5a56fe6fe104f9cb94df5a6bb3b918412c1f5`构建，版本`v0.0.1-alpha.2-local.multihost.1`。双端测试使用其中CLI/agent/daemon及插件，短时installer不部署。源码690文件清单与两平台二进制hash独立记录；这是候选构建，不是已公开alpha.2。终端提示缺陷修复后，仅CLI替换为固定源码的`v0.0.1-alpha.2-local.multihost.2`，其余产品程序仍为上述c4产物；不得把新CLI结果追认为旧公开包或长期运行包含该修复。
 
-[test/diagnostics/multihost](../test/diagnostics/multihost/)为显式验收工具，业务均经过真实CLI/agent/daemon RPC。配置所有可写路径须在各自0700根目录；只读sync.snapshot仅提取指定mapping/path的baseline/operation及staging摘要，拒绝凭据路径。helper按UID/PID/启动身份/可执行文件核验自己启动的进程，不停止共享tmux服务器。controller清理与操作系统账户/目录/SSH清理分别核验；前者成功不代表后者完成，也不代替所有历史worker退出检查。
+[test/diagnostics/multihost](../test/diagnostics/multihost/)为显式验收工具，实际用户业务经过真实CLI/agent/daemon RPC；条件提交原语另用本轮独立Token/CA经真实HTTP2/TLS直接调用daemon文件RPC，先认证协商并校验daemon ID，不扩大前端代理白名单。配置所有可写路径须在各自0700根目录；只读sync.snapshot仅提取指定mapping/path的baseline/operation及staging摘要，拒绝凭据路径。helper按UID/PID/启动身份/可执行文件核验自己启动的进程，不停止共享tmux服务器。controller清理与操作系统账户/目录/SSH清理分别核验；前者成功不代表后者完成，也不代替所有历史worker退出检查。
 
 使用明确标记的shell fixture验证终端，匹配`MULTIHOST_REPLY:`防止把输入回显误当实际远端执行。本批不验证真实Claude、tsnet P2P/DERP、物理主机重启、Intel Mac或WSL完整平台，不把VPS称为裸金属设备。
 
@@ -20,6 +20,7 @@ A为原生macOS27.0.1 arm64、UID501；B为已有Debian VPS原生amd64上的新�
 | 2 | 27.37秒失败：真实CLI显式接管成功后仍显示read-only observer；正常清理 | 修复产品接管模式提示，见下文 |
 | 3 | 45.14秒失败：修复后的真实CLI观察/接管提示及Ctrl+Q均通过，Dashboard夹具过早发q，最终超时；正常清理 | 改为等待真实界面/目标面板/所需内容，再发送退出；不使用固定延迟猜测就绪 |
 | 4 | 35.61秒失败：双端Sessions与终端阶段通过；CAS负例误用不支持的ctrl-x先被参数校验拒绝 | 改为契约允许的ctrl-]，继续使用旧revision验证Aborted；不更改产品错误优先级 |
+| 5 | 39.06秒失败：终端、配置CAS及不同路径并发通过；夹具经前端代理调用raw StatFile被PermissionDenied拒绝 | 按13保留前端白名单；条件提交原语使用独立认证TLS文件RPC，普通同步继续走agent/真实插件 |
 
 每轮重新初始化专用状态并发行新的独立测试Token，保留失败结论；不在失败后重用已撤销凭据。原始临时证据位于本轮closeout目录，各轮events单独保存；最终清理后可用性以清理记录为准。
 
@@ -34,3 +35,9 @@ A为原生macOS27.0.1 arm64、UID501；B为已有Debian VPS原生amd64上的新�
 尚待整轮实际结果确认：独立身份/映射、同机配置CAS与重叠拒绝、同/异路径条件提交和同名新建、A离线/B写入、修改与删除、相同内容采纳、第三次修改失效旧generation、预览与KEEP_LOCAL/REMOTE/BOTH、冲突副本碰撞保护、无前台冲突持久化、真实Sessions/Sync/Ports展示、同时接管唯一胜者及只读拒绝、重连新attachment、独立loopback转发、仅A撤权而B继续工作。
 
 两类硬崩溃要求先观察远端真实部分临时文件与仍完整的公开目标、本地prepared记录/完整staging及旧baseline，再SIGKILL agent，确认旧host/worker退出、旧listener不可连接，B终端/TCP保持。新owner扫描恢复后核对完整内容、远端revision对应新baseline且无pending operation。缓冲可能使commit_state为possible，不强行称incomplete；不把该部分上传场景冒充提交后ACK丢失，后者沿用既有四场景syncack实测范围。
+
+## 共享连接取消分类修复
+
+CI41039024257的Ubuntu启动IPC取消用例实际失败：caller已经取消后关闭的发送流返回EOF。共享connection发送层增加caller context检查并重建取消错误，主动关闭且context有效仍返回EOF。确定性unary/server-stream × cancellation/deadline × Send/SendHeaders/CloseSend共12分支修前失败、修后通过，另2个正常关闭对照保持EOF。完整connection race2.482秒，原启动IPC专项race1.532秒，vet通过。
+
+后续完整双主机轮次改用`v0.0.1-alpha.2-local.multihost.3`整套两平台产品（含全部host和匹配插件manifest），冻结源为e50d03d加最终connection修复，commit元数据unknown；二进制和完整源码manifest另存hash。helper v4双平台构建及整包race1.680秒通过；四目标Homebrew公开包、已运行c4默认12h与本候选严格分源。

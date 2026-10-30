@@ -30,6 +30,24 @@ class OperationFailure(Failure):
         self.code = code
 
 
+RPC_METHODS = frozenset('GetStatus GetPreferences SetPreferences ListServers ListMappings PutMapping RemoveMapping '
+                        'GetSyncState ListConflicts ResolveConflict CreateForward StopForward ListForwards ListPlugins '
+                        'ManagePlugin GetSystemInfo ListProjects CreateProject GetProject DeleteProject CreateSession '
+                        'GetSession GetSessionScreen TakeControl DeleteSession StatFile DeleteFile'.split())
+RPC_SERVICES = frozenset(('agent', 'remote', 'file-direct'))
+
+
+def operation_context(op, args):
+    """Only fixed protocol names enter diagnostics, never request payloads."""
+    if op not in ('rpc', 'upload'):
+        return {}, op
+    method = args.get('method') if op == 'rpc' else 'WriteFile'
+    service = args.get('service')
+    safe = {'method': method if isinstance(method, str) and (method in RPC_METHODS or op == 'upload') else 'unrecognized',
+            'service': service if isinstance(service, str) and service in RPC_SERVICES else 'unrecognized'}
+    return safe, f"{op} {safe['service']}.{safe['method']}"
+
+
 def require(condition, description):
     if not condition:
         raise Failure(description)
@@ -101,6 +119,7 @@ class Device:
         self.reader = threading.Thread(target=self.read, name=f'helper-{name}', daemon=True)
         self.reader.start()
         self.server = None
+        self.daemon_id = None
         self.mapping = None
 
     def read(self):
@@ -123,6 +142,7 @@ class Device:
 
     def call(self, op, args=None, *, timeout=100, expect=None):
         identifier, channel = request_id(), queue.Queue(maxsize=2)
+        context, label = operation_context(op, args or {})
         with self.lock:
             self.pending[identifier] = channel
         try:
@@ -132,15 +152,15 @@ class Device:
                 self.child.stdin.flush()
             response = channel.get(timeout=timeout)
             code = response.get('error_code', '')
-            self.evidence.record('operation', {'device': self.name, 'op': op, 'ok': response.get('ok'), 'code': code})
+            self.evidence.record('operation', {'device': self.name, 'op': op, **context, 'ok': response.get('ok'), 'code': code})
             if expect is not None:
-                require(not response.get('ok') and code in expect, f'{self.name} {op}: expected {expect}, got {code}')
+                require(not response.get('ok') and code in expect, f'{self.name} {label}: expected {expect}, got {code}')
                 return response
             if not response.get('ok'):
-                raise OperationFailure(self.name, op, code)
+                raise OperationFailure(self.name, label, code)
             return response.get('result')
         except queue.Empty:
-            raise Failure(f'{self.name} {op} timed out; never acceptance') from None
+            raise Failure(f'{self.name} {label} timed out; never acceptance') from None
         finally:
             with self.lock:
                 self.pending.pop(identifier, None)
@@ -148,6 +168,11 @@ class Device:
     def rpc(self, method, message=None, *, remote=False, frontend='default', expect=None):
         return self.call('rpc', {'service': 'remote' if remote else 'agent', 'frontend': frontend,
                                 'server_id': self.server, 'method': method, 'message': message or {}}, expect=expect)
+
+    def direct_file_stat(self, project_id, path):
+        return self.call('rpc', {'service': 'file-direct', 'server_id': self.server, 'method': 'StatFile',
+                                'expected_daemon_id': self.daemon_id,
+                                'message': {'project_id': project_id, 'path': path}})
 
     def cli(self, *args):
         result = self.call('cli', {'args': list(args)})
@@ -298,6 +323,8 @@ class Matrix:
             require(len(servers) == 1 and servers[0]['credential_present'], 'isolated agent must contain one test server')
             d.server = servers[0]['config']['id']
             require(servers[0]['remote_protocol']['build_version'] == self.env['expected_version'], 'wrong daemon binary')
+            d.daemon_id = servers[0]['remote_protocol'].get('daemon_id')
+            require(d.daemon_id, 'authenticated daemon identity required for direct file primitive verification')
         self.project = self.a.rpc('CreateProject', {'name': 'multihost-' + self.env['run_id'],
                                     'path': self.env['daemon']['project_root'], 'request_id': request_id()}, remote=True)
         self.session = self.a.rpc('CreateSession', {'name': 'multihost-terminal', 'project_id': self.project['id'],
@@ -402,13 +429,14 @@ class Matrix:
             base = ''
             if initial is not None:
                 self.b.call('file.write', {'path': self.env['daemon']['project_root'] + '/' + name, 'content': initial})
-                base = self.b.rpc('StatFile', {'project_id': self.project['id'], 'path': name}, remote=True)['revision']
+                base = self.b.direct_file_stat(self.project['id'], name)['revision']
             else:
                 for device, value in zip(self.devices, values):
                     device.write(name, value)
             def upload(d, value):
                 try:
-                    result = d.call('upload', {'server_id': d.server, 'frontend': 'default', 'project_id': self.project['id'],
+                    result = d.call('upload', {'service': 'file-direct', 'server_id': d.server,
+                                    'expected_daemon_id': d.daemon_id, 'project_id': self.project['id'],
                                     'path': name, 'base_revision': base, 'content': value})
                     return {'status': 'success', 'result': result, 'hash': digest(value)}
                 except Failure as error:
@@ -428,7 +456,7 @@ class Matrix:
                         conflict = self.conflict(device, name)
                         self.resolve(device, conflict, 'KEEP_REMOTE')
             self.settled(name, values[0] if digest(values[0]) == winner['hash'] else values[1])
-            self.record('conditional-write', {'path': name, 'results': results})
+            self.record('conditional-write', {'path': name, 'results': results, 'submission_route': 'authenticated file-direct'})
 
     def offline_conflicts(self):
         for name in ('offline.txt', 'deleted.txt', 'equal.txt', 'remote-only.txt'):
@@ -649,7 +677,7 @@ class Matrix:
         if conflict:
             self.resolve(self.a, conflict, 'KEEP_LOCAL')
         self.settled(filename, payload(pattern, size), timeout=60)
-        remote = self.b.rpc('StatFile', {'project_id': self.project['id'], 'path': filename}, remote=True)
+        remote = self.b.direct_file_stat(self.project['id'], filename)
         def committed_baseline():
             snapshot = self.a.call('sync.snapshot', snapshot_args)
             baseline = snapshot.get('baseline') or {}
@@ -762,8 +790,8 @@ class Matrix:
 
     def run(self):
         self.setup()
-        for name in ('terminals', 'config_cas', 'concurrent_paths', 'conditional_writes', 'offline_conflicts', 'keep_both_and_ui',
-                     'forwards', 'crashes', 'copy_collision', 'revoke_a'):
+        for name in ('terminals', 'config_cas', 'concurrent_paths', 'forwards', 'crashes', 'conditional_writes',
+                     'offline_conflicts', 'keep_both_and_ui', 'copy_collision', 'revoke_a'):
             self.record('phase-start', name)
             getattr(self, name)()
             self.record('phase-complete', name)
@@ -782,6 +810,7 @@ def main():
     evidence = Evidence(env['evidence_dir'])
     evidence.record('scope', {'run_id': env['run_id'], 'version': env['expected_version'], 'physical_clients': ['native Mac', 'remote Debian VPS'],
                     'transport': 'application TLS over a private SSH TCP bridge for A; loopback TLS for B',
+                    'file_primitives': 'conditional WriteFile and verification StatFile use authenticated direct TLS with the same daemon identity',
                     'tsnet_acceptance': False, 'real_claude_acceptance': False, 'products_rebuilt_by_controller': False})
     matrix, passed, failure = Matrix(env, evidence), False, None
     started = time.monotonic()

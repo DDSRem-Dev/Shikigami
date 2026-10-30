@@ -70,6 +70,9 @@ func (s *cancelStream) sendOperation(fn func() error) error {
 		s.sendMu.Lock()
 		defer s.sendMu.Unlock()
 		if s.closed {
+			if cause := s.ctx.Err(); cause != nil {
+				return RebuildError(cause)
+			}
 			return io.EOF
 		}
 	}
