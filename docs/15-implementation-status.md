@@ -942,3 +942,12 @@ Linux最早自然到期为北京时间10/31 05:02:34.914992，初始最早终点
 原终端/stats保持；原held TCP结束且不重放；持久mapping/forward/revision及最后daemon ID/credential revision按原断言核验。轮换窗口暂停短周期文件业务，不声称覆盖任意在途提交。资源门禁仍是FD基线+4、测试harness goroutine+6、8秒内连续三次满足；不是生产goroutine或连续RSS硬上限，不构成无泄漏证明。测试禁用Tailscale，使用独立TLS/24h应用Token与证书、shell终端夹具；不覆盖真实Claude、官方tsnet认证或没有调用的慢前端RPC。官方未使用key到期任务及现有节点完全独立。
 
 当前正式结果为**运行中**，尚无自然轮换通过结论；旧495/697源记录保持原范围。根目录外的launcher JSON、正式evidence及run.log保存实际PID/命令/原始观察，PID只作为此启动记录，不可单独用作未来清理授权。
+
+
+## 四目标原生 Homebrew CI 准备（2026-10-30）
+
+现有CI新增四目标原生runner：macos-15/arm64、macos-15-intel/amd64、ubuntu-24.04/amd64、ubuntu-24.04-arm/arm64。仅分支/PR验证已公开渠道，tag复用CI在发布前跳过此job，避免依赖尚未公开的资产。可信checkout取得Formula版本/摘要及最后修改提交，真实远端tap固定该提交；版本随自动发行公式更新，不永久绑定alpha.2。
+
+实际brew操作仅允许普通用户的GitHub托管runner，核对uname/RUNNER_ARCH并拒绝Rosetta。完整install/test/reinstall/test/uninstall、14成员及所有摘要校验与Formula自身Ed25519验证分别记录。只回收本轮登记的tap/keg/新装未用依赖，路径身份不符拒绝删除；前后tap、已装包、服务及受保护状态必须一致，finally与always清理保留历史失败。私有缓存/信任目录不上传。机器解析只读取stdout，stderr独立留证。
+
+11项隔离Python回归、actionlint和语法检查已通过；没有在用户Mac执行brew或改Xcode/CLT。四目标实际结果仍待，不以工具测试代替渠道验收。c4c5a56的CI41029690521及a8112d9的CI41031430621均已成功；原42条及32勾选保持，默认12h与预约key到期测试不受影响。

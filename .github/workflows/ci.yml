@@ -7,6 +7,63 @@ on:
 permissions:
   contents: read
 jobs:
+  homebrew:
+    # Release calls this CI on a tag before publishing its assets. Only branch
+    # pushes and PRs test the already-public channel, avoiding a release cycle.
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/'))
+    name: homebrew (${{ matrix.goos }}, ${{ matrix.goarch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - runner: macos-15
+            goos: darwin
+            goarch: arm64
+          - runner: macos-15-intel
+            goos: darwin
+            goarch: amd64
+          - runner: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+    env:
+      SHIKI_CHANNEL_OS: ${{ matrix.goos }}
+      SHIKI_CHANNEL_ARCH: ${{ matrix.goarch }}
+      HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        id: checkout
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Test the fixed public Homebrew formula on the native runner
+        timeout-minutes: 30
+        run: |
+          python3 -B scripts/test-homebrew-channel.py run \
+            --evidence "$RUNNER_TEMP/shiki-homebrew-channel" --checkout "$GITHUB_WORKSPACE" \
+            --os "$SHIKI_CHANNEL_OS" --arch "$SHIKI_CHANNEL_ARCH"
+      - name: Finish cleanup of only this run's owned Homebrew objects
+        if: always() && steps.checkout.outcome == 'success'
+        timeout-minutes: 10
+        run: |
+          python3 -B scripts/test-homebrew-channel.py cleanup \
+            --evidence "$RUNNER_TEMP/shiki-homebrew-channel" \
+            --os "$SHIKI_CHANNEL_OS" --arch "$SHIKI_CHANNEL_ARCH"
+      - uses: actions/upload-artifact@v7.0.2
+        if: always() && steps.checkout.outcome == 'success'
+        with:
+          name: homebrew-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            ${{ runner.temp }}/shiki-homebrew-channel/**
+            !${{ runner.temp }}/shiki-homebrew-channel/private/**
+          if-no-files-found: warn
+          retention-days: 14
   test:
     strategy:
       fail-fast: false

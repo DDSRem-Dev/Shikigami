@@ -95,3 +95,12 @@ alpha.1 Formula只是未提交的准备fixture；用户要求的首个Homebrew a
 证据目录`/tmp/shiki-homebrew-alpha2-public-20261030/`，包括`verified-summary.json`、实际`public-formula.rb`、tap提交、公式预期hash核验、完整六份命令/日志、归档成员与许可证核验、工具链/UID、Docker事件及最终清理回执；输入/日志后置hash已保存。核验脚本`/tmp/shiki-homebrew-alpha2-public.sh`不修改真实tap内容或远端仓库。临时目录不是永久证据存档；不可取得时须重新核验对应结论。
 
 七类收尾复核：生产源码目录、SDK/host/plugin依赖未改；RPC/授权/能力声明未改；持久状态/revision/幂等未改；服务生命周期只走原stage-only路径，无新激活；文件/终端/网络语义未放宽，归档与完整bundle仍认证后消费；CLI/安装布局保持独立受管prefix与Homebrew包分离；证据声明区分当前alpha.2公开tap、旧alpha.1准备fixture、本机直接Formula方法及被工具前置阻止的macOS完整brew安装。Linux arm64的Homebrew Tier2提示、原生amd64/WSL、外部账号/网络、物理部署与长期资源门槛不因本次分发成功而关闭。
+
+
+## 四目标原生 CI验收
+
+2026-10-30已在现有CI加入macOS/Linux × arm64/amd64四个原生GitHub托管runner（macos-15、macos-15-intel、ubuntu-24.04、ubuntu-24.04-arm），最多同时两个。仅分支push/PR执行，发布前的tag复用CI跳过；读取可信checkout的当前Formula版本及最后修改提交，真实公开tap固定到该提交，不硬编码首发版本。
+
+[scripts/test-homebrew-channel.py](../scripts/test-homebrew-channel.py)执行tap/install/test/reinstall/test/uninstall，核对本机架构、签名元数据、完整14成员和payload hash。安装/重装真实运行Formula验签。私有缓存/信任目录隔离；只回收登记且身份相符的测试对象，检查tap、包、服务和产品状态与基线一致。工具拒绝普通用户Mac及非GitHub托管环境，不升级本机Xcode或更改全局brew配置。
+
+准备阶段11项隔离回归、actionlint和语法检查通过；四目标实际运行待记录，不能提前视为分发或完整平台验收通过。
