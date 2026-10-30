@@ -206,4 +206,24 @@ Mac保留同一状态目录的新显式BeginLogin通过：官方两节点Connect
 
 ### m7启动恢复补验
 
-基于bf2e645加本地node授权等待修复的719文件冻结源构建两平台m7，node/agent新差异独立复核通过。8项定向race、agent整包race37.341秒（68顶层、187含子项，0skip/fail）及vet通过。专用Mac正常停止m6并使用m7启动，同IP online且无需显式connect即恢复ready/tailscale-direct；应用daemon ID和既有凭据代次保持。最早一次采样已ready，不声称本轮捕获中间auth_required，确定性本地回归覆盖该竞态。VPS同身份候选更新正在复核，不将手动进程替换计为安装器升级或主机重启。
+基于bf2e645加本地node授权等待修复的719文件冻结源构建两平台m7，node/agent新差异独立复核通过。8项定向race、agent整包race37.341秒（68顶层、187含子项，0skip/fail）及vet通过。专用Mac正常停止m6并使用m7启动，同IP online且无需显式connect即恢复ready/tailscale-direct；应用daemon ID和既有凭据代次保持。最早一次采样已ready，不声称本轮捕获中间auth_required，确定性本地回归覆盖该竞态。VPS同身份候选更新后NodeControl同IP online，但Mac连接停在REMOTE_TRUST_OR_PROTOCOL_REJECTED，30秒自动恢复观察失败；保留该独立失败并继续调查，不将Mac侧成功扩称双端重启恢复。手动进程替换不计为安装器升级或主机重启。
+
+提交格式更正：按用户要求，bf2e645重建为c83c95a，797092d重建为42eb93e；两组各自git tree完全相同，仅提交信息/父提交标识变化。历史CI仍绑定原OID，不能将其误写成新OID的实际运行。
+
+
+### 官方节点key短期到期观察（2026-10-31 01:08–01:10 +08）
+
+仅专用Mac使用source7诊断overlay调用SDK公开DebugSetExpireIn；调用链经该节点自己的官方RegisterRequest设置Expiry，不改tailnet全局策略或其他节点。overlay必须使用/private/tmp规范路径：首次/tmp逻辑路径映射未生效，部署前由二进制marker检查发现并纠正，未将该次构建当诊断。有效overlay的安全观测、持久单次claim、0600原子trigger及输入摘要独立保存；诊断未进入仓库或发行程序。
+
+实际仅请求一次，01:08:08成功；SDK随后回读KeyExpiry从2027-04-28改为2026-10-31 01:09:08。到期后SDK为NeedsLogin、Self.Online=true、Self.Expired=false、已过去KeyExpiry、无AuthURL；这证明既有仅Self.Expired适配不足，NodeControl仍报needs_login/NODE_AUTH_REQUIRED。旧终端先实际回显，之后Canceled结束；旧loopback TCP先回显，01:09:15读到EOF且无额外字节。认证旧流回收已观察，expired分类修复及干净产品重新认证/业务恢复仍待；不能将SDK返回nil独自作为到期证据，也不把此次节点key测试等同独立预约的未使用auth key自然到期。
+
+诊断期间另一次同版本VPS优雅重启后，新sessions RPC和自动同步可用，未重现先前m6→m7永久错误；该成功不解释或抹除此前失败。新的本地HTTP2/SDK边界测试仅提供错误分类证据，不将未定位的历史失败改记已修复。
+
+
+### 到期组合分类修复与干净候选范围
+
+到期分类现优先保留显式Self.Expired，否则仅同一SDK NeedsLogin观察、已知self公钥、非nil/非零KeyExpiry且严格超过该期限1秒才分类expired。额外1秒覆盖SDK秒级舍入；Running、控制失联、审批或单独本地时间均不能证明到期。11项定向race（node34.746秒、CLI9.695秒）及vet通过。CLI有效expired尝试沿原截止等待；现场m8另暴露SDK启动uninitialized使前端过早退出，同样只在有效attempt且reason为空时有界等待，最终CLI整包42顶层/183含子项race28.607秒、零skip/fail及vet通过，独立复核通过。
+
+诊断agent已正常停止，干净source8 agent启动并核验无诊断marker；重启后的SDK未保留可读SelfExpiry，实际NodeControl为needs_login，不能记为干净候选外部显示expired。01:28仅原子替换source9 CLI，SHA256 157f406627408e6bcded4c6fd1a593abf5e494ca45130b58421be5816e45191a，agent8/VPS7未重启。前一attempt在Chrome Google登录页持续空白后按原截止LOGIN_EXPIRED；新显式attempt使用CLI9已正常等到URL。浏览器认证与同daemon完整业务恢复待完成；不重触发已发生的官方到期，不删除保留节点或身份。
+
+调查中的SDK peer关闭、HTTP2 GOAWAY和共享pool probe取消测试各自通过，但不证明旧m6→m7 VPS错误已修复。认证证据位于隔离auth-m6-tybjjsuq/evidence，冻结source7/8/9与各构建摘要保留各自范围，预约自然auth key到期继续原CLI5/agent4。

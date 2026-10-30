@@ -15,7 +15,7 @@ import (
 
 func TestPrepareTailnetLoginKeepsAcceptedAttempt(t *testing.T) {
 	url := "https://login.example.invalid/test-only"
-	for _, scenario := range []string{"delayed_url", "existing_url", "online", "new_attempt", "noninteractive", "parent_deadline", "control_offline", "control_offline_noninteractive"} {
+	for _, scenario := range []string{"delayed_url", "existing_url", "online", "new_attempt", "noninteractive", "parent_deadline", "control_offline", "control_offline_noninteractive", "expired_active_attempt", "uninitialized_active_attempt"} {
 		t.Run(scenario, func(t *testing.T) {
 			pending := pendingLoginStatus()
 			last := pendingLoginStatus()
@@ -23,6 +23,11 @@ func TestPrepareTailnetLoginKeepsAcceptedAttempt(t *testing.T) {
 			probe := &nodeLoginProbe{statuses: []*apb.NodeStatus{pending, pending, last}}
 			wantBegins, wantReads := 0, 3
 			switch scenario {
+			case "uninitialized_active_attempt":
+				pending.State, pending.ReasonCode = "uninitialized", ""
+			case "expired_active_attempt":
+				pending.State, pending.ReasonCode = "expired", "NODE_KEY_EXPIRED"
+				last.State, last.ReasonCode = "expired", "NODE_KEY_EXPIRED"
 			case "control_offline", "control_offline_noninteractive":
 				probe.statuses, wantReads = []*apb.NodeStatus{{State: "offline", ReasonCode: "NODE_CONTROL_UNAVAILABLE"}}, 1
 			case "existing_url":

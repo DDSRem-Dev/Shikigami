@@ -25,18 +25,22 @@ import (
 // before the control plane has supplied an interactive URL or accepted a key.
 func TestNodeLoginWaitsForPendingControlPlane(t *testing.T) {
 	for _, tc := range []struct {
-		name                              string
-		authKey, controlOffline, approval bool
+		name                                       string
+		authKey, controlOffline, approval, expired bool
 	}{
-		{"interactive_url", false, false, false}, {"auth_key_online", true, false, false},
-		{"control_offline/interactive_url", false, true, false}, {"control_offline/auth_key_online", true, true, false},
-		{"approval_pending/interactive_url", false, false, true}, {"approval_pending/auth_key_online", true, false, true},
+		{"interactive_url", false, false, false, false}, {"auth_key_online", true, false, false, false},
+		{"control_offline/interactive_url", false, true, false, false}, {"control_offline/auth_key_online", true, true, false, false},
+		{"approval_pending/interactive_url", false, false, true, false}, {"approval_pending/auth_key_online", true, false, true, false},
+		{"expired_identity/interactive_url", false, false, false, true}, {"expired_identity/auth_key_online", true, false, false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			authKey := tc.authKey
 			pending := pendingLoginStatus()
 			if tc.approval {
 				pending.State, pending.ReasonCode = "denied", "NODE_APPROVAL_REQUIRED"
+			}
+			if tc.expired {
+				pending.State, pending.ReasonCode = "expired", "NODE_KEY_EXPIRED"
 			}
 			last := proto.Clone(pending).(*apb.NodeStatus)
 			want := "https://login.example.invalid/test-only"
@@ -80,6 +84,9 @@ func TestNodeLoginWaitsForPendingControlPlane(t *testing.T) {
 			if tc.approval && !authKey && (result.State != "denied" || result.ReasonCode != "NODE_APPROVAL_REQUIRED") {
 				t.Fatal("publishing an approval login URL changed the node's denied status")
 			}
+			if tc.expired && !authKey && (result.State != "expired" || result.ReasonCode != "NODE_KEY_EXPIRED") {
+				t.Fatal("publishing a reauthentication URL changed the expired node status")
+			}
 			if stderr != "" || strings.Contains(out, "unit-test-auth-key") {
 				t.Fatal("unexpected diagnostics or auth-key disclosure")
 			}
@@ -97,6 +104,10 @@ func TestNodeLoginStopsForTerminalStatus(t *testing.T) {
 		{State: "denied", ReasonCode: "NODE_APPROVAL_REQUIRED", LoginId: "expired-approval", LoginExpiresAt: 1},
 		{State: "denied", ReasonCode: "NODE_APPROVAL_REQUIRED", LoginId: "finished-approval"},
 		{State: "expired", ReasonCode: "NODE_KEY_EXPIRED"},
+		{State: "expired", ReasonCode: "NODE_KEY_EXPIRED", LoginExpiresAt: time.Now().Add(time.Minute).Unix()},
+		{State: "expired", ReasonCode: "NODE_KEY_EXPIRED", LoginId: "expired-attempt", LoginExpiresAt: 1},
+		{State: "expired", ReasonCode: "NODE_KEY_EXPIRED", LoginId: "finished-attempt"},
+		{State: "expired", ReasonCode: "OTHER_EXPIRY", LoginId: "unknown-expiry", LoginExpiresAt: time.Now().Add(time.Minute).Unix()},
 		{State: "needs_login", ReasonCode: "LOGIN_CANCELED"},
 		{State: "needs_login", ReasonCode: "LOGIN_EXPIRED"},
 		{State: "offline", ReasonCode: "LOGIN_START_FAILED"},
@@ -122,12 +133,13 @@ func TestNodeLoginStopsForTerminalStatus(t *testing.T) {
 
 func TestNodeLoginPendingWaitIsBounded(t *testing.T) {
 	for _, tc := range []struct {
-		name                                     string
-		parentDeadline, controlOffline, approval bool
+		name                                              string
+		parentDeadline, controlOffline, approval, expired bool
 	}{
-		{"wait_timeout", false, false, false}, {"earlier_parent_deadline", true, false, false},
-		{"control_offline/wait_timeout", false, true, false}, {"control_offline/earlier_parent_deadline", true, true, false},
-		{"approval_pending/wait_timeout", false, false, true}, {"approval_pending/earlier_parent_deadline", true, false, true},
+		{"wait_timeout", false, false, false, false}, {"earlier_parent_deadline", true, false, false, false},
+		{"control_offline/wait_timeout", false, true, false, false}, {"control_offline/earlier_parent_deadline", true, true, false, false},
+		{"approval_pending/wait_timeout", false, false, true, false}, {"approval_pending/earlier_parent_deadline", true, false, true, false},
+		{"expired_identity/wait_timeout", false, false, false, true}, {"expired_identity/earlier_parent_deadline", true, false, false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			pending := pendingLoginStatus()
@@ -136,6 +148,9 @@ func TestNodeLoginPendingWaitIsBounded(t *testing.T) {
 			}
 			if tc.approval {
 				pending.State, pending.ReasonCode = "denied", "NODE_APPROVAL_REQUIRED"
+			}
+			if tc.expired {
+				pending.State, pending.ReasonCode = "expired", "NODE_KEY_EXPIRED"
 			}
 			probe := &nodeLoginProbe{statuses: []*apb.NodeStatus{pending}}
 			socket := nodeLoginSocket(t, probe)

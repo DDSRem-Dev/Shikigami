@@ -117,14 +117,17 @@ func (a *app) nodeCommands() *cobra.Command {
 	return root
 }
 
-// Required login/approval or an unavailable control plane can precede a URL
-// or successful authentication. These specific states remain pending only for
-// an active, unexpired attempt. Approval still denies business admission;
-// invalid keys, cancellation, expiry and other failures remain terminal.
+// SDK startup, required login/approval or an unavailable control plane can
+// precede a URL or successful authentication. These specific states remain
+// pending only for an active, unexpired attempt. Approval still denies business
+// admission; expired identities may remain visible during reauthentication.
+// Invalid keys, expired attempts and other failures remain terminal.
 func nodeLoginActive(status *apb.NodeStatus) bool {
-	pendingControl := status.State == "needs_login" && status.ReasonCode == "NODE_AUTH_REQUIRED" ||
+	pendingControl := status.State == "uninitialized" && status.ReasonCode == "" ||
+		status.State == "needs_login" && status.ReasonCode == "NODE_AUTH_REQUIRED" ||
 		status.State == "offline" && status.ReasonCode == "NODE_CONTROL_UNAVAILABLE" ||
-		status.State == "denied" && status.ReasonCode == "NODE_APPROVAL_REQUIRED"
+		status.State == "denied" && status.ReasonCode == "NODE_APPROVAL_REQUIRED" ||
+		status.State == "expired" && status.ReasonCode == "NODE_KEY_EXPIRED"
 	return status.State == "authenticating" ||
 		pendingControl && status.LoginId != "" && status.LoginExpiresAt > time.Now().Unix()
 }

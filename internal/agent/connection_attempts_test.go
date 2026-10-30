@@ -193,10 +193,15 @@ func TestConnectionAttemptsObsoleteSelectionCannotPublish(t *testing.T) {
 	}
 	// The new generation actually enters tsnet's factory, which refuses the
 	// unavailable node before network I/O. It must not inherit old direct-TLS data.
-	if _, err := r.Resolve(ctx, record.Config.Id); connect.CodeOf(err) != connect.CodeFailedPrecondition {
-		t.Fatal(err)
+	// Maintenance may already have published that refusal and put the local
+	// node wait in cooldown before this foreground call acquires the pool.
+	_, err := r.Resolve(ctx, record.Config.Id)
+	code := connect.CodeOf(err)
+	if code != connect.CodeFailedPrecondition && code != connect.CodeUnavailable {
+		t.Fatalf("new generation did not wait for local authorization: %v", err)
 	}
-	if got := findServer(t, service, record.Config.Id); !reflect.DeepEqual(got.ConnectionAttempts, []string{"tsnet"}) {
+	if got := findServer(t, service, record.Config.Id); !reflect.DeepEqual(got.ConnectionAttempts, []string{"tsnet"}) ||
+		got.ConnectionState != "auth_required" || got.ReasonCode != "NODE_AUTH_REQUIRED" || got.RemoteProtocol != nil {
 		t.Fatal("old generation contaminated diagnostics", got)
 	}
 }

@@ -324,10 +324,7 @@ func (n *Node) applyStatus(generation uint64, observed *ipnstate.Status) {
 	case "NoState":
 		result.State, result.ReasonCode = "uninitialized", ""
 	}
-	// The SDK may retain the self node while transitioning to NeedsLogin.
-	// Preserve its explicit expiry signal independently of the backend state;
-	// neither control connectivity nor our wall clock proves revocation.
-	if observed.Self != nil && observed.Self.Expired {
+	if nodeKeyExpired(observed, time.Now()) {
 		result.State, result.ReasonCode = "expired", "NODE_KEY_EXPIRED"
 	}
 	if attempt := n.attempt; attempt != nil {
