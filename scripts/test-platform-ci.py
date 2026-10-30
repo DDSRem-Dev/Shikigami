@@ -3,6 +3,7 @@
 import importlib.util
 import json
 import os
+import stat
 from pathlib import Path
 import sys
 import subprocess
@@ -12,7 +13,7 @@ import unittest
 from unittest.mock import patch
 
 sys.dont_write_bytecode = True
-from platform_support import GO_VERSION, hosted_guard, require_verbose_pass, test_events, validate_identity, safe_test_locations, public_systemd_result
+from platform_support import GO_VERSION, hosted_guard, require_verbose_pass, test_events, validate_identity, safe_test_locations, public_systemd_result, InstallerFailure, safe_script_failure
 
 from platform_resources import GIB, parallelism, resources, go_environment, copy_build_cache, cgroup_limits
 import platform_resources
@@ -278,9 +279,67 @@ class PlatformAcceptanceTests(unittest.TestCase):
 
     def test_layout_paths_cannot_escape_owned_root(self):
         with patch.object(systemd, "hosted_guard"):
-            for root in ("/home/runner", "/tmp/shiki-platform-systemd-owned"):
+            for root in ("/home/runner", "/tmp/shiki-platform-systemd-owned", "/opt/shiki-platform-systemd-owned"):
                 with self.subTest(root=root), self.assertRaisesRegex(ValueError, "unexpected native systemd root"):
                     systemd.validate_layout({"root": root})
+
+    def test_system_directory_check_rejects_every_unprotected_ancestor(self):
+        metadata = {path: SimpleNamespace(st_uid=0, st_mode=stat.S_IFDIR | 0o755)
+                    for path in ("/", "/var", "/var/lib", "/opt")}
+        metadata["/opt"] = SimpleNamespace(st_uid=0, st_mode=stat.S_IFDIR | 0o777)
+        with patch.object(Path, "lstat", autospec=True, side_effect=lambda path: metadata[str(path)]):
+            result = {}
+            self.assertEqual(systemd.checked_runtime_parent(result), Path("/var/lib"))
+            self.assertTrue(result["system_directories"][-1]["writable_by_others"])
+            for path in ("/", "/var", "/var/lib"):
+                original = metadata[path]
+                for uid, mode in ((0, stat.S_IFDIR | 0o777), (0, stat.S_IFDIR | 0o775),
+                                  (1001, stat.S_IFDIR | 0o755), (0, stat.S_IFLNK | 0o777),
+                                  (0, stat.S_IFREG | 0o644)):
+                    metadata[path] = SimpleNamespace(st_uid=uid, st_mode=mode)
+                    with self.subTest(path=path, uid=uid, mode=mode), self.assertRaisesRegex(RuntimeError, "ancestors"):
+                        systemd.checked_runtime_parent({})
+                metadata[path] = original
+
+    def test_unsafe_parent_stops_before_directory_account_cache_or_build_mutation(self):
+        evidence = self.root / "evidence"
+        evidence.mkdir()
+        argv = ["platform-systemd.py"]
+        for name in ("source", "go", "modules", "cache", "evidence"):
+            argv += ["--" + name, str(evidence if name == "evidence" else self.root / name)]
+        argv += ["--parallelism", "1", "--gomaxprocs", "2"]
+        unsafe = [{"path": "/var", "kind": "directory", "root_owned": True, "writable_by_others": True}]
+        with patch.object(sys, "argv", argv), patch.object(systemd, "preflight"), \
+                patch.object(systemd, "system_directory_ancestors", return_value=unsafe), \
+                patch.object(systemd.signal, "signal"), patch.object(systemd.os, "chown"), \
+                patch.object(systemd.tempfile, "mkdtemp") as create, \
+                patch.object(systemd, "account_step") as account, \
+                patch.object(systemd, "copy_build_cache") as cache, \
+                patch.object(systemd, "cleanup") as cleanup:
+            with self.assertRaisesRegex(RuntimeError, "ancestors"):
+                systemd.main()
+            for mutation in (create, account, cache, cleanup):
+                mutation.assert_not_called()
+        result = json.loads((evidence / "result.json").read_text())
+        self.assertEqual(result["state"], "failed")
+        self.assertEqual(result["phase"], "check-system-directories")
+        self.assertEqual(result["cleanup"], "passed")
+
+    def test_installer_and_ancestor_diagnostics_do_not_publish_error_bodies(self):
+        secret = "SECRET-token private-path https://private.example"
+        for stderr, expected in (("system prefix ancestors must be root-owned and protected from replacement " + secret,
+                                  "system_prefix_ancestor_unprotected"), (secret, "unclassified")):
+            error = InstallerFailure(SimpleNamespace(returncode=1, stderr=stderr))
+            result = safe_script_failure(error)
+            result["system_directories"] = [
+                {"path": "/opt", "kind": "directory", "root_owned": True, "writable_by_others": True},
+                {"path": secret, "kind": "directory", "root_owned": True, "writable_by_others": False},
+            ]
+            public = public_systemd_result(result)
+            self.assertEqual(public["installer_exit_class"], "nonzero_exit")
+            self.assertEqual(public["installer_error_codes"], [expected])
+            self.assertEqual(len(public["system_directories"]), 1)
+            self.assertNotIn(secret, json.dumps(public))
 
     def test_account_setup_records_safe_outcomes_without_masking_failures(self):
         secret = "private command stderr and token"

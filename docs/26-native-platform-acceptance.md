@@ -2,15 +2,15 @@
 
 ## 当前状态（2026-10-31）
 
-四目标完整产品及实际WSL2验收已接入现有CI。首轮[41090262712](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41090262712)绑定原bf2e645；按用户要求改提交格式后对应c83c95a，git tree相同但不改写历史CI来源。第二轮[41093552523](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41093552523)绑定42eb93e。两轮已有失败，不能认定平台完成；Phase5复合项保持未勾选，路线图36/42。公开Homebrew四目标渠道验收见22，不能替代本矩阵。
+当前修复源为c10852f，[CI41104833762](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41104833762)正在执行；实际WSL2完整产品/systemd维护已通过；两Linux完整产品通过但首次daemon激活仍失败，原因继续调查。四目标compile/warm及两Linux native partial保存成功；Mac和完整平台终态仍待。四目标完整产品及实际WSL2验收已接入现有CI。首轮[41090262712](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41090262712)绑定原bf2e645；按用户要求改提交格式后对应c83c95a，git tree相同但不改写历史CI来源。第二轮[41093552523](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41093552523)绑定42eb93e。两轮已有失败，不能认定平台完成；Phase5复合项保持未勾选，路线图36/42。公开Homebrew四目标渠道验收见22，不能替代本矩阵。
 
-| 环境 | 本批要求执行的范围 | 已取得结果（02:10 +08） |
+| 环境 | 本批要求执行的范围 | 已取得结果（02:38 +08） |
 |---|---|---|
-| ubuntu-24.04 / amd64 | 完整race、真实双端插件、E2E、内嵌插件、终端语义、原生systemd及用户服务、活动升级/回滚 | 首轮E2E失败、第二轮agent用例失败保留；588全产品/E2E/embedded/terminal通过，systemd安装路径失败，修复待新CI |
-| ubuntu-24.04-arm / arm64 | 同上，实际arm64内核/Go宿主 | 三轮产品/E2E/embedded/terminal通过；588在useradd 60秒超时，原因待核验，新固定诊断已补 |
+| ubuntu-24.04 / amd64 | 完整race、真实双端插件、E2E、内嵌插件、终端语义、原生systemd及用户服务、活动升级/回滚 | 首轮E2E失败、第二轮agent用例失败保留；588及c108全产品/E2E/embedded/terminal通过；c108修正路径后首次daemon激活仍失败，账户创建与清理通过 |
+| ubuntu-24.04-arm / arm64 | 同上，实际arm64内核/Go宿主 | c108产品/E2E/embedded/terminal通过；useradd37.682秒成功，首次daemon激活仍失败；588的useradd60秒超时原因仍未确认 |
 | macos-15 / arm64 | 完整产品/终端、实际LaunchAgent、上传下载活动升级 | 三轮有tmux/session失败；588另有GOMAX1下node期限失败，兼容性和资源策略已本地修复，待新CI |
-| macos-15-intel / amd64 | 同上，拒绝Rosetta替代 | 首轮bf2e645完整原生产品及LaunchAgent维护通过，tmux3.7c；42eb/588结果尚待，不追认新源码 |
-| windows-2025的WSL2 / amd64 | 独立Ubuntu、真实Microsoft内核、Linux文件系统、systemd PID1及产品/维护矩阵 | 首轮实际WSL身份通过；588全产品/E2E/embedded/terminal通过，systemd安装路径失败、清理通过；前轮agent/sync失败保留 |
+| macos-15-intel / amd64 | 同上，拒绝Rosetta替代 | 首轮bf2e645完整原生产品及LaunchAgent维护通过，tmux3.7c；58806be完整产品/维护亦通过；42eb接口目前404且未取得其Intel产物，不推断结论，不追认c108新源码 |
+| windows-2025的WSL2 / amd64 | 独立Ubuntu、真实Microsoft内核、Linux文件系统、systemd PID1及产品/维护矩阵 | c108完整产品/E2E/embedded/terminal及systemd维护通过，13生命周期操作、双角色四个活动升级/回滚边界及清理通过；前轮agent/sync失败保留 |
 
 首轮四Homebrew及四unsigned构建成功不代表五个完整平台成功。旧摘要未保留原始Output，缺确切断言行的失败仍待诊断，不能凭耗时猜测超时。完全重复源的41093194046/41093197337取消请求已接受、随后不可查询，不记为验证通过或已核实的cancelled结论。
 
@@ -75,4 +75,26 @@ Mac arm64实际3CPU/7GiB被选为p2/GOMAX1，全包race590.757秒失败，包含
 
 失败且实际产生编译条目时可保存partial，成功完整执行后保存warm；优先同源warm，再同源partial和同角色/宿主/目标/依赖的旧源缓存。精确命中及保存前lookup避免重复上传，不使用每轮run_id强制重传。保存前再次核对包括文档在内的全部来源不变；取消不保存，测试/安装失败不被缓存动作改写，count=1与实际PASS门槛保持。只缓存go env的独立Go目录，不包含运行状态、Token、证据或产物。
 
-可选缓存预算为build8GiB/modules4GiB、25万文件、15秒协作stat扫描，保持源内容和权限；恢复3分钟、保存5分钟以及准备/lookup1分钟步骤上限均为非阻断，缓存失效时正常构建。16项缓存工具检查、18项平台工具检查、8项构建元数据检查、AST/actionlint/diff及独立七类审查通过。尚未取得新设计真实远端命中/保存时间，不把上述本地验证写成缓存收益实测。WSL继续独立发行版，不复用跨Windows缓存。
+可选缓存预算为build8GiB/modules4GiB、25万文件、15秒协作stat扫描，保持源内容和权限；恢复3分钟、保存5分钟以及准备/lookup1分钟步骤上限均为非阻断，缓存失效时正常构建。16项缓存工具检查、18项平台工具检查、8项构建元数据检查、AST/actionlint/diff及独立七类审查通过。c108轮四compile初次模块/编译缓存均miss，prepare/baseline/plan成功且四目标warm实际保存；Linux amd64于18:14:54Z保存共享modules，另外两任务迟到lookup命中跳过重复上传，另一并发reserve竞争被安全拒绝且任务成功。c108两Linux失败后native partial实际保存，新增缓存尾部约15.1/11.5秒；保存成功不覆盖安装失败。跨轮恢复命中/partial提升仍待，不把首存通过当提速证据。WSL继续独立发行版，不复用跨Windows缓存。
+
+
+58806be原生Intel后续终态同样通过，source_unchanged=true、incomplete_stages为空，4CPU/14GiB、p2/GOMAX2；build/lint578.146秒、全包race1055.335秒、E2E287.879秒、embedded54.098秒、terminal16.053秒、LaunchAgent生命周期159.038秒、上传137.744秒、下载162.144秒。首轮1451.806秒的全包race本轮降至1055.335秒；不同源/runner波动保留，不能当作c108修复后的完整结果。
+
+
+### c10852f 平台结果与剩余安装诊断
+
+实际WSL2全阶段通过：全包race535.945秒、E2E178.547秒、systemd227.259秒；13项服务生命周期、agent/daemon两角色共四个活动升级/回滚边界、卸载数据保持及独占发行版清理通过。该结果覆盖本轮冻结源的WSL产品与服务，不外推物理设备重启、真实Claude或外部认证。
+
+Linux amd64/arm64全包race574.450/530.638秒、E2E187.125/177.919秒及embedded/terminal均通过；systemd分别73.282/92.822秒失败，固定诊断为activate-daemon、test-systemd.py初次install的RuntimeError。两端账户创建及清理通过，arm64的useradd为37.682秒；cache3.709/3.671GB均完整复制。/tmp祖先权限冲突已修正且WSL完整维护通过，但不能据此把native剩余错误归结为编译、缓存或超时。原始stderr不上传。后续独占容器已复现/opt0777的明确安装拒绝，见下述诊断；本轮原生宿主尚无实际目录mode记录，不把机制复现当成修复后原生通过。
+
+
+### 托管镜像安装祖先权限冲突复现
+
+读取GitHub官方runner-images的`images/ubuntu/scripts/build/configure-system.sh`，当前blob `829f338bcdeb6093e493790d9e3856efdddd2c93`明确执行`chmod -R 777 /opt`。本轮日志记录的Ubuntu amd64/arm64镜像分别为20261025.353.1/20261025.165.1；对应amd64镜像tag API返回404，因此这里不声称取得本轮镜像的冻结配置源码或实际宿主mode。
+
+独占Linux arm64真实systemd容器冻结c108源，在容器内部将/opt由0755模拟为0777；真实首次installer退出1，明确类别`system_prefix_ancestor_unprotected`，与生产ensureSystemPrefix的保护拒绝对应。未改用户主机/opt，未读取或公开认证材料；按CID与label核对后销毁诊断容器并清理专属镜像tag。该反例确认/opt并非可假定安全的CI父目录，前次只从/tmp移到/opt的修复不完整。
+
+本次仅调整验收脚本：GitHub专属根移到`/var/lib/shiki-platform-systemd-*`，在建账户、复制缓存及构建之前逐层检查父目录为真实目录、root所有且无group/world写入；公开目录诊断仅允许`/`、`/var`、`/var/lib`、`/opt`固定路径及固定布尔/类别，不输出stderr。生产安装安全检查、权限、超时和全部维护场景保持。新布局的原生正向验收由下一轮CI提供；WSL已通过证据仍绑定c108旧布局，不能跨源追认。
+
+
+本次诊断含构建/清理109.055秒，初次installer没有单独计时；专属CID与image tag缺席已独立记录。21项平台工具回归1.078秒及四脚本AST/diff通过，覆盖任意深度祖先权限/owner/symlink拒绝、拒绝时零账户/缓存/目录创建、结果保留和固定诊断不泄露原始错误。架构/协议检查通过；新布局实际平台结果保持待验。

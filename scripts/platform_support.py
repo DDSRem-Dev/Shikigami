@@ -202,13 +202,32 @@ def require_verbose_pass(path, names):
 
 
 ACCOUNT_PHASES = frozenset(("lookup-account", "lookup-group", "create-group", "create-user"))
-SYSTEMD_PHASES = ACCOUNT_PHASES | frozenset(("setup-account", "copy-modules", "copy-build-cache", "check-layout", "service-scenario",
+SYSTEMD_PHASES = ACCOUNT_PHASES | frozenset(("setup-account", "check-system-directories", "copy-modules", "copy-build-cache", "check-layout", "service-scenario",
                            "build-bundle-a", "build-bundle-b", "activate-daemon", "service-recovery", "crash-guard",
                            "active-transfer-probe", "agent-maintenance", "daemon-maintenance", "uninstall-retention",
                            "scenario-complete", "helper-result-missing", "unknown"))
 SCRIPT_NAMES = frozenset(("platform-systemd.py", "platform_support.py", "platform_resources.py", "test-systemd.py", "systemd_activity.py"))
 ERROR_KINDS = frozenset(("AssertionError", "TimeoutExpired", "RuntimeError", "ValueError", "FileNotFoundError",
-                         "PermissionError", "KeyboardInterrupt", "OSError", "CalledProcessError", "other"))
+                         "PermissionError", "KeyboardInterrupt", "OSError", "CalledProcessError", "InstallerFailure", "other"))
+INSTALLER_ERRORS = {
+    "system_prefix_ancestor_unprotected": "system prefix ancestors must be root-owned and protected from replacement",
+    "system_command_ancestor_unprotected": "system binary directory and its parents must be root-owned and not writable by other users",
+    "private_directory_owner_or_mode": "existing private directory has unexpected owner or permissions",
+    "systemctl_failed": "systemctl failed:",
+    "ordinary_user_config_failed": "ordinary-user config failed:",
+    "ordinary_user_probe_failed": "ordinary-user probe failed:",
+    "token_issuance_failed": "device Token issuance failed:",
+}
+
+
+class InstallerFailure(RuntimeError):
+    """Keep raw command errors private, with a separate fixed public taxonomy."""
+    def __init__(self, response):
+        super().__init__(response.stderr)
+        self.exit_class = "signal" if response.returncode < 0 else "nonzero_exit"
+        self.error_codes = [name for name, message in INSTALLER_ERRORS.items() if message in response.stderr]
+        if not self.error_codes:
+            self.error_codes = ["unclassified"]
 
 
 def safe_script_failure(error):
@@ -220,7 +239,10 @@ def safe_script_failure(error):
         if file.parent.resolve() == root and file.name in SCRIPT_NAMES:
             locations.append({"file": file.name, "line": frame.lineno})
     kind = type(error).__name__
-    return {"error_kind": kind if kind in ERROR_KINDS else "other", "source_locations": locations[-20:]}
+    result = {"error_kind": kind if kind in ERROR_KINDS else "other", "source_locations": locations[-20:]}
+    if isinstance(error, InstallerFailure):
+        result.update(installer_exit_class=error.exit_class, installer_error_codes=error.error_codes)
+    return result
 
 
 def public_systemd_result(value):
@@ -233,12 +255,23 @@ def public_systemd_result(value):
         result["runtime"] = "native systemd PID 1"
     if "error_kind" in value:
         result["error_kind"] = value["error_kind"] if value["error_kind"] in ERROR_KINDS else "other"
+    if value.get("installer_exit_class") in ("signal", "nonzero_exit"):
+        result["installer_exit_class"] = value["installer_exit_class"]
+        result["installer_error_codes"] = [name for name in value.get("installer_error_codes", [])
+                                            if isinstance(name, str) and (name in INSTALLER_ERRORS or name == "unclassified")][:8]
     result["source_locations"] = [
         {"file": item["file"], "line": item["line"]} for item in value.get("source_locations", [])
         if isinstance(item, dict) and item.get("file") in SCRIPT_NAMES and type(item.get("line")) is int and 1 <= item["line"] <= 10000
     ][:20]
     if type(value.get("operations")) is int and 0 <= value["operations"] <= 100:
         result["operations"] = value["operations"]
+    result["system_directories"] = [
+        {key: item[key] for key in ("path", "kind", "root_owned", "writable_by_others")}
+        for item in value.get("system_directories", []) if isinstance(item, dict)
+        and item.get("path") in ("/", "/var", "/var/lib", "/opt")
+        and item.get("kind") in ("directory", "symlink", "other", "unavailable")
+        and type(item.get("root_owned")) is bool and type(item.get("writable_by_others")) is bool
+    ][:4]
     result["account_setup"] = [
         {"phase": item["phase"], "outcome": item["outcome"], "seconds": item["seconds"]}
         for item in value.get("account_setup", []) if isinstance(item, dict)

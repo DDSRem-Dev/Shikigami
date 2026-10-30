@@ -1,8 +1,14 @@
 # 实施与验收记录
 
-**当前批次（2026-10-31，36/42）：** 原生四目标和实际WSL2的完整产品/终端/安装维护矩阵已实现，17项工具检查、actionlint与语法检查通过，首轮CI41090262712与42eb93e轮已有真实失败，完整平台尚未通过，详见[26](26-native-platform-acceptance.md)。认证状态的两处确定缺口已修复：显式Self.Expired不受BackendState限制；非空AuthURL使旧应用授权退役，而单纯控制失联保持已有有效peer通道。修前红、针对race34.610秒、node整包40项无skip/race322.712秒及vet通过，独立授权生命周期审查通过。官方m6候选两端已构建核验；Mac首轮登记后触发LOGIN_EXPIRED，第二轮两端实际online，当前不计完整认证通过，见[23](23-tsnet-external-acceptance.md#独立认证环境重建与状态修复2026-10-31)。VPS进程更新后另一处连接停在REMOTE_TRUST_OR_PROTOCOL_REJECTED，当前保留失败并调查。保护两项c4长测及预约key到期任务；专用新认证状态有后续依赖，暂保留而非提前清理。
+**当前进度（2026-10-31）：36/42，剩余6个复合门槛。** 已完成官方节点key到期后的同身份重新认证，原daemon/凭据自动恢复，终端新输入、双向同步与TCP通过；完整认证矩阵仍有待验项。原生Intel在bf2e645及58806be两轮完整产品/LaunchAgent验收通过；58806be的Linux双架构和实际WSL产品链通过，维护阶段失败保留。tmux3.8与Mac并发调度已修复并本地验证；systemd原/tmp冲突修正后发现/opt在托管镜像中也可能不受保护，已复现并继续修复，详见[23](23-tsnet-external-acceptance.md)与[26](26-native-platform-acceptance.md)。
 
-**本批收尾：36/42，剩余6项（2026-10-30）。** 四目标原生Homebrew已验；Mac/VPS最终10阶段矩阵157.31秒、两类8MiB真实强杀恢复、条件竞争、后台冲突/TUI和撤A保B通过，操作系统账户/目录/转发清理已独立核验。结合公开包版本/既有ACK专项与[CI41047781448](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41047781448)十任务全成功，新增关闭Phase0恢复/版本/多设备、Phase4多设备体验、Phase5审查/扫描/关键分支三条；连同本批Homebrew共减少四条门槛。原42条文字/顺序保留，详情及失败记录见[25](25-multihost-acceptance.md)。完整认证、主机生命周期/外部身份升级、其余原生平台、资源性能长稳及最终支持声明六项继续待验。以下较早批次计数是当时记录，不代表当前进度。
+**当前CI：** c10852f的[41104833762](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41104833762)中，实际WSL2完整产品及systemd维护已通过；Linux双架构产品/E2E/终端通过，但首次daemon激活仍失败，账户创建及清理成功。隔离容器已复现/opt0777触发安装器祖先保护拒绝，下一修复改用受保护/var/lib并在构建前检查所有祖先，等待原生CI确认。四目标编译/warm缓存和两Linux的native partial缓存保存成功，后续restore命中与整轮平台结果尚待。已实测Mac排队显著缩短、Linux全包race约17–19分钟降至9分钟，隔离构建185.545→152.838秒且产物一致。16缓存、21平台、8构建工具检查与独立七类审查通过。两项c4长测及15:56未使用Auth Key自然到期保持冻结输入；本轮已回收约3.2GB完成验证的构建缓存/副本，认证节点因后续依赖保留。
+
+以下是按各批源码范围保留的历史记录，当前状态以本摘要和原条目的最新部分进展为准。
+
+**前序认证与平台基线（2026-10-31，36/42）：** 原生四目标和实际WSL2的完整产品/终端/安装维护矩阵已实现，17项工具检查、actionlint与语法检查通过，首轮CI41090262712与42eb93e轮已有真实失败，完整平台尚未通过，详见[26](26-native-platform-acceptance.md)。认证状态的两处确定缺口已修复：显式Self.Expired不受BackendState限制；非空AuthURL使旧应用授权退役，而单纯控制失联保持已有有效peer通道。修前红、针对race34.610秒、node整包40项无skip/race322.712秒及vet通过，独立授权生命周期审查通过。官方m6候选两端已构建核验；Mac首轮登记后触发LOGIN_EXPIRED，第二轮两端实际online，当前不计完整认证通过，见[23](23-tsnet-external-acceptance.md#独立认证环境重建与状态修复2026-10-31)。VPS进程更新后另一处连接停在REMOTE_TRUST_OR_PROTOCOL_REJECTED，当前保留失败并调查。保护两项c4长测及预约key到期任务；专用新认证状态有后续依赖，暂保留而非提前清理。
+
+**上批收尾：36/42，剩余6项（2026-10-30）。** 四目标原生Homebrew已验；Mac/VPS最终10阶段矩阵157.31秒、两类8MiB真实强杀恢复、条件竞争、后台冲突/TUI和撤A保B通过，操作系统账户/目录/转发清理已独立核验。结合公开包版本/既有ACK专项与[CI41047781448](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41047781448)十任务全成功，新增关闭Phase0恢复/版本/多设备、Phase4多设备体验、Phase5审查/扫描/关键分支三条；连同本批Homebrew共减少四条门槛。原42条文字/顺序保留，详情及失败记录见[25](25-multihost-acceptance.md)。完整认证、主机生命周期/外部身份升级、其余原生平台、资源性能长稳及最终支持声明六项继续待验。以下较早批次计数是当时记录，不代表当前进度。
 
 **环境清理收尾（2026-10-30）：** 在此前专项清理之外，补充删除811项已确权历史临时对象；本轮closeout、归属审计目录及一次性清理工具也已删除，原始日志/报告未归档进docs。124项来源不足的历史对象及1项未确权且有VM缓存引用的脚本保留，不声称所有旧临时文件均已清空。8个受保护进程身份、运行中的长测容器、expiry输入hash/预约和代理连接复核保持；正式签名备份保留。当前源码提交cc0bb7e的[CI41051011635](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41051011635)十任务全成功。仍为36/42；两项12h与10月31日15:56的独立到期测试尚待实际结果，详见[清理边界](25-multihost-acceptance.md#历史临时材料最终清理)。
 
@@ -995,4 +1001,11 @@ m6专用agent正常重启后，同一节点/IP已online，既有server却永久R
 2026-10-31追加平台修复：已适配tmux3.8对已退出pane返回空PID的实际格式变化，仅dead缺PID记0，live缺PID仍拒绝；退出证据与精确tmux身份保持，PID0不进入信号/活跃归属。确定性修前红，本机3.7b两包race65顶层零skip/fail及vet、独立七类复核通过；真实3.8平台须待新CI，不用本机旧版本覆盖替代。Mac排队实测已降至Intel5秒/arm64 2分27秒，整轮耗时仍待，详见[26](26-native-platform-acceptance.md)。原42条及36/42保持。
 
 
-**2026-10-31 CI修复与性能收敛：** 首轮固定源原生Intel（tmux3.7c）完整产品及LaunchAgent验收通过；58806be轮Linux双架构与实际WSL全产品/E2E/embedded/terminal通过，两Linux全包race约17–19分钟降至9分钟。该轮Mac的tmux3.8空PID与GOMAX1期限失败已分别取得红绿和修复；systemd专属根移至满足既有安全契约的/opt，真实生产路径拒绝/允许对照通过。arm64 useradd超时仍待原因，新固定阶段诊断保持60秒预算。构建参数对齐实测185.545→152.838秒且六二进制/双manifest完全一致。新增按角色/平台/来源隔离的partial/warm缓存，16缓存、18平台、8构建元数据工具检查及独立七类审查通过，远端新缓存和修复后整轮结果待CI。详情及失败/源码范围见[26](26-native-platform-acceptance.md)；同身份官方到期恢复见[23](23-tsnet-external-acceptance.md)。原42条及36/42保持，受保护长测和预约key到期未修改。
+**2026-10-31 CI修复与性能收敛：** 首轮固定源原生Intel（tmux3.7c）完整产品及LaunchAgent验收通过；58806be轮Linux双架构与实际WSL全产品/E2E/embedded/terminal通过，两Linux全包race约17–19分钟降至9分钟。该轮Mac的tmux3.8空PID与GOMAX1期限失败已分别取得红绿和修复；systemd专属根曾移至/opt，0755隔离容器的生产路径对照通过；后续发现托管镜像可将/opt设为0777，修复并未覆盖这一环境，现补/var/lib及逐层前置校验。arm64 useradd超时仍待原因，新固定阶段诊断保持60秒预算。构建参数对齐实测185.545→152.838秒且六二进制/双manifest完全一致。新增按角色/平台/来源隔离的partial/warm缓存，16缓存、18平台、8构建元数据工具检查及独立七类审查通过，远端新缓存和修复后整轮结果待CI。详情及失败/源码范围见[26](26-native-platform-acceptance.md)；同身份官方到期恢复见[23](23-tsnet-external-acceptance.md)。原42条及36/42保持，受保护长测和预约key到期未修改。
+
+
+## 原生CI安装路径修复与证据同步（2026-10-31）
+
+c10852f的CI41104833762已取得WSL完整产品及systemd维护通过；两Linux产品链通过、首次安装失败和cleanup通过分别保留。独占systemd容器冻结c108，模拟/opt0777后真实installer退出1，分类为system_prefix_ancestor_unprotected；整体诊断含构建和清理109.055秒，首次安装未单独计时。证据位于`/var/folders/1n/q373cln10fqb0gl9z1ds5d8m0000gn/T/shiki-native-initial.sje9gvp9/`，仅本地私有保存；CID901b50ad34476d6127fedeb6a222221ec6776b75a961f330ef996291f2c27750及专属镜像tag清理后缺席。未修改原主机/opt、HOME、服务或受保护长跑。
+
+CI专属根改为/var/lib并在任何账户/缓存/构建操作前核对全部祖先；失败结果继续可见，目录创建到归属登记屏蔽取消信号，恢复后由finally清理。新增安装器错误固定分类及固定目录诊断，原始stderr不上传。21项平台工具测试1.078秒、四文件AST和diff通过；架构/协议检查0.440秒通过，四份更新文档367条本地链接无断链，42条文字/顺序/状态保持、36/42。新原生正向结果仍需下一轮CI；本轮不重新构建容器正例或追认旧WSL证据。具体平台与缓存时间见[26](26-native-platform-acceptance.md)。

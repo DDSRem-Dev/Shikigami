@@ -16,6 +16,7 @@ import traceback
 
 sys.dont_write_bytecode = True
 from systemd_activity import ActiveUpgradeProbe
+from platform_support import InstallerFailure
 
 
 def run(args, *, timeout=60, check=True, cwd=None, env=None):
@@ -68,7 +69,7 @@ def host(output, prebuilt=None, fresh_only=False):
     provenance = {}
     for relative in ("go.mod", "go.sum", "internal/install/service.go", "internal/install/probe.go", "internal/server/daemon.go", "internal/server/initialize.go", "internal/server/node_disabled.go", "internal/agent/runtime.go", "internal/agent/crash_guard.go", "internal/client/client.go", "internal/client/start.go", "cmd/shiki/agent.go", "scripts/test-systemd.py", "scripts/test-systemd.Dockerfile"):
         provenance[relative] = hashlib.sha256((source / relative).read_bytes()).hexdigest()
-    for relative in ("scripts/systemd_activity.py", "test/e2e/upgrade_activity_test.go", "test/e2e/upgrade_helpers_test.go", "test/e2e/upgrade_network_test.go"):
+    for relative in ("scripts/systemd_activity.py", "scripts/platform_support.py", "test/e2e/upgrade_activity_test.go", "test/e2e/upgrade_helpers_test.go", "test/e2e/upgrade_network_test.go"):
         provenance[relative] = hashlib.sha256((source / relative).read_bytes()).hexdigest()
     for pattern in ("*.go", "*.proto"):
         for path in source.rglob(pattern):
@@ -272,7 +273,7 @@ def inside(layout=None):
             args += ["--token-output", token_destination]
         result = run(args, timeout=90, check=False)
         if result.returncode not in (0, 3):
-            raise RuntimeError(result.stderr)
+            raise InstallerFailure(result)
         data = json.loads(result.stdout)
         if result.returncode == 3:
             data = readiness(version, token_destination if initial else None)

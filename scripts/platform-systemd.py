@@ -28,6 +28,7 @@ from platform_resources import copy_build_cache, go_environment
 
 UNIT = Path("/etc/systemd/system/shiki-daemon.service")
 ENABLED = Path("/etc/systemd/system/multi-user.target.wants/shiki-daemon.service")
+INSTALLATION_PARENT = Path("/var/lib")
 
 
 def run(args, *, check=True, timeout=60):
@@ -65,6 +66,35 @@ def require_unused(lookup, name):
     raise RuntimeError("refusing to reuse a native acceptance account or group")
 
 
+def system_directory_ancestors(path):
+    """Inspect every ancestor without trusting symlinks or changing permissions."""
+    if not path.is_absolute() or path != Path(os.path.normpath(path)):
+        raise ValueError("system directory must have a normalized absolute path")
+    records = []
+    for current in (path, *path.parents):
+        try:
+            info = current.lstat()
+        except OSError:
+            records.append({"path": str(current), "kind": "unavailable", "root_owned": False,
+                            "writable_by_others": False})
+            continue
+        kind = "symlink" if stat.S_ISLNK(info.st_mode) else "directory" if stat.S_ISDIR(info.st_mode) else "other"
+        records.append({"path": str(current), "kind": kind, "root_owned": info.st_uid == 0,
+                        "writable_by_others": bool(info.st_mode & 0o022)})
+    return records
+
+
+def checked_runtime_parent(result):
+    result["phase"] = "check-system-directories"
+    ancestors = system_directory_ancestors(INSTALLATION_PARENT)
+    # Record the earlier /opt choice as fixed, read-only diagnostics. Hosted
+    # images may deliberately make it writable; never change a shared parent.
+    result["system_directories"] = ancestors + system_directory_ancestors(Path("/opt"))[:1]
+    if any(row["kind"] != "directory" or not row["root_owned"] or row["writable_by_others"] for row in ancestors):
+        raise RuntimeError("native system installation ancestors are not protected")
+    return INSTALLATION_PARENT
+
+
 def owned_processes(uid):
     result = {}
     for entry in Path("/proc").iterdir():
@@ -92,7 +122,7 @@ def validate_layout(layout):
     """Reject cross-user/path injection before inside() performs privileged writes."""
     hosted_guard()
     root = Path(layout["root"])
-    if root.parent != Path("/opt") or not re.fullmatch(r"shiki-platform-systemd-[a-z0-9_]+", root.name):
+    if root.parent != INSTALLATION_PARENT or not re.fullmatch(r"shiki-platform-systemd-[a-z0-9_]+", root.name):
         raise ValueError("unexpected native systemd root")
     if root.is_symlink() or root.resolve() != root or root.stat().st_uid != 0:
         raise ValueError("native systemd root must be a canonical root-owned directory")
@@ -253,10 +283,7 @@ def main():
     args = parser.parse_args()
     preflight(args.source, args.go, args.modules, args.cache, args.evidence)
     owner = args.evidence.parent.stat()
-    # The installer's system command directory requires protected ancestors;
-    # /tmp is world-writable even when this run's immediate root is private.
-    root = Path(tempfile.mkdtemp(prefix="shiki-platform-systemd-", dir="/opt"))
-    os.chmod(root, 0o755)  # private descendants; service/build paths need traversal
+    root = None
     username = "shikici" + str(os.getpid())
     account, group, created, tmux_owned = None, None, False, False
     result = {"state": "failed", "cleanup": "pending", "phase": "setup-account", "runtime": "native systemd PID 1",
@@ -267,6 +294,15 @@ def main():
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, interrupted)
     try:
+        # Reject unsafe ancestors before creating an account or copying/building
+        # anything. A protected immediate directory is insufficient by itself.
+        parent = checked_runtime_parent(result)
+        previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM})
+        try:
+            root = Path(tempfile.mkdtemp(prefix="shiki-platform-systemd-", dir=parent))
+            os.chmod(root, 0o755)  # private descendants need service/build traversal
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
         account_step(result, "lookup-account", lambda: require_unused(pwd.getpwnam, username))
         account_step(result, "lookup-group", lambda: require_unused(grp.getgrnam, username))
         # Avoid a signal between successful OS mutation and ownership recording.
@@ -346,7 +382,8 @@ def main():
         for sig in (signal.SIGINT, signal.SIGTERM):
             signal.signal(sig, signal.SIG_IGN)
         try:
-            cleanup(root, username, account, created=created, group=group, tmux_owned=tmux_owned)
+            if root is not None:
+                cleanup(root, username, account, created=created, group=group, tmux_owned=tmux_owned)
             result["cleanup"] = "passed"
         except Exception as error:
             result["cleanup"] = "failed"
