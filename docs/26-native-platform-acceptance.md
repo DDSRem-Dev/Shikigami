@@ -2,15 +2,15 @@
 
 ## 当前状态（2026-10-31）
 
-c1e5ece的[CI41119194452](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41119194452)已completed/success、13/13任务成功，同源五平台完整通过。主代理独立核验全部必需阶段、来源一致性及清理；平台兼容原项已关闭，路线图37/42。三核受限并行与异步watch收尾候选只改CI/测试，实际新调度时长仍由后续CI验证。旧失败及未验外部账号、真实Claude、物理重启登录/自然切网与长稳边界保持。
+最终045b463的[CI41125907702](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41125907702)已completed/success、13/13任务成功，同源五平台完整通过；此前c1e5ece的[CI41119194452](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41119194452)亦完整通过。主代理独立核验五平台各730文件源码摘要、全部必需阶段、来源一致性及清理；平台兼容原项已关闭，路线图37/42。实际3CPU/7GiB已验证p2/GOMAX1策略，整轮46分51秒→36分09秒，详细耗时及冷暖缓存边界见[最终记录](#ci-045-final-20261031)。历史失败和未验外部账号、真实Claude、物理重启登录/自然切网与长稳范围保持。
 
 | 环境 | 本批要求执行的范围 | 已取得结果（截至本批） |
 |---|---|---|
-| ubuntu-24.04 / amd64 | 完整race、真实双端插件、E2E、内嵌插件、终端语义、原生systemd及用户服务、活动升级/回滚 | 首轮E2E失败、第二轮agent用例失败保留；588及c108全产品/E2E/embedded/terminal通过；c108首次安装/e2f退出事件旧失败保留；896b与c1e全产品/E2E/terminal及systemd维护、数据保持和清理完整通过 |
-| ubuntu-24.04-arm / arm64 | 同上，实际arm64内核/Go宿主 | 896b与c1e产品及systemd维护完整通过，真实HTTP拒绝用例通过；c108首次安装/e2f认证health失败历史保留，588的useradd60秒超时原因仍未知 |
-| macos-15 / arm64 | 完整产品/终端、实际LaunchAgent、上传下载活动升级 | c108与e2f完整产品及LaunchAgent全部通过，实际tmux3.8及p1/GOMAX2；896b亦完整通过；c1e新依赖完整通过，旧失败保留 |
-| macos-15-intel / amd64 | 同上，拒绝Rosetta替代 | bf2e645/588/c108/e2f完整产品及LaunchAgent通过；896b唯一peer-lifetime登录准备超时历史保留；c1e同用例1.88秒及完整产品/服务均通过，旧瞬时原因未复现 |
-| windows-2025的WSL2 / amd64 | 独立Ubuntu、真实Microsoft内核、Linux文件系统、systemd PID1及产品/维护矩阵 | c108/e2f/896b/c1e完整产品及systemd维护通过，13生命周期操作、双角色四个活动升级/回滚边界及清理通过；历史失败保留 |
+| ubuntu-24.04 / amd64 | 完整race、真实双端插件、E2E、内嵌插件、终端语义、原生systemd及用户服务、活动升级/回滚 | 首轮E2E失败、第二轮agent用例失败保留；588及c108全产品/E2E/embedded/terminal通过；c108首次安装/e2f退出事件旧失败保留；896b与c1e全产品/E2E/terminal及systemd维护、数据保持和清理完整通过；045本轮完整通过 |
+| ubuntu-24.04-arm / arm64 | 同上，实际arm64内核/Go宿主 | 896b与c1e产品及systemd维护完整通过，真实HTTP拒绝用例通过；c108首次安装/e2f认证health失败历史保留，588的useradd60秒超时原因仍未知；045本轮完整通过 |
+| macos-15 / arm64 | 完整产品/终端、实际LaunchAgent、上传下载活动升级 | c108与e2f完整产品及LaunchAgent全部通过，实际tmux3.8及p1/GOMAX2；896b亦完整通过；c1e新依赖完整通过，旧失败保留；045本轮完整通过 |
+| macos-15-intel / amd64 | 同上，拒绝Rosetta替代 | bf2e645/588/c108/e2f完整产品及LaunchAgent通过；896b唯一peer-lifetime登录准备超时历史保留；c1e同用例1.88秒及完整产品/服务均通过，旧瞬时原因未复现；045本轮完整通过 |
+| windows-2025的WSL2 / amd64 | 独立Ubuntu、真实Microsoft内核、Linux文件系统、systemd PID1及产品/维护矩阵 | c108/e2f/896b/c1e完整产品及systemd维护通过，13生命周期操作、双角色四个活动升级/回滚边界及清理通过；历史失败保留；045本轮完整通过 |
 
 首轮四Homebrew及四unsigned构建成功不代表五个完整平台成功。旧摘要未保留原始Output，缺确切断言行的失败仍待诊断，不能凭耗时猜测超时。完全重复源的41093194046/41093197337取消请求已接受、随后不可查询，不记为验证通过或已核实的cancelled结论。
 
@@ -32,7 +32,7 @@ WSL独立发行版以随机名称导入，只有该发行版被terminate/unregis
 
 旧配置原生矩阵max-parallel=2，Mac首轮排队约26分钟；首轮Linux amd64 build/lint236秒、全包race1023秒、E2E168秒，arm64相应297/1132/186秒。原生arm64维护首轮322.787秒、第二轮273.994秒失败，WSL首轮286.077秒失败；这些不是已证明的编译超时。
 
-本轮将四原生任务并发槽增至4；预检按CPU亲和性、内存及当前cgroup-v2/可见祖先限制选择包并发：最终策略至少4核且6GiB才用p2，2/3核保持p1/GOMAX2，否则p1，探测失败也p1，GOMAXPROCS限制1–2。缓存来自runner既有GOCACHE，按目录与1MiB分块协作检查30秒/4GiB预算，完整条目复制到新UID自有私有目录；不共享可写源、不更改原缓存/HOME权限，部分复制可重建缺项，未完成条目删除。30秒不是阻塞文件系统操作硬deadline。
+当时将四原生任务并发槽增至4；预检按CPU亲和性、内存及当前cgroup-v2/可见祖先限制选择包并发。CAS修复前的临时策略为至少4核且6GiB才用p2，2/3核保持p1/GOMAX2，否则p1，探测失败也p1，GOMAXPROCS限制1–2；这是历史配置，修复后的三核策略及最终结果见本文后续记录。缓存来自runner既有GOCACHE，按目录与1MiB分块协作检查30秒/4GiB预算，完整条目复制到新UID自有私有目录；不共享可写源、不更改原缓存/HOME权限，部分复制可重建缺项，未完成条目删除。30秒不是阻塞文件系统操作硬deadline。
 
 所有count=1、race、平台/维护阶段、具名PASS与清理要求保持。systemd失败时finally也导出安全固定结果；Go失败只公开受跟踪已知测试文件basename、合法行号、固定错误类别及有界elapsed，不含原始Output、Token或URL。独立七类审查通过。实际wallclock收益与剩余失败须由新CI确认，不能只凭调整参数宣称提速完成。
 
@@ -169,3 +169,35 @@ CAS修复后候选恢复3CPU且至少6GiB的p2/GOMAX1；两核/低内存保持p1
 Mac ARM关键实际用例896→c1e：Epoch40.70→1.06秒、Address36.71→1.24秒、PeerRemoval108.21→11.55秒、HTTP拒绝2.64→0.24秒，原45秒期限未改。node顶层elapsed合计375.41→43.57秒（44→45），全产品顶层1098.77→777.64秒（635→636）；合计不是含编译stage的替代。Intel旧失败outbound/removed本轮1.88秒通过、同组9.06秒，完整平台通过；旧失败原因未直接复现，不据ARM专属CAS修复推断Intel根因。
 
 新依赖首次四原生modules/build均实际冷miss，成功后四平台warm真实保存，Intel20:30:53Z、ARM20:40:58Z完成；后续同依赖可恢复。关闭平台单项至37/42不降低其余五个复合门槛；最后一批资源策略与watch观察修正保留同一生产Go/依赖，下一CI另记录真实三核并行结果。
+
+
+<a id="ci-045-final-20261031"></a>
+### 045b463 三核受限并行与缓存复用验证
+
+本轮固定045b463a9f3d5949b938685c3d44fd23bf531133，生产Go/依赖与已全绿c1e保持一致。GitHub最终completed/success、13/13任务成功，五平台全部完整通过，source_unchanged=true、incomplete_stages为空，必需阶段和清理均通过。主代理已将五个平台source.json各730文件摘要与git archive逐项比对，并核对必需阶段、具名PASS、来源不变及清理；独立收据为`/var/folders/1n/q373cln10fqb0gl9z1ds5d8m0000gn/T/shiki-ci-41125907702.o8n3obs9/root-platform-verification.json`；逐任务终态和时间见同目录045-successful-workflow-timing.json。
+
+| 平台 | build/lint | 全包race | E2E | 服务维护 |
+|---|---:|---:|---:|---|
+| Linux amd64 | 17.610 | 372.124 | 177.062 | 254.750 |
+| Linux arm64 | 12.396 | 372.385 | 169.915 | 232.805 |
+| WSL2 amd64 | 263.976 | 692.037 | 192.707 | 260.979 |
+| macOS Intel | 96.371 | 617.097 | 309.768 | 225.254 / 194.678 / 184.842 |
+| macOS ARM | 50.011 | 506.798 | 253.725 | 141.307 / 103.863 / 102.824 |
+
+以上为实际stage秒数，Mac维护列依次为生命周期/活动上传/活动下载。Mac ARM平台产物确认3CPU、7GiB、p2/GOMAX1，四核平台仍p2/GOMAX2。ARM的AuthorizationEpoch2.10秒、PeerAddressForms2.31秒、PeerRemoval9.89秒、真实HTTP拒绝0.44秒均通过；原45秒期限不变。45个node顶层elapsed合计52.39秒，相比c1e的43.57秒有所增加；整包阶段同时受包级并行和缓存影响，不能将整轮加速解释成所有单用例都变快。sync权威删除及远端watch收尾用例0.08秒通过，归档、冲突与双端文件保留断言仍在。
+
+四原生均实际恢复c1e warm并保存新045 warm：Linux amd64/arm64分别11.348/14.977秒，Mac ARM19.785秒，Mac Intel104.855秒；恢复/保存安全摘录随证据保留。Linux同p2/GOMAX2的build/lint由211.438/149.566降到17.610/12.396秒，产品阶段由571.905/508.999到372.124/372.385秒。ARM产品由1158.014到506.798秒，但上一轮为新依赖冷缓存，本轮为warm且并行策略变化，不能单独归因为三核并行。整轮同口径自创建至最终API更新时间由46分51秒降到36分09秒，减少10分42秒（约22.8%）；这也包含排队和API终态延迟差异。最后平台任务于21:22:59Z完成，整轮21:23:00Z终态成功。各平台实际job时长另列如下，不能宣称每个平台都提速。
+
+| 完整平台任务 | c1e | 045 |
+|---|---:|---:|
+| Linux amd64 | 22分02秒 | 15分08秒 |
+| Linux arm64 | 19分00秒 | 14分33秒 |
+| WSL2 amd64 | 23分48秒 | 26分58秒 |
+| macOS Intel | 35分32秒 | 36分02秒 |
+| macOS ARM | 40分35秒 | 21分58秒 |
+
+本轮五平台启动等待3–6秒；c1e Mac ARM启动前等待5分03秒。最终最长任务转为Intel36分02秒，E2E及Launch维护分别258.319→309.768秒、416.755→604.774秒，另有104.855秒缓存恢复；这些是实际观察，不推断未取证的宿主原因。Mac ARM节点专项、整包/完整任务和workflow口径分别保留，不把不同口径混合计算。
+
+WSL使用独立cold环境，本轮build/lint263.976秒、产品692.037秒均比c1e的220.521/598.848秒略长，不能归入warm提速；13服务操作、四活动边界、数据保持及cleanup完整通过。
+
+全包中的root/独立fault helper/资源采集/终端analyzer等条件skip保留原状态，不计作通过；必需跨进程、E2E、终端及服务维护以各自实际阶段和具名PASS核验。未验外部账号、真实Claude、物理重启登录及长稳范围保持，原42条与37/42不变。
