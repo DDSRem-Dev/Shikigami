@@ -1,8 +1,8 @@
 # 架构与文档一致性检查
 
-**当前进度（2026-10-31）：36/42，剩余6个复合门槛。** 官方节点key到期后的同身份重新认证及终端、双向同步、TCP恢复已验，完整认证矩阵仍有待验项。c108的Mac双架构完整产品/LaunchAgent及实际WSL2完整维护通过；e2f的WSL2使用受保护/var/lib布局再次完整通过。两Linux新出现的产品测试失败已完成本地测试修复，原生systemd正向验收仍待下一轮，详见[23](23-tsnet-external-acceptance.md)与[26](26-native-platform-acceptance.md)。
+**当前进度（2026-10-31）：36/42，剩余6个复合门槛。** 官方节点key到期后的同身份重新认证及终端、双向同步、TCP恢复已验，完整认证矩阵仍有待验项。896b的Linux双架构与WSL2完整产品/systemd矩阵通过；e2f的Mac双架构已完整通过，但896b的Intel新出现登录准备超时，Mac ARM仍运行。另确认并修复ARM64 race网络栈依赖的原子操作错误，已通过本地验证，完整平台待新CI，详见[23](23-tsnet-external-acceptance.md)与[26](26-native-platform-acceptance.md)。
 
-**当前CI：** e2f7f41的[41109911804](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41109911804)四目标编译/Homebrew及WSL完整矩阵通过；两Linux分别在session退出事件、node认证health等待失败，未运行维护，Mac新源码终态仍待。session修复允许未知原因升级为首次已知事件且继续拒绝重复；node夹具改为真实Noise注册HTTP400，以订阅/SDK health屏障明确两种时序，原CI瞬时失败未直接复现。专项race/vet通过，未改生产逻辑或放宽期限。Linux/WSL新增独立维护准入，普通产品失败后仍可验证systemd，但取消/前置或来源不符拒绝，最终失败不被覆盖；27项平台工具检查及七类审查通过，下一轮CI待提交。缓存已实际恢复：两Linux native约13.2/13.9秒，build/lint由217.624/143.132降至16.766/12.900秒；失败轮产品时长不作为整体提速证据。两项c4长测、15:56未使用Auth Key自然到期及后续认证身份保持冻结。
+**当前CI：** 896b986的[41115363744](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41115363744)四目标编译及Linux双架构/WSL完整矩阵通过，两个原生Linux旧失败用例与受保护/var/lib安装均实际通过；Mac Intel唯一失败位于peer用例登录准备，原CI瞬时原因未复现，Mac ARM仍待。缓存由partial实际提升warm，两Linuxbuild/lint为17.717/13.500秒。性能分析另复现gVisor旧ARM64 race CAS错误，现固定最早包含上游修复的可构建Go快照；同配置节点用例32.48→1.81秒，44顶层node race51.200秒、CAS红绿、全包build/vet、模块校验及漏洞扫描通过。Go1.26.10/Tailscale1.98.10和原超时保持，新依赖完整平台待下一轮；不把ARM修复当成Intel超时已定位。三份进度同步、36/42保持，长测与预约key/认证身份继续冻结。
 
 以下是按各批源码范围保留的历史记录，当前状态以本摘要和原条目的最新部分进展为准。
 
@@ -1338,3 +1338,12 @@ CI复现的obsolete-selection测试仅修正已有maintenance cooldown竞态允�
 对照01/02/03/04/06/07/09/10/11/13/14完成七类复核并独立审阅：目录及SDK/host/plugin边界无生产变更，新Noise夹具仅属internal/node测试；RPC准入、TLS、Token、能力及认证拒绝保持，真实HTTP400经过固定SDK再由Node适配；持久schema/revision/去重不变，测试继续要求同login ID的终态去重，source_identity纳入非忽略新输入但不宣称覆盖任意忽略生成物；退出事件保留unknown→known且最多一次crash，scope/顺序/原因强化，测试watcher代次退休和hijacked连接取消清理明确，维护取消及信号退出不继续；文件/终端/TCP语义、限额和正常退出/主动停止不报crash保持；CLI/TUI/生产安装/产物无变化，Linux独立维护先验证四个前置阶段、六字段原生身份和冻结源码，零sudo/账户副作用前完成准入；最终必需矩阵不变，普通产品失败仍为失败，拒绝/skip不当PASS。
 
 最终session专项race5.753秒、node最终SDK oracle专项race4.764秒与vet通过；此前session初稿整包21.482秒、认证20次43.912秒保留实际范围。原CI认证瞬时失败未直接复现，overlay禁用watch拒绝分支的红例仅用于覆盖验证。27工具1.200秒、actionlint/AST/WSL Bash/diff通过，独立审查无阻断。e2f的WSL新/var/lib布局完整通过，两个原生Linux本轮未进维护，Mac新源码仍待；不把c108完整结果跨源追认。三份当前摘要及平台证据同步，原42条文字/顺序/状态保持，长测与认证身份未改。
+
+
+## gVisor ARM64 race原子操作与依赖边界复核（2026-10-31）
+
+依01/02/04/06/07/09/10/11/13/14完成七类审查：gVisor仍是internal/node私有tsnet适配依赖，插件业务/SDK/host目录与依赖方向保持，新CAS回归位于该边界测试；Go1.26.10/Tailscale1.98.10及Connect/H2/TLS/Token/能力协商未改，真实节点在身份/到期前后检查且不兼容fail closed；应用持久schema/revision/去重不变；上游修复恢复race arm64 park回调的正确CAS，取消/连接关闭与peer撤销仍由原测试覆盖；应用文件/终端/TCP语义、限额及默认值不变；CLI/TUI/安装/产物契约不变，不将依赖升级宣称新能力；新依赖绑定独立候选与完整本地验证，原长跑、历史平台和Intel单次超时范围分别保留。February→September网络栈并非单行回补，整轮平台结果不能由本机44项node race替代。
+
+验证包括原CAS三个分支红例0.612秒、新CAS绿例1.533秒；候选44顶层/132含子项node race51.200秒、相同连接用例32.48→1.81秒、全包build/vet/模块校验/漏洞扫描通过。默认非race使用标准sync/atomic，此次缺陷证据仅针对race && arm64；GOMAX3单次改善20.98秒只作诊断，不改变最终资源策略。独立review确认模块图仅四要求版本变化，无关tidy UI/Go1.27.3候选均排除。
+
+896b两原生Linux及WSL完整产品/服务维护PASS，前两个测试失败与受保护安装布局已实际闭环；Linux产品本轮成功，因此普通失败后继续维护的分支仍仅由27工具用例覆盖，不冒称远端故障注入已验。e2f两Mac完整通过，896b Intel登录准备单次超时未复现、ARM仍运行；保持15/45秒预算、零额外重试/skip，不据ARM原子缺陷修复追认Intel原因。三份进度与26同步、原42条/36勾保持；受保护原认证环境及冻结长测未改。

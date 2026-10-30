@@ -2,15 +2,15 @@
 
 ## 当前状态（2026-10-31）
 
-e2f7f41的[CI41109911804](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41109911804)四目标compile/Homebrew和实际WSL2完整矩阵通过。两原生Linux产品测试分别失败，未执行维护；Mac新源码终态尚待。两项测试时序修复及独立Linux维护准入已通过本地专项，待下一轮CI。此前c10852f的[CI41104833762](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41104833762)Mac双架构与WSL完整通过，两Linux产品链通过但首次安装失败；失败历史保留。Phase5完整复合项仍未勾选，路线图36/42，公开Homebrew渠道验收见22，不能替代本矩阵。
+当前[CI41115363744](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41115363744)绑定896b986：原生Linux双架构与WSL2完整通过；Mac Intel在登录准备有一个新失败，Mac ARM仍运行。此前e2f的Mac双架构与WSL完整通过，两Linux产品失败已在896b正向复验。另已确认并本地修复旧gVisor的ARM64 race CAS缺陷，固定Go1.26兼容的最早上游Go快照，完整平台待新CI。Phase5复合项保持未勾选，路线图36/42；物理环境、主机重启登录与外部账号仍独立验收。
 
-| 环境 | 本批要求执行的范围 | 已取得结果（03:22 +08） |
+| 环境 | 本批要求执行的范围 | 已取得结果（截至本批） |
 |---|---|---|
-| ubuntu-24.04 / amd64 | 完整race、真实双端插件、E2E、内嵌插件、终端语义、原生systemd及用户服务、活动升级/回滚 | 首轮E2E失败、第二轮agent用例失败保留；588及c108全产品/E2E/embedded/terminal通过；c108首次daemon激活失败，账户创建与清理通过；e2f退出事件断言失败，维护未执行，修复待新CI |
-| ubuntu-24.04-arm / arm64 | 同上，实际arm64内核/Go宿主 | c108产品/E2E/embedded/terminal通过；useradd37.682秒成功，首次daemon激活仍失败；588的useradd60秒超时原因仍未确认；e2f认证health测试失败、维护未执行，真实HTTP夹具修复待新CI |
-| macos-15 / arm64 | 完整产品/终端、实际LaunchAgent、上传下载活动升级 | c108完整产品/E2E/embedded/terminal与LaunchAgent全部通过，实际tmux3.8及p1/GOMAX2；旧tmux/节点失败保留 |
-| macos-15-intel / amd64 | 同上，拒绝Rosetta替代 | 首轮bf2e645完整原生产品及LaunchAgent维护通过，tmux3.7c；58806be完整产品/维护亦通过；c108亦完整通过；42eb接口404且未取得其Intel产物，不推断该轮结论 |
-| windows-2025的WSL2 / amd64 | 独立Ubuntu、真实Microsoft内核、Linux文件系统、systemd PID1及产品/维护矩阵 | c108完整产品/E2E/embedded/terminal及systemd维护通过，13生命周期操作、双角色四个活动升级/回滚边界及清理通过；e2f使用/var/lib新布局亦完整通过；前轮agent/sync失败保留 |
+| ubuntu-24.04 / amd64 | 完整race、真实双端插件、E2E、内嵌插件、终端语义、原生systemd及用户服务、活动升级/回滚 | 首轮E2E失败、第二轮agent用例失败保留；588及c108全产品/E2E/embedded/terminal通过；c108首次安装/e2f退出事件旧失败保留；896b全产品/E2E/terminal及systemd维护、数据保持和清理完整通过 |
+| ubuntu-24.04-arm / arm64 | 同上，实际arm64内核/Go宿主 | 896b产品及systemd维护完整通过，真实HTTP拒绝用例通过；c108首次安装/e2f认证health失败历史保留，588的useradd60秒超时原因仍未知 |
+| macos-15 / arm64 | 完整产品/终端、实际LaunchAgent、上传下载活动升级 | c108与e2f完整产品及LaunchAgent全部通过，实际tmux3.8及p1/GOMAX2；896b当前运行，旧失败保留 |
+| macos-15-intel / amd64 | 同上，拒绝Rosetta替代 | bf2e645/588/c108/e2f完整产品及LaunchAgent通过；896b唯一peer-lifetime登录准备超时，后续维护未执行，原CI原因未复现 |
+| windows-2025的WSL2 / amd64 | 独立Ubuntu、真实Microsoft内核、Linux文件系统、systemd PID1及产品/维护矩阵 | c108/e2f/896b完整产品及systemd维护通过，13生命周期操作、双角色四个活动升级/回滚边界及清理通过；历史失败保留 |
 
 首轮四Homebrew及四unsigned构建成功不代表五个完整平台成功。旧摘要未保留原始Output，缺确切断言行的失败仍待诊断，不能凭耗时猜测超时。完全重复源的41093194046/41093197337取消请求已接受、随后不可查询，不记为验证通过或已核实的cancelled结论。
 
@@ -128,3 +128,16 @@ GitHub API部分job.steps滞后、运行中日志404/503，Chrome页面也出现
 下一批仅修测试与调度：真实tmux事件测试接受unknown→首次known，仍检查唯一crash、scope/顺序/正确原因和原超时；确定性补测不要求实际tmux必须提供信号。认证夹具改为真实Noise HTTP400，在LocalAPI订阅完成后放行，或先经独立SDK health observer确认再启动Node watcher；旧needs_login不足以作为认证结果屏障。原CI认证瞬时失败未直接复现，不能据此宣称已定位所有SDK时序原因。session最终专项race5.753秒、node最终两种时序包4.764秒及vet通过；更早初稿全包与20次认证重复另按实际范围记录于15。
 
 Linux普通产品失败后允许独立systemd维护；必须先通过preflight/build-lint/tool-tests/platform-tool-tests，再核对OS/arch/machine/Go/kernel/WSL与完整冻结源码。源码摘要覆盖tracked及非忽略untracked，新增Go输入/同提交变更均会拒绝，忽略生成物不算自定义摘要覆盖。信号取消/负退出码/130/143拒绝继续，固定blocked原因不当PASS；最终所有原必需阶段保持，失败不能被维护成功覆盖，Mac仍按成功链。27项平台工具检查1.200秒、actionlint/AST及三段WSL Bash检查通过。下一轮完整平台结果待新提交。
+
+
+### 896b986 Linux完整闭环、Mac新失败与依赖性能定位
+
+两原生Linux最终state=passed、source_unchanged=true、incomplete/failures均为空。amd64/arm64产品385.477/400.338秒、E2E176.416/168.868秒、build/lint17.717/13.500秒、systemd239.720/245.831秒。新auth health-event0.09/0.57秒、before-watch均PASS；session TERM0.71/0.70秒，exit0/exit7/intentional-stop通过。实际/opt两台均writable_by_others=true，/var/lib、/var、/均root所有且不可组/他人写；新根13服务操作、四活动升级/回滚边界、数据保持及cleanup通过。e2f partial真实恢复12.708/15.550秒并保存896b warm。独立维护准入通过；因产品本轮成功，不宣称已在真实runner演练“产品失败但维护继续”。
+
+WSL896b全阶段PASS，来源未变且无未完成项：build205.913秒、产品566.848秒、E2E185.237秒、embedded21.441秒、terminal8.044秒、systemd247.212秒，13操作/四活动边界/数据保持/清理全通过。Mac Intel本轮build65.562秒、产品642.911秒唯一失败为TestPeerRemovalClosesEstablishedIdleStreams/outbound/removed，15.89秒；安全行43/49指向left的loginInteractive，未进入撤销业务断言，不能从安全日志判断是URL还是online阶段。Mac ARM实际排队约10分10秒，19:37:21Z开始，不把排队当测试执行时长。
+
+旧e2f Mac终态也已完整取得：arm64 build292.232、产品1391.744、E2E244.342、embedded32.245、terminal13.826、Launch144.770/上传120.498/下载117.580秒；Intel547.226/900.658/249.957/65.391/23.246/172.875/167.196/152.176秒，全部PASS且来源未变。旧run41109911804完整结论failure来自两Linux产品测试；上述新run的两Linux正向结果不改写旧失败。
+
+耗时独立定位发现旧gVisor ARM64 race CAS错误：预期old值被new覆盖、存储寄存器未初始化；固定模块zip与已编译指令一致，最小直接调用和新增CAS回归均确定性失败。上游PR14585于09-09合并，选择第一份含修复的可构建Go快照v0.0.0-20260909230408-9b1144b679cb，保持Go1.26.10/Tailscale1.98.10。默认非race走标准sync/atomic，不据此宣称默认产品同样忙循环；新网络栈版本还包含其他变更，完整平台需重验。
+
+本机同GOMAX2/p1/race的原连接用例32.48→1.81秒；后者未插入phase overlay，仅报告原用例总时长。候选node整包44顶层/132含子项51.200秒零fail/skip，主树新增CAS回归1.533秒通过（旧依赖0.612秒红）；全包build39.847/vet22.515/模块校验3.356/漏洞扫描4.029秒通过。Intel旧失败本机未复现，候选两次phase诊断通过仅属局部证据；预算与重试不变，下一轮须实际通过Intel与其余完整矩阵。进度仍36/42，长稳与外部环境不跨新依赖追认。

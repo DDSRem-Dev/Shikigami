@@ -1,8 +1,8 @@
 # 实施与验收记录
 
-**当前进度（2026-10-31）：36/42，剩余6个复合门槛。** 官方节点key到期后的同身份重新认证及终端、双向同步、TCP恢复已验，完整认证矩阵仍有待验项。c108的Mac双架构完整产品/LaunchAgent及实际WSL2完整维护通过；e2f的WSL2使用受保护/var/lib布局再次完整通过。两Linux新出现的产品测试失败已完成本地测试修复，原生systemd正向验收仍待下一轮，详见[23](23-tsnet-external-acceptance.md)与[26](26-native-platform-acceptance.md)。
+**当前进度（2026-10-31）：36/42，剩余6个复合门槛。** 官方节点key到期后的同身份重新认证及终端、双向同步、TCP恢复已验，完整认证矩阵仍有待验项。896b的Linux双架构与WSL2完整产品/systemd矩阵通过；e2f的Mac双架构已完整通过，但896b的Intel新出现登录准备超时，Mac ARM仍运行。另确认并修复ARM64 race网络栈依赖的原子操作错误，已通过本地验证，完整平台待新CI，详见[23](23-tsnet-external-acceptance.md)与[26](26-native-platform-acceptance.md)。
 
-**当前CI：** e2f7f41的[41109911804](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41109911804)四目标编译/Homebrew及WSL完整矩阵通过；两Linux分别在session退出事件、node认证health等待失败，未运行维护，Mac新源码终态仍待。session修复允许未知原因升级为首次已知事件且继续拒绝重复；node夹具改为真实Noise注册HTTP400，以订阅/SDK health屏障明确两种时序，原CI瞬时失败未直接复现。专项race/vet通过，未改生产逻辑或放宽期限。Linux/WSL新增独立维护准入，普通产品失败后仍可验证systemd，但取消/前置或来源不符拒绝，最终失败不被覆盖；27项平台工具检查及七类审查通过，下一轮CI待提交。缓存已实际恢复：两Linux native约13.2/13.9秒，build/lint由217.624/143.132降至16.766/12.900秒；失败轮产品时长不作为整体提速证据。两项c4长测、15:56未使用Auth Key自然到期及后续认证身份保持冻结。
+**当前CI：** 896b986的[41115363744](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41115363744)四目标编译及Linux双架构/WSL完整矩阵通过，两个原生Linux旧失败用例与受保护/var/lib安装均实际通过；Mac Intel唯一失败位于peer用例登录准备，原CI瞬时原因未复现，Mac ARM仍待。缓存由partial实际提升warm，两Linuxbuild/lint为17.717/13.500秒。性能分析另复现gVisor旧ARM64 race CAS错误，现固定最早包含上游修复的可构建Go快照；同配置节点用例32.48→1.81秒，44顶层node race51.200秒、CAS红绿、全包build/vet、模块校验及漏洞扫描通过。Go1.26.10/Tailscale1.98.10和原超时保持，新依赖完整平台待下一轮；不把ARM修复当成Intel超时已定位。三份进度同步、36/42保持，长测与预约key/认证身份继续冻结。
 
 以下是按各批源码范围保留的历史记录，当前状态以本摘要和原条目的最新部分进展为准。
 
@@ -1020,3 +1020,16 @@ c108的Mac双架构完整产品/LaunchAgent已通过，e2f的实际WSL2在/var/l
 认证测试使用本地真实Noise/HTTP2控制面返回HTTP400；确认needs_login可以先于真实拒绝，改用已安装的LocalAPI订阅或独立SDK初始health快照屏障，分别验证订阅后与订阅前错误。退休watcher代次、Node、observer、HTTP transport和hijacked连接均清理，原30/15秒期限保持。四组认证×5共20次顶层race43.912秒；最终独立SDK oracle两种时序包4.764秒、vet通过。旧测试本机10次通过，未直接复现原CI瞬时失败；临时overlay移除watch拒绝分支时新用例16.15秒失败仅证明覆盖能力。报告`/tmp/shiki-auth-health-20261031/review.json`，session私有证据`/tmp/shiki-session-exit.IwZpAivb/`。
 
 Linux及WSL普通产品失败后可继续独立维护；前置四阶段须真通过，重验六字段原生身份、提交与所有受跟踪/非忽略输入，取消或来源变更拒绝执行。finalize原必需阶段保持，维护成功不能掩盖产品失败；Mac仍按原成功链执行。27项平台工具检查1.200秒、actionlint、Python AST、WSL内嵌Bash语法及独立七类审查通过。生产Go、协议、依赖和超时不变，完整平台等待新CI；08/15/16同步，原42条/36已勾选保持。
+
+
+## 原生Linux闭环与ARM64 race依赖修复（2026-10-31）
+
+896b986的CI41115363744原生Linux amd64/arm64及WSL完整通过，源码未变、未完成阶段与失败列表均为空。原生两架构build/lint17.717/13.500秒、全包race385.477/400.338秒、E2E176.416/168.868秒、systemd239.720/245.831秒；两旧失败用例全部正向通过。两平台实际/opt可被其他用户写入，/var/lib、/var、/三层均安全；新布局维护13操作、四活动升级/回滚边界、数据保持和cleanup通过。partial缓存实际恢复12.708/15.550秒后保存本轮warm；WSL产品566.848秒、E2E185.237秒、systemd247.212秒完整通过。e2f的两Mac完整通过另存；896b Intel唯一失败在peer_lifetime_test.go49的loginInteractive准备，尚未进入撤销断流断言，Mac ARM运行中，见26。
+
+CPU诊断冻结896b源、独立overlay及状态：本机两核race同一连接用例32.48秒，两登录9.706/9.530秒、首次RPC4.543秒、清理0.104秒；另轮CPU采样29.92秒wall/50.77秒CPU，gVisor Sleeper/fetch/nextWaker及调度热点突出，未解析ExternalCode不猜成加密。直接调用旧依赖CAS的1→2交换实际返回false且保留1；汇编原文件、模块zip和objdump一致，排除本机误改。新CAS回归在旧依赖三个分支均红，包0.612秒；这是race && arm64路径错误，不能声称默认非race产品同样忙循环。
+
+上游修复[PR14585](https://github.com/google/gvisor/pull/14585)于2026-09-09合并，原commit1b2946c日期为08-23；固定第一份包含修复的自动Go快照`v0.0.0-20260909230408-9b1144b679cb`。原修复commit含未生成模板，不能直接编译；10-30最新快照要求Go1.27.3，独立候选被拒绝，均未进入主树。最终仅gVisor、mdlayher/socket0.5.1、x/exp6ae5c78190dc、x/time0.15.0四个要求版本变化，Go/toolchain及Tailscale保持。该依赖更新包含上游其他变更，不能描述成仅一行回补，须完整平台验证。
+
+同GOMAX2/p1/race、原45秒期限和相同业务用例，新候选1.81秒、包3.436秒；这轮overlay未命中规范/private路径，因此仅比较真实原用例总时长，不报告其分阶段收益。冻结896源+独立最终modfile的node整包44顶层/132含子项，51.200秒零fail/skip；主树新增CAS三分支race1.533秒通过。主树全包build39.847秒、vet22.515秒、go mod verify3.356秒、包级govulncheck4.029秒全部通过。工具完整记录位于`/var/folders/1n/q373cln10fqb0gl9z1ds5d8m0000gn/T/shiki-ci-dependency-tnkdjc05/`，性能/候选证据位于`/var/folders/1n/q373cln10fqb0gl9z1ds5d8m0000gn/T/shiki-node-perf-896b986-79uy476y/`。独立tidy会把可选负载诊断UI专用mod依赖引入根图，已排除，原sum历史行保留合法。
+
+Intel登录失败未复现：冻结896旧依赖本机4次通过、随后110秒整组截止，不记为case失败复现；候选依赖的两次phase诊断2.01/2.08秒，四次登录URL等待160–162ms、online349–398ms，原15/45秒不变。无法从公开安全行判断Intel失败属于哪一阶段，不改生产/增加重试；`/tmp/shiki-peer-login-896b-20261031/review.json`保留范围与清理。新依赖完整CI和Intel复验待下一轮；七类审查通过，42条/36勾选保持，既有长测不跨源码追认。

@@ -1,8 +1,8 @@
 # 开发路线图
 
-**当前进度（2026-10-31）：36/42，剩余6个复合门槛。** 官方节点key到期后的同身份重新认证及终端、双向同步、TCP恢复已验，完整认证矩阵仍有待验项。c108的Mac双架构完整产品/LaunchAgent及实际WSL2完整维护通过；e2f的WSL2使用受保护/var/lib布局再次完整通过。两Linux新出现的产品测试失败已完成本地测试修复，原生systemd正向验收仍待下一轮，详见[23](23-tsnet-external-acceptance.md)与[26](26-native-platform-acceptance.md)。
+**当前进度（2026-10-31）：36/42，剩余6个复合门槛。** 官方节点key到期后的同身份重新认证及终端、双向同步、TCP恢复已验，完整认证矩阵仍有待验项。896b的Linux双架构与WSL2完整产品/systemd矩阵通过；e2f的Mac双架构已完整通过，但896b的Intel新出现登录准备超时，Mac ARM仍运行。另确认并修复ARM64 race网络栈依赖的原子操作错误，已通过本地验证，完整平台待新CI，详见[23](23-tsnet-external-acceptance.md)与[26](26-native-platform-acceptance.md)。
 
-**当前CI：** e2f7f41的[41109911804](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41109911804)四目标编译/Homebrew及WSL完整矩阵通过；两Linux分别在session退出事件、node认证health等待失败，未运行维护，Mac新源码终态仍待。session修复允许未知原因升级为首次已知事件且继续拒绝重复；node夹具改为真实Noise注册HTTP400，以订阅/SDK health屏障明确两种时序，原CI瞬时失败未直接复现。专项race/vet通过，未改生产逻辑或放宽期限。Linux/WSL新增独立维护准入，普通产品失败后仍可验证systemd，但取消/前置或来源不符拒绝，最终失败不被覆盖；27项平台工具检查及七类审查通过，下一轮CI待提交。缓存已实际恢复：两Linux native约13.2/13.9秒，build/lint由217.624/143.132降至16.766/12.900秒；失败轮产品时长不作为整体提速证据。两项c4长测、15:56未使用Auth Key自然到期及后续认证身份保持冻结。
+**当前CI：** 896b986的[41115363744](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41115363744)四目标编译及Linux双架构/WSL完整矩阵通过，两个原生Linux旧失败用例与受保护/var/lib安装均实际通过；Mac Intel唯一失败位于peer用例登录准备，原CI瞬时原因未复现，Mac ARM仍待。缓存由partial实际提升warm，两Linuxbuild/lint为17.717/13.500秒。性能分析另复现gVisor旧ARM64 race CAS错误，现固定最早包含上游修复的可构建Go快照；同配置节点用例32.48→1.81秒，44顶层node race51.200秒、CAS红绿、全包build/vet、模块校验及漏洞扫描通过。Go1.26.10/Tailscale1.98.10和原超时保持，新依赖完整平台待下一轮；不把ARM修复当成Intel超时已定位。三份进度同步、36/42保持，长测与预约key/认证身份继续冻结。
 
 以下是按各批源码范围保留的历史记录，当前状态以本摘要和原条目的最新部分进展为准。
 
@@ -206,7 +206,7 @@
 | Phase 0 tsnet认证原型 | 官方双端登录、进程身份保持、key首用/复用拒绝与交互取消已验；peer撤销旧流回收已有本地与官方复验证据；新增官方node key到期后的同身份认证/业务恢复通过，见23 | 控制失联分类、最终agent撤销/重新认证、未使用key撤销及审批等待/移除/批准已验；自身明确撤销/管理员拒绝分类、未使用Auth Key自然到期及其余11认证矩阵 |
 | Phase 4 安装器与服务 | 原生LaunchAgent、容器systemd、二次PID1启动及未登录system tailscaled非干扰已验；本地启动策略配置展示已完成双平台和真实systemd四态验证 | 外部账号、原生VPS及重启/登录持久化 |
 | Phase 4 升级回滚与卸载 | 原开发schema迁移/拒写/恢复证据保留；公开alpha.1→alpha.2实际活动升级/回滚、重复安装/卸载及兼容矩阵双平台通过，见24 | 外部登录状态跨升级、主机重启/重新登录及其他原生平台完整场景 |
-| Phase 5 平台兼容 | c108的Mac双架构与真实WSL2完整产品/维护通过，两Linux产品链通过；e2f的WSL新布局亦通过，Linux两项测试夹具已修，见26 | 新测试源码的完整平台与原生Linux维护矩阵；物理环境和外部账号不由CI代替 |
+| Phase 5 平台兼容 | e2f的Mac双架构完整通过，896b的Linux双架构/WSL完整产品与维护通过；ARM race依赖缺陷已本地修复，见26 | 新依赖完整矩阵、896b Intel登录超时复验及Mac ARM结果；物理环境和外部账号不由CI代替 |
 | Phase 5 长稳、资源与性能 | macOS原12小时通过，Linux578源失败保留；697源Linux12h30m/4368轮及恢复/清理已独立通过 | 完整已有记录与源码差异已分析；生产heap/object归因、当前候选长时/资源与负载证据仍待，不能跨源码追认 |
 | Phase 5 支持声明 | 持续保持实现/验收/外部门槛分开 | 所有相应支持条件实际通过 |
 
@@ -372,7 +372,7 @@
 <a id="evidence-acceptance-runner"></a>
 
 - [ ] macOS Intel/ARM、Linux、WSL 客户端与 Linux daemon 兼容性验证。
-  - macOS ARM与Linux ARM容器既有证据保持。原生Intel的bf2e645（树同c83c95a）与58806be均已通过完整产品、终端及LaunchAgent生命周期/活动升级下载上传；实际tmux3.7c，不覆盖3.8。58806be的Linux amd64/arm64与真实WSL2产品/E2E/embedded/terminal通过，systemd维护仍失败。c10852f的真实WSL2完整产品/systemd维护已通过，两Linux产品链通过但首次daemon激活仍失败；已实际复现/opt0777祖先权限拒绝，继续改用/var/lib及前置校验。c108的Mac双架构全部阶段通过，tmux3.8实际运行已验；e2f的WSL2在/var/lib新布局完整通过，两Linux产品测试新失败后未进入维护。退出事件/真实HTTP拒绝夹具已修并通过专项race，独立维护准入的27项工具检查通过，下一轮完整平台仍待；保留arm64旧useradd超时未知原因。完整矩阵通过前不勾选，详见[26](26-native-platform-acceptance.md)。
+  - macOS ARM与Linux ARM容器既有证据保持。原生Intel的bf2e645（树同c83c95a）与58806be均已通过完整产品、终端及LaunchAgent生命周期/活动升级下载上传；实际tmux3.7c，不覆盖3.8。58806be的Linux amd64/arm64与真实WSL2产品/E2E/embedded/terminal通过，systemd维护仍失败。c10852f的真实WSL2完整产品/systemd维护已通过，两Linux产品链通过但首次daemon激活仍失败；已实际复现/opt0777祖先权限拒绝，继续改用/var/lib及前置校验。c108的Mac双架构全部阶段通过，tmux3.8实际运行已验；e2f的WSL2在/var/lib新布局完整通过，两Linux产品测试新失败后未进入维护。退出事件/真实HTTP拒绝夹具已修并通过专项race，独立维护准入的27项工具检查通过，当时下一轮完整平台仍待；保留arm64旧useradd超时未知原因。896b的两Linux及WSL完整矩阵现已通过，包括/var/lib正向维护；Mac Intel登录准备出现单次超时，未复现，Mac ARM运行中。已确认并修复gVisor的ARM64 race CAS错误，固定上游可构建修复快照，本地44顶层node race、CAS回归、全包build/vet与漏洞扫描通过。新依赖尚需完整平台验证；完整矩阵通过前不勾选，详见[26](26-native-platform-acceptance.md)。
 - [ ] 长时间后台运行、资源泄漏、故障注入、安全边界与性能回归。
   - 2026-10-29原697源Linux12h30m3.603s/4368轮、四角色自然凭据轮换、1803.013s恢复尾部及正常清理已独立核验通过。仅覆盖该冻结源；完整已有资源记录分析、当前alpha覆盖差异与长期资源稳定未关闭，见[最终核验](15-implementation-status.md#evidence-default-linux-final-20261029)。
   - 2026-10-29逐项核对697运行源与当前候选：521→541执行输入，34改/20新增/487不变，14观察工具相同；新sync Stop直接改变轮换/停机清理，路由attempts也包含持久字段隔离，旧长跑不能追认为当前组合长稳。安装器/独立analyzer不在此场景；已有专项保持各自范围，不因文件数变化盲目追加12小时，见[源码覆盖核对](15-implementation-status.md#evidence-long-run-source-coverage)。
