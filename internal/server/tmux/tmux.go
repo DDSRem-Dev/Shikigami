@@ -33,7 +33,7 @@ type Pane struct {
 	TmuxSessionID     string // tmux's exact $N target, never a name prefix
 	WindowID          string
 	PaneID            string
-	PID               int
+	PID               int // zero when tmux omits the PID of a retained dead pane
 	Dead              bool
 	ExitStatus        *int
 	ExitSignal        int
@@ -159,14 +159,21 @@ func parsePane(line string) (Pane, error) {
 	if _, err := Name(id); err != nil {
 		return Pane{}, err
 	}
-	pid, err := strconv.Atoi(fields[3])
-	if err != nil {
-		return Pane{}, fmt.Errorf("parse pane PID: %w", err)
+	dead := fields[4] == "1"
+	var pid int
+	// Since tmux 3.8 pane_pid is empty once a pane dies. Its exact tmux
+	// identities and retained exit evidence remain available independently.
+	if fields[3] != "" || !dead {
+		var err error
+		pid, err = strconv.Atoi(fields[3])
+		if err != nil {
+			return Pane{}, fmt.Errorf("parse pane PID: %w", err)
+		}
 	}
 	if !validTmuxSession.MatchString(fields[6]) {
 		return Pane{}, errors.New("invalid tmux session identity")
 	}
-	p := Pane{SessionID: id, TmuxSessionID: fields[6], WindowID: fields[1], PaneID: fields[2], PID: pid, Dead: fields[4] == "1"}
+	p := Pane{SessionID: id, TmuxSessionID: fields[6], WindowID: fields[1], PaneID: fields[2], PID: pid, Dead: dead}
 	if fields[5] != "" {
 		exit, err := strconv.Atoi(fields[5])
 		if err != nil {
