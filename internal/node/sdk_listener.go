@@ -37,7 +37,7 @@ func (n *Node) listenPeerTCP(server *tsnet.Server, generation uint64, port uint1
 	n.mu.Lock()
 	if n.generation != generation || n.server != server || !n.authorizedLocked() {
 		n.mu.Unlock()
-		return nil, connect.NewError(connect.CodeFailedPrecondition, "NODE_AUTH_REQUIRED")
+		return nil, authorizationError(connect.CodeFailedPrecondition)
 	}
 	if n.peerListeners[port] != nil {
 		n.mu.Unlock()

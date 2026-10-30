@@ -81,7 +81,7 @@ func (n *Node) bindPeerConn(conn net.Conn, generation uint64, address netip.Addr
 	peer := n.peers[address]
 	switch {
 	case generation != n.generation || !n.authorizedLocked():
-		err = connect.NewError(connect.CodeFailedPrecondition, "NODE_AUTH_REQUIRED")
+		err = authorizationError(connect.CodeFailedPrecondition)
 	case identity.key.IsZero() || peer.key != identity.key || peer.epoch != identity.epoch:
 		err = connect.NewError(connect.CodePermissionDenied, "UNKNOWN_TAILNET_PEER")
 	case peer.expired:

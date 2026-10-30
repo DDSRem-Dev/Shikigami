@@ -418,6 +418,13 @@ func (r *Resources) failRemote(p *remotePool, err error) {
 	p.state, p.reason = "offline", "REMOTE_UNAVAILABLE"
 	p.needsSuspend = true
 	p.episode.failed(time.Now(), err)
+	if localNodeAuthorizationRequired(err) {
+		// Consume an old stream's admission failure. The next scheduled probe
+		// must consult the current node, not replay this retired lease's error.
+		p.failure.Store(nil)
+		p.state, p.reason = "auth_required", "NODE_AUTH_REQUIRED"
+		return
+	}
 	if p.episode.exhausted {
 		p.reason = "RECONNECT_EXHAUSTED"
 	}
@@ -490,6 +497,11 @@ func (p *remotePool) bind(next connect.ClientFunc) connect.ClientFunc {
 }
 func (p *remotePool) failed(err error) {
 	if err == nil || errors.Is(err, io.EOF) {
+		return
+	}
+	if localNodeAuthorizationRequired(err) {
+		p.failure.Store(&remoteFailure{err: err})
+		p.invalidate()
 		return
 	}
 	switch connect.CodeOf(err) {

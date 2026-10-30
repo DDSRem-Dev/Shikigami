@@ -37,7 +37,7 @@ func (n *Node) Dial(ctx context.Context, network, address string) (net.Conn, err
 	lease := n.authorization
 	n.mu.Unlock()
 	if server == nil || lc == nil || lease == nil || lease.Err() != nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, "NODE_AUTH_REQUIRED")
+		return nil, authorizationError(connect.CodeFailedPrecondition)
 	}
 	status, err := n.queryStatus(ctx, lc, generation)
 	if err != nil {
@@ -47,7 +47,7 @@ func (n *Node) Dial(ctx context.Context, network, address string) (net.Conn, err
 		return nil, connect.NewError(connect.CodeUnavailable, "NODE_STATUS_UNAVAILABLE")
 	}
 	if status.BackendState != "Running" || (status.Self != nil && status.Self.Expired) {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, "NODE_AUTH_REQUIRED")
+		return nil, authorizationError(connect.CodeFailedPrecondition)
 	}
 	peer, ip, err := resolvePeer(status, host)
 	if err != nil {
@@ -71,7 +71,7 @@ func (n *Node) Dial(ctx context.Context, network, address string) (net.Conn, err
 	n.mu.Unlock()
 	if !current || lease.Err() != nil {
 		_ = conn.Close()
-		return nil, connect.NewError(connect.CodeFailedPrecondition, "NODE_AUTH_REQUIRED")
+		return nil, authorizationError(connect.CodeFailedPrecondition)
 	}
 	return n.bindPeerConn(conn, generation, ip, identity)
 }
@@ -126,7 +126,7 @@ func (n *Node) Listen(port uint16) (net.Listener, error) {
 	generation := n.generation
 	n.mu.Unlock()
 	if server == nil || !authorized {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, "NODE_AUTH_REQUIRED")
+		return nil, authorizationError(connect.CodeFailedPrecondition)
 	}
 	return n.listenPeerTCP(server, generation, port)
 }

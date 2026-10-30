@@ -8,6 +8,7 @@ import (
 
 	"connectrpc.com/connect/v2"
 	"github.com/DDSRem-Dev/Shikigami/internal/connection"
+	"github.com/DDSRem-Dev/Shikigami/internal/node"
 	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
 	apb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/agent"
 	rpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/protocolconnect"
@@ -186,7 +187,7 @@ func (r *Resources) newTrustedRoute(server *apb.ServerConfig, token, route strin
 		return connection.NewRPCClient(endpoint, bearer), endpoint.Close, nil
 	}
 	if r.node == nil || server.TailscaleAddress == "" {
-		return nil, nil, rpcError(connect.CodeFailedPrecondition, "NODE_AUTH_REQUIRED")
+		return nil, nil, connect.NewError(connect.CodeFailedPrecondition, "NODE_AUTH_REQUIRED").WithCause(node.ErrAuthorizationRequired)
 	}
 	pool, err := r.node.NewRPCPool(server.TailscaleAddress, token)
 	if err != nil {

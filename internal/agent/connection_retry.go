@@ -7,7 +7,13 @@ import (
 
 	"connectrpc.com/connect/v2"
 	"github.com/DDSRem-Dev/Shikigami/internal/connection"
+	"github.com/DDSRem-Dev/Shikigami/internal/node"
 )
+
+func localNodeAuthorizationRequired(err error) bool {
+	var remote *connect.Error
+	return errors.Is(err, node.ErrAuthorizationRequired) && !(errors.As(err, &remote) && remote.IsRemote())
+}
 
 type remoteFailure struct{ err error }
 
@@ -38,6 +44,13 @@ func (e *reconnectEpisode) allowed(now time.Time) error {
 
 func (e *reconnectEpisode) failed(now time.Time, err error) {
 	e.lastError = err
+	if localNodeAuthorizationRequired(err) {
+		// Waiting for our own node is not a failed remote protocol or a network
+		// reconnect. Recheck local admission without consuming the shared budget;
+		// no registration, credential change or route fallback is initiated.
+		e.retryAt = now.Add(time.Second)
+		return
+	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		// A caller abandoning its request is neither a remote trust failure nor
 		// permission to burn another caller's entire reconnect budget.

@@ -148,7 +148,7 @@
 
 ## 最近进展与剩余条件
 
-**2026-10-31两步推进：** 完整原生四目标与实际WSL2产品/维护矩阵已接入CI，9项工具检查及静态检查通过，实际平台结果待执行，见[26](26-native-platform-acceptance.md)。节点显式Self.Expired跨BackendState分类及AuthURL出现时旧授权退役已修复，原生node整包race40项无skip和vet通过；官方干净候选Mac首轮登录超时、VPS已online，失败及后续验证见[23](23-tsnet-external-acceptance.md#独立认证环境重建与状态修复2026-10-31)。新专用认证环境保留到相关认证/安装升级验收结束；不清除仍有依赖的节点。原42条、36/42及六个复合门槛保持。
+**2026-10-31两步推进：** 完整原生四目标与实际WSL2产品/维护矩阵已接入CI，9项工具检查及静态检查通过，首轮CI41090262712运行中，实际平台结果待核验，见[26](26-native-platform-acceptance.md)。节点显式Self.Expired跨BackendState分类及AuthURL出现时旧授权退役已修复，原生node整包race40项无skip和vet通过；官方干净候选Mac首轮登录超时后第二轮两端已online，失败及后续验证见[23](23-tsnet-external-acceptance.md#独立认证环境重建与状态修复2026-10-31)。重启预检发现本地节点未入网被永久标成REMOTE_INCOMPATIBLE，已修为本地auth_required等待并重验远端身份，定向race/vet、agent整包及干净m7官方节点同身份自动恢复通过。新专用认证环境保留到相关认证/安装升级验收结束；不清除仍有依赖的节点。原42条、36/42及六个复合门槛保持。
 
 以下按实际完成范围列出进度；部分工作完成也必须同步，不等待整个复合条目满足才记录。
 

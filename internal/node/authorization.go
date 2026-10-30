@@ -2,10 +2,19 @@ package node
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"connectrpc.com/connect/v2"
 )
+
+// ErrAuthorizationRequired identifies admission blocked by this process's own
+// node. The cause is not serialized: remote error text cannot impersonate it.
+var ErrAuthorizationRequired = errors.New("local node authorization required")
+
+func authorizationError(code connect.Code) error {
+	return connect.NewError(code, "NODE_AUTH_REQUIRED").WithCause(ErrAuthorizationRequired)
+}
 
 // authorizedLocked separates retained data-plane authorization from control
 // connectivity diagnostics. The caller must hold n.mu.
@@ -33,7 +42,7 @@ func (n *Node) authorizeRPC(next connect.ClientFunc) connect.ClientFunc {
 		online := n.authorizedLocked()
 		n.mu.Unlock()
 		if !online || lease.Err() != nil {
-			return nil, connect.NewError(connect.CodeFailedPrecondition, "NODE_AUTH_REQUIRED")
+			return nil, authorizationError(connect.CodeFailedPrecondition)
 		}
 		callCtx, cancel := context.WithCancel(ctx)
 		stopLease := context.AfterFunc(lease, cancel)
@@ -71,7 +80,7 @@ func (s *authorizedStream) Close() error {
 func (s *authorizedStream) Receive(message any) error {
 	err := s.ClientStream.Receive(message)
 	if s.lease.Err() != nil {
-		err = connect.NewError(connect.CodeCanceled, "NODE_AUTH_REQUIRED")
+		err = authorizationError(connect.CodeCanceled)
 	}
 	if err != nil || s.singleResponse {
 		_ = s.Close()
@@ -81,7 +90,7 @@ func (s *authorizedStream) Receive(message any) error {
 
 func (s *authorizedStream) Send(message any) error {
 	if s.lease.Err() != nil {
-		return connect.NewError(connect.CodeCanceled, "NODE_AUTH_REQUIRED")
+		return authorizationError(connect.CodeCanceled)
 	}
 	return s.ClientStream.Send(message)
 }
