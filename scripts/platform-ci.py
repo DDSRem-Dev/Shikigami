@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+"""Native platform acceptance. Upload only public/, never private test logs/state."""
+import argparse
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import time
+
+sys.dont_write_bytecode = True
+from platform_support import command, native_identity, source_identity, test_events, write_json, require_verbose_pass
+
+ROOT = Path(__file__).resolve().parent.parent
+REQUIRED_INTEGRATION = (
+    "TestProductionSyncProcessThroughSupervisor", "TestFullCrossProcessDataPlane",
+    "TestCommittedUploadLostACK", "TestIndependentProcessVersionBoundaries",
+)
+REQUIRED_E2E = (
+    "TestCLIThreeProcessTLSLifecycle", "TestCLIPortForwardTLSLifecycleAndRecovery",
+    "TestInstallerLocalReadinessAndExplicitTokenDelivery",
+)
+
+
+class Acceptance:
+    def __init__(self, evidence):
+        self.root = Path(evidence).absolute()
+        temporary = Path(os.environ["RUNNER_TEMP"]).resolve()
+        if self.root.is_symlink() or self.root.parent.resolve() != temporary or not self.root.name.startswith("shiki-platform"):
+            raise ValueError("evidence must be a dedicated shiki-platform directory directly under RUNNER_TEMP")
+        self.root.mkdir(mode=0o700, exist_ok=True)
+        self.public, self.private = self.root / "public", self.root / "private"
+        for path in (self.public, self.private):
+            if path.is_symlink():
+                raise ValueError("evidence subdirectory cannot be a symlink")
+            path.mkdir(mode=0o700, exist_ok=True)
+        self.state = self.public / "stages.json"
+        self.stages = json.loads(self.state.read_text()) if self.state.exists() else {}
+
+    def run(self, label, args, *, timeout=1800, env=None, required=None, required_text=()):
+        print(f"Platform acceptance: {label}", flush=True)
+        started = time.monotonic()
+        record = {"state": "running"}
+        self.stages[label] = record
+        write_json(self.state, self.stages)
+        log = self.private / (label + ".log")
+        try:
+            with log.open("w") as stream:
+                process = subprocess.Popen([str(arg) for arg in args], cwd=ROOT, env=env,
+                                           stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
+                try:
+                    code = process.wait(timeout=timeout)
+                except BaseException:
+                    # Give the exact wrapper its full cleanup window. Killing only
+                    # sudo/bash would bypass owned-service teardown in its child.
+                    previous = {sig: signal.signal(sig, signal.SIG_IGN) for sig in (signal.SIGINT, signal.SIGTERM)}
+                    try:
+                        if process.poll() is None:
+                            try:
+                                os.killpg(process.pid, signal.SIGTERM)
+                            except ProcessLookupError:
+                                pass
+                            try:
+                                process.wait(timeout=150)
+                            except subprocess.TimeoutExpired:
+                                os.killpg(process.pid, signal.SIGKILL)
+                                process.wait(timeout=10)
+                    finally:
+                        for sig, handler in previous.items():
+                            signal.signal(sig, handler)
+                    raise
+            record["exit_code"] = code
+            if required is not None:
+                write_json(self.public / (label + ".json"), test_events(log, validate=False))
+            if code:
+                raise RuntimeError(f"{label} failed; named outcomes are public and raw output remains private")
+            if required is not None:
+                test_events(log, required)
+            require_verbose_pass(log, required_text)
+            if required_text:
+                record["required_tests_passed"] = list(required_text)
+            record["state"] = "passed"
+        except BaseException:
+            record["state"] = "failed"
+            raise
+        finally:
+            record["seconds"] = round(time.monotonic() - started, 3)
+            write_json(self.state, self.stages)
+
+    def preflight(self):
+        if (self.public / "source.json").exists():
+            raise RuntimeError("refusing to reuse acceptance evidence from an earlier run")
+        write_json(self.public / "platform.json", native_identity(ROOT))
+        write_json(self.public / "source.json", source_identity(ROOT))
+        self.stages["preflight"] = {"state": "passed"}
+        write_json(self.state, self.stages)
+
+    def product(self):
+        self.run("build-lint", ["make", "build", "lint"])
+        self.run("tool-tests", ["make", "test-tools"])
+        self.run("platform-tool-tests", ["python3", "-B", "scripts/test-platform-ci.py"])
+        self.run("product-tests", ["go", "test", "-count=1", "-race", "-json", "./..."], required=REQUIRED_INTEGRATION)
+        for name in ("release-trust", "release"):
+            self.run(name + "-tests", ["go", "test", "-count=1", "-race", "-json", f"scripts/{name}.go", f"scripts/{name}_test.go"], required=())
+        self.run("e2e-tests", ["go", "test", "-count=1", "-race", "-json", "-tags=e2e", "./test/e2e/..."], required=REQUIRED_E2E)
+        self.run("embedded-plugins", ["bash", "scripts/build-embedded.sh"],
+                 env={**os.environ, "SHIKI_EMBED_VERIFY": "1", "GOFLAGS": os.environ.get("GOFLAGS", "") + " -v"},
+                 required_text=("TestEmbeddedPluginExtractsAndRunsThroughNativeHost",))
+
+    def terminal(self):
+        evidence = self.private / "terminal"
+        evidence.mkdir(mode=0o700)
+        self.run("terminal-semantics", ["bash", "scripts/test-terminal-state.sh"],
+                 env={**os.environ, "SHIKI_RUN_EVIDENCE_DIR": str(evidence)}, required_text=("TestFrontendSemanticRedraw",))
+
+    def maintenance(self):
+        identity = native_identity(ROOT)
+        if identity["os"] == "darwin":
+            self.run("launchd-lifecycle", ["bash", "scripts/test-launchd.sh"], timeout=1200,
+                     required_text=("TestNativeLaunchAgentLifecycle",))
+            for direction in ("upload", "download"):
+                evidence = self.private / ("launchd-" + direction)
+                evidence.mkdir(mode=0o700)
+                self.run("launchd-active-" + direction, ["bash", "scripts/test-launchd-activity.sh",
+                         *(["--download"] if direction == "download" else [])], timeout=1200,
+                         env={**os.environ, "SHIKI_RUN_EVIDENCE_DIR": str(evidence)},
+                         required_text=("TestNativeLaunchAgentUpgradeWithActiveTransfers",))
+        else:
+            self.run("systemd-modules", ["go", "mod", "download"], timeout=300)
+            self.run("systemd-lifecycle", ["sudo", "--preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT",
+                     "python3", "-B", ROOT / "scripts/platform-systemd.py", "--source", ROOT,
+                     "--go", command(["go", "env", "GOROOT"]) + "/bin/go",
+                     "--modules", command(["go", "env", "GOMODCACHE"]),
+                     "--evidence", self.private / "systemd"], timeout=2100)
+            result = json.loads((self.private / "systemd/result.json").read_text())
+            if result.get("state") != "passed" or result.get("cleanup") != "passed":
+                raise RuntimeError("native systemd scenario or exact cleanup did not pass")
+            write_json(self.public / "systemd.json", result)
+
+    def finalize(self):
+        source = self.public / "source.json"
+        source_ok = source.exists() and json.loads(source.read_text()) == source_identity(ROOT)
+        required = {"preflight", "build-lint", "tool-tests", "platform-tool-tests", "product-tests", "release-trust-tests",
+                    "release-tests", "e2e-tests", "embedded-plugins", "terminal-semantics"}
+        if os.environ["SHIKI_PLATFORM_OS"] == "darwin":
+            required.update(("launchd-lifecycle", "launchd-active-upload", "launchd-active-download"))
+        else:
+            required.add("systemd-lifecycle")
+        pending = sorted(name for name in required if self.stages.get(name, {}).get("state") != "passed")
+        passed = source_ok and not pending and os.environ.get("SHIKI_PLATFORM_JOB_STATUS") == "success"
+        write_json(self.public / "result.json", {"state": "passed" if passed else "failed", "source_unchanged": source_ok,
+                    "incomplete_stages": pending, "scope": "native local product and installation/service acceptance",
+                    "external_accounts": "not tested", "physical_restart_login": "not tested"})
+        if not passed:
+            raise RuntimeError("native acceptance incomplete; see public/result.json")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("stage", choices=("preflight", "product", "terminal", "maintenance", "finalize"))
+    parser.add_argument("--evidence", required=True)
+    arguments = parser.parse_args()
+    def interrupted(_signum, _frame):
+        raise KeyboardInterrupt
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, interrupted)
+    acceptance = Acceptance(arguments.evidence)
+    if arguments.stage not in ("preflight", "finalize"):
+        if not (acceptance.public / "source.json").exists():
+            raise RuntimeError("preflight must freeze source before tests")
+        native_identity(ROOT)
+    getattr(acceptance, arguments.stage)()
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as error:
+        # All exceptions here are controlled labels, not subprocess output.
+        print(f"platform acceptance: {error}", file=sys.stderr)
+        sys.exit(1)

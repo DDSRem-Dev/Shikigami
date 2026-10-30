@@ -186,3 +186,12 @@ CLI修复仅将denied/NODE_APPROVAL_REQUIRED且login_id非空、expires在未来
 
 
 最终补充历史清理及本轮临时审计材料回收已完成，811项确权对象与未知/运行中保留边界见[25清理终态](25-multihost-acceptance.md#历史临时材料最终清理)。expiry输入与runs=0仍保持；此记录不新增认证验收通过。
+
+
+## 独立认证环境重建与状态修复（2026-10-31）
+
+在原已清理环境之外，新建隔离Mac agent与VPS普通用户daemon，主服务、系统Tailscale和受保护长测均不修改。两端候选为v0.0.1-alpha.2-local.auth.6，基于ed7da9e加本批node修复；产品/插件摘要逐项核验，未使用诊断overlay。终端仅shell夹具，不宣称真实Claude。专用账号、HOME、配置、身份与节点保留至认证和后续安装升级依赖验收完成，再精确清理。
+
+两处确定实现缺口已取得修前红/修后race及整包验证：Self.Expired跨全部BackendState保持expired/NODE_KEY_EXPIRED；非空AuthURL撤回旧应用授权，控制面单纯失联仍保留先前有效授权。SDK1.98.10的私有keyExpired和公开Self.Expired并非相同来源，官方Expire是否提供该公开标志仍待观察，不能将这一修复直接认定官方到期通过。自身移除、管理员明确拒绝、官方URL有效期与本应用10分钟attempt仍分别记录。
+
+首轮实际结果：Mac完成浏览器认证并在控制台出现，但NodeControl始终未online，最终本应用attempt返回LOGIN_EXPIRED；保留失败，不将网页登记计为成功。VPS首次Connect又返回登录页，完成Google登录并再次Connect后，网页Connected且本地NodeControl实际online，SDK版本与Linux内核已记录。Mac正在进行保留身份的新显式尝试；完整双端业务、官方节点key过期、旧流回收及重新认证后同daemon业务恢复尚待。预约未使用auth key自然过期仍为10月31日15:56，使用原冻结CLI5/agent4，不替换为本批候选。

@@ -65,24 +65,49 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
   test:
+    name: test (${{ matrix.goos }}, ${{ matrix.goarch }})
+    timeout-minutes: 120
     strategy:
       fail-fast: false
+      max-parallel: 2
       matrix:
-        os: [ubuntu-24.04, macos-14]
-    runs-on: ${{ matrix.os }}
+        include:
+          - runner: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+          - runner: macos-15
+            goos: darwin
+            goarch: arm64
+          - runner: macos-15-intel
+            goos: darwin
+            goarch: amd64
+    runs-on: ${{ matrix.runner }}
+    env:
+      GOMAXPROCS: '2'
+      GOFLAGS: '-p=1 -mod=readonly -buildvcs=false'
+      GOTOOLCHAIN: local
+      SHIKI_PLATFORM_OS: ${{ matrix.goos }}
+      SHIKI_PLATFORM_ARCH: ${{ matrix.goarch }}
     steps:
       - uses: actions/checkout@v7.0.1
+        id: checkout
         with:
           ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/setup-go@v7.0.0
         with:
           go-version: '1.26.10'
           cache: true
+      - name: Verify actual native platform and freeze source identity
+        run: python3 -B scripts/platform-ci.py preflight --evidence "$RUNNER_TEMP/shiki-platform"
       - name: Install runtime test dependencies
         run: |
           if [[ "$RUNNER_OS" == Linux ]]; then
             sudo apt-get update
-            sudo apt-get install -y tmux unzip iproute2
+            sudo apt-get install -y tmux unzip iproute2 dbus-user-session openssl
           elif ! command -v tmux; then
             brew install tmux
           fi
@@ -98,19 +123,46 @@ jobs:
           GOFLAGS: '-p=1 -mod=readonly -buildvcs=false'
           GOTOOLCHAIN: local
         run: go -C test/diagnostics/terminalstate/analyzer run golang.org/x/vuln/cmd/govulncheck@v1.1.4 -scan=package ./...
-      - run: make build lint test test-e2e
+      - name: Complete native product, integration and end-to-end suite
+        run: python3 -B scripts/platform-ci.py product --evidence "$RUNNER_TEMP/shiki-platform"
       - name: Verify terminal screen semantics
-        shell: bash
+        run: python3 -B scripts/platform-ci.py terminal --evidence "$RUNNER_TEMP/shiki-platform"
+      - name: Native installation, service lifecycle and active upgrade maintenance
+        timeout-minutes: 55
+        run: python3 -B scripts/platform-ci.py maintenance --evidence "$RUNNER_TEMP/shiki-platform"
+      - name: Verify source identity and record final acceptance
+        if: always() && steps.checkout.outcome == 'success'
         env:
-          GOMAXPROCS: '2'
-          GOFLAGS: '-p=1 -mod=readonly -buildvcs=false'
-          GOTOOLCHAIN: local
-        run: |
-          set -euo pipefail
-          test "$(id -u)" -ne 0
-          shiki_terminal_evidence="$(mktemp -d "$RUNNER_TEMP/shiki-terminal-state.XXXXXX")"
-          printf 'Terminal evidence: %s\n' "$shiki_terminal_evidence"
-          SHIKI_RUN_EVIDENCE_DIR="$shiki_terminal_evidence" ./scripts/test-terminal-state.sh
+          SHIKI_PLATFORM_JOB_STATUS: ${{ job.status }}
+        run: python3 -B scripts/platform-ci.py finalize --evidence "$RUNNER_TEMP/shiki-platform"
+      - uses: actions/upload-artifact@v7.0.2
+        if: always() && steps.checkout.outcome == 'success'
+        with:
+          name: platform-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ runner.temp }}/shiki-platform/public/**
+          if-no-files-found: error
+          retention-days: 14
+  wsl:
+    name: test (WSL2, linux, amd64)
+    runs-on: windows-2025
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Native WSL2 product, terminal and systemd maintenance
+        id: acceptance
+        shell: pwsh
+        run: ./scripts/platform-wsl.ps1
+      - uses: actions/upload-artifact@v7.0.2
+        if: always() && steps.acceptance.outputs.evidence != ''
+        with:
+          name: platform-wsl2-linux-amd64
+          path: ${{ steps.acceptance.outputs.evidence }}/**
+          if-no-files-found: error
+          retention-days: 14
   compile:
     runs-on: ubuntu-24.04
     strategy:

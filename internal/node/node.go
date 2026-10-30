@@ -307,9 +307,7 @@ func (n *Node) applyStatus(generation uint64, observed *ipnstate.Status) {
 	fresh := usableIdentity && observed.Self.Online && observed.AuthURL == ""
 	switch observed.BackendState {
 	case "Running":
-		if observed.Self != nil && observed.Self.Expired {
-			result.State, result.ReasonCode = "expired", "NODE_KEY_EXPIRED"
-		} else if usableIdentity {
+		if usableIdentity {
 			result.ReasonCode = "NODE_CONTROL_UNAVAILABLE"
 			if observed.AuthURL != "" {
 				result.State, result.ReasonCode = "needs_login", "NODE_AUTH_REQUIRED"
@@ -325,6 +323,12 @@ func (n *Node) applyStatus(generation uint64, observed *ipnstate.Status) {
 		result.State, result.ReasonCode = "authenticating", ""
 	case "NoState":
 		result.State, result.ReasonCode = "uninitialized", ""
+	}
+	// The SDK may retain the self node while transitioning to NeedsLogin.
+	// Preserve its explicit expiry signal independently of the backend state;
+	// neither control connectivity nor our wall clock proves revocation.
+	if observed.Self != nil && observed.Self.Expired {
+		result.State, result.ReasonCode = "expired", "NODE_KEY_EXPIRED"
 	}
 	if attempt := n.attempt; attempt != nil {
 		result.LoginId = attempt.id
@@ -365,7 +369,9 @@ func (n *Node) applyStatus(generation uint64, observed *ipnstate.Status) {
 			n.authorization, n.authorizationCancel = context.WithCancel(n.ctx)
 		}
 	}
-	if !usableIdentity && n.authorizationCancel != nil {
+	// A pending registration URL explicitly requires login even when the SDK
+	// retains an old Running map. That differs from a lost control poll alone.
+	if (!usableIdentity || observed.AuthURL != "") && n.authorizationCancel != nil {
 		n.authorizationCancel()
 		n.authorization, n.authorizationCancel = nil, nil
 	}

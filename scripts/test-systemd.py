@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Real systemd acceptance, confined to one private Docker cgroup/PID namespace."""
+"""Real systemd acceptance: isolated Docker CLI or an explicit owned CI layout."""
 import argparse
 import hashlib
 import json
@@ -157,24 +157,54 @@ def host(output, prebuilt=None, fresh_only=False):
         run(["docker", "image", "rm", image], check=False)
 
 
-def inside():
+def inside(layout=None):
+    """Run the same real-service scenario in Docker or an owned hosted-runner layout.
+
+    Native callers must create the account/tree and own cleanup. The default is
+    intentionally the original private-container layout, including its PID1 gate.
+    """
     assert os.geteuid() == 0 and Path("/proc/1/comm").read_text().strip() == "systemd"
-    assert Path("/proc/1/cgroup").read_text().strip() == "0::/init.scope"
-    evidence = Path("/evidence")
+    if layout is None:
+        assert Path("/proc/1/cgroup").read_text().strip() == "0::/init.scope"
+        layout = dict(evidence="/evidence", home="/home/shikitest", user="shikitest", uid=1000, gid=1000,
+                      go_bin="/usr/local/go/bin", work="/work", build="/build", source="/source",
+                      cache="/var/cache/shiki-go", gopath="/go", modules="/go/pkg/mod",
+                      config="/etc/shiki", state="/var/lib/shiki", prefix="/opt/shiki",
+                      commands="/opt/shiki-commands", address="127.0.0.1:19527", build_timeout=300,
+                      transport="loopback TLS only; runtime network disabled")
+    else:
+        # The explicit native caller validates the complete layout before entry;
+        # do not allow this parameter to bypass the disposable-runner boundary.
+        from platform_support import hosted_guard
+        import pwd
+        hosted_guard()
+        account = pwd.getpwnam(layout["user"])
+        if (account.pw_uid, account.pw_gid, account.pw_dir) != (layout["uid"], layout["gid"], layout["home"]):
+            raise ValueError("systemd scenario account does not match its layout")
+    evidence, home = Path(layout["evidence"]), Path(layout["home"])
+    work, build = Path(layout["work"]), Path(layout["build"])
+    config, state, prefix = (Path(layout[key]) for key in ("config", "state", "prefix"))
+    uid, gid, username = layout["uid"], layout["gid"], layout["user"]
+    go_bin, address = layout["go_bin"], layout["address"]
+    user_path = f"{home}/.local/bin:{go_bin}:/usr/bin:/bin"
     evidence.mkdir(mode=0o700)
-    home = Path("/home/shikitest")
-    env = {**os.environ, "PATH": "/usr/local/go/bin:/usr/bin:/bin", "HOME": str(home), "TMPDIR": "/build/tmp", "GOCACHE": "/var/cache/shiki-go", "GOPATH": "/go", "GOTOOLCHAIN": "local", "GOPROXY": "off", "GOSUMDB": "off", "GOMAXPROCS": "2", "GOFLAGS": "-p=1 -mod=readonly -buildvcs=false"}
-    os.chown("/var/cache/shiki-go", 1000, 1000)
-    for directory in (Path("/work"), Path("/build")):
+    env = {**os.environ, "PATH": f"{go_bin}:/usr/bin:/bin", "HOME": str(home), "TMPDIR": str(build / "tmp"),
+           "GOCACHE": layout["cache"], "GOPATH": layout["gopath"], "GOMODCACHE": layout["modules"],
+           "GOTOOLCHAIN": "local", "GOPROXY": "off", "GOSUMDB": "off", "GOMAXPROCS": "2",
+           "GOFLAGS": "-p=1 -mod=readonly -buildvcs=false"}
+    os.chown(layout["cache"], uid, gid)
+    for directory in (work, build):
         directory.mkdir()
-        os.chown(directory, 1000, 1000)
-    Path("/build/tmp").mkdir(mode=0o700)
-    os.chown("/build/tmp", 1000, 1000)
-    shutil.copytree("/source", "/work", dirs_exist_ok=True)
-    run(["chown", "-R", "1000:1000", "/work"])
+        os.chown(directory, uid, gid)
+    (build / "tmp").mkdir(mode=0o700)
+    os.chown(build / "tmp", uid, gid)
+    shutil.copytree(layout["source"], work, dirs_exist_ok=True,
+                    ignore=shutil.ignore_patterns(".git", ".tools", "bin", "dist", "__pycache__"))
+    run(["chown", "-R", f"{uid}:{gid}", work])
 
     def user(args, **kwargs):
-        return run(["/usr/sbin/runuser", "-u", "shikitest", "--", "env", "HOME=" + str(home), "USER=shikitest", "XDG_RUNTIME_DIR=/run/user/1000", "PATH=/home/shikitest/.local/bin:/usr/local/go/bin:/usr/bin:/bin", *args], env=env, **kwargs)
+        return run(["/usr/sbin/runuser", "-u", username, "--", "env", "HOME=" + str(home),
+                    "USER=" + username, f"XDG_RUNTIME_DIR=/run/user/{uid}", "PATH=" + user_path, *args], env=env, **kwargs)
 
     prebuilt = os.environ.get("SHIKI_INSTALL_TEST_BUNDLES")
     if prebuilt:
@@ -187,11 +217,11 @@ def inside():
         bundles = {}
         for version in versions:
             phase("Building isolated release " + version)
-            user(["env", "SHIKI_VERSION=" + version, "bash", "scripts/build.sh"], cwd="/work", timeout=300)
-            result = user(["go", "run", "scripts/release.go", "--dir", "bin", "--output", "/build/" + version, "--version", version], cwd="/work", timeout=120)
+            user(["env", "SHIKI_VERSION=" + version, "bash", "scripts/build.sh"], cwd=work, timeout=layout["build_timeout"])
+            result = user(["go", "run", "scripts/release.go", "--dir", "bin", "--output", str(build / version), "--version", version], cwd=work, timeout=120)
             (evidence / (version + "-build.log")).write_text(result.stdout + result.stderr)
-            archive = next(Path("/build", version).glob("*.tar.gz"))
-            bundle = Path("/build", version, "bundle")
+            archive = next((build / version).glob("*.tar.gz"))
+            bundle = (build / version / "bundle")
             bundle.mkdir(mode=0o755)
             with tarfile.open(archive) as packed:
                 for member in packed.getmembers():
@@ -208,23 +238,23 @@ def inside():
     fixture = home / "claude-systemd-test-fixture"
     fixture.write_text("#!/bin/sh\nif [ \"${1:-}\" = --version ]; then printf '0.0.0-systemd-fixture\\n'; exit 0; fi\nif [ \"${1:-} ${2:-} ${3:-}\" = 'auth status --json' ]; then printf '{\"loggedIn\":true}'; exit 0; fi\nprintf 'SYSTEMD_FIXTURE_READY\\n'\nwhile IFS= read -r line; do printf '%s\\n' \"$line\" >> \"$HOME/upgrade-terminal-inputs\"; printf 'REPLY:%s\\n' \"$line\"; done\n")
     os.chmod(fixture, 0o700)
-    os.chown(fixture, 1000, 1000)
+    os.chown(fixture, uid, gid)
     tls = home / "tls"
     user(["mkdir", "-m", "700", tls])
     user(["openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-keyout", tls / "key.pem", "-out", tls / "cert.pem", "-days", "1", "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1"])
     user(["chmod", "600", tls / "key.pem", tls / "cert.pem"])
-    for directory in (Path("/etc/shiki"), Path("/var/lib/shiki")):
+    for directory in (config, state):
         directory.mkdir(mode=0o700)
-        os.chown(directory, 1000, 1000)
-    daemon_config = Path("/etc/shiki/daemon.yaml")
-    user([bundles[a][0] / "shiki-daemon", "init", "--config", daemon_config, "--user", "shikitest", "--state-dir", "/var/lib/shiki", "--projects-dir", home / "projects", "--tailscale=false", "--direct-tls-address", "127.0.0.1:19527", "--tls-cert", tls / "cert.pem", "--tls-key", tls / "key.pem", "--claude-executable", fixture])
+        os.chown(directory, uid, gid)
+    daemon_config = (config / "daemon.yaml")
+    user([bundles[a][0] / "shiki-daemon", "init", "--config", daemon_config, "--user", username, "--state-dir", state, "--projects-dir", home / "projects", "--tailscale=false", "--direct-tls-address", address, "--tls-cert", tls / "cert.pem", "--tls-key", tls / "key.pem", "--claude-executable", fixture])
     token = home / "device.token"
-    daemon_args = ["--role", "daemon", "--user", "shikitest", "--prefix", "/opt/shiki", "--non-interactive"]
-    daemon_install_args = [*daemon_args, "--config", daemon_config, "--state-dir", "/var/lib/shiki", "--plugins-dir", "/var/lib/shiki/plugins", "--bin-dir", "/opt/shiki-commands", "--projects-dir", home / "projects", "--claude-executable", fixture, "--path", "/home/shikitest/.local/bin:/usr/bin:/bin"]
+    daemon_args = ["--role", "daemon", "--user", username, "--prefix", prefix, "--non-interactive"]
+    daemon_install_args = [*daemon_args, "--config", daemon_config, "--state-dir", state, "--plugins-dir", state / "plugins", "--bin-dir", layout["commands"], "--projects-dir", home / "projects", "--claude-executable", fixture, "--path", str(home / ".local/bin") + ":/usr/bin:/bin"]
 
     def readiness(version, token_destination=None):
         def attempt():
-            args = ["/opt/shiki/current/shiki-install", "probe", *daemon_args]
+            args = [prefix / "current/shiki-install", "probe", *daemon_args]
             if token_destination is not None:
                 args += ["--token-output", token_destination]
             result = run(args, timeout=60, check=False)
@@ -257,15 +287,15 @@ def inside():
     config_before = daemon_config.read_bytes()
     unit = run(["systemctl", "cat", "shiki-daemon.service"]).stdout
     (evidence / "daemon-unit.txt").write_text(unit)
-    assert "KillMode=process" in unit and "User=shikitest" in unit
-    run(["loginctl", "enable-linger", "shikitest"])
-    run(["systemctl", "start", "user@1000.service"])
-    wait_for(lambda: Path("/run/user/1000/bus").exists())
+    assert "KillMode=process" in unit and "User=" + username in unit
+    run(["loginctl", "enable-linger", username])
+    run(["systemctl", "start", f"user@{uid}.service"])
+    wait_for(lambda: Path(f"/run/user/{uid}/bus").exists())
     client_config = home / ".shiki/config.yaml"
     user(["mkdir", "-p", "-m", "700", client_config.parent])
     client_config.write_text("schema_version: 1\nplugins_dir: ~/.shiki/plugins\nagent:\n  socket: ~/.shiki/run/agent.sock\n  state_dir: ~/.shiki/agent\n  auto_start: false\ntailscale:\n  enabled: false\n  hostname: shiki-systemd-test\n  state_dir: ~/.shiki/tailscale\n  control_url: https://controlplane.tailscale.com\nservers: {}\nprojects: {}\n")
     os.chmod(client_config, 0o600)
-    os.chown(client_config, 1000, 1000)
+    os.chown(client_config, uid, gid)
     client_prefix = home / ".local/share/shiki/install"
 
     def client_operation(operation, version, expected_version=None, expected_state="local_application_ready"):
@@ -307,10 +337,10 @@ def inside():
 
     def process(pid):
         status = Path(f"/proc/{pid}/status").read_text()
-        assert "Uid:\t1000\t1000\t1000\t1000" in status, status
+        assert f"Uid:\t{uid}\t{uid}\t{uid}\t{uid}" in status, status
         environment = dict(line.split("=", 1) for line in Path(f"/proc/{pid}/environ").read_bytes().decode().split("\0") if "=" in line)
         assert environment["HOME"] == str(home)
-        return {"pid": pid, "uid": 1000, "home": environment["HOME"], "path": environment["PATH"], "cwd": user(["readlink", f"/proc/{pid}/cwd"]).stdout.strip(), "cgroup": Path(f"/proc/{pid}/cgroup").read_text().strip()}
+        return {"pid": pid, "uid": uid, "home": environment["HOME"], "path": environment["PATH"], "cwd": user(["readlink", f"/proc/{pid}/cwd"]).stdout.strip(), "cgroup": Path(f"/proc/{pid}/cgroup").read_text().strip()}
 
     def workers(parent):
         found = []
@@ -329,15 +359,15 @@ def inside():
     def gone(pids):
         return all(not Path(f"/proc/{pid}").exists() for pid in pids)
 
-    cli("connect", "systemd", "--tls-address", "127.0.0.1:19527", "--tls-server-name", "localhost", "--tls-ca", str(tls / "cert.pem"), "--token-file", str(token))
+    cli("connect", "systemd", "--tls-address", address, "--tls-server-name", "localhost", "--tls-ca", str(tls / "cert.pem"), "--token-file", str(token))
     user(["mkdir", "-p", "-m", "700", home / "projects/preserved"])
     marker = home / "projects/preserved/keep.txt"
     marker.write_text("preserved across systemd lifecycle\n")
-    os.chown(marker, 1000, 1000)
+    os.chown(marker, uid, gid)
     project = cli("projects", "create", "systemd", "--path", str(marker.parent))
     session = cli("sessions", "create", "durable", "--project", project["id"])
     session_id = session["id"]
-    tmux_args = ["tmux", "-L", "shiki-1000", "display-message", "-p", "-t", "shiki-" + session_id, "#{pane_pid}"]
+    tmux_args = ["tmux", "-L", f"shiki-{uid}", "display-message", "-p", "-t", "shiki-" + session_id, "#{pane_pid}"]
     pane = int(user(tmux_args).stdout.strip())
     cli("--server", "systemd", "plugins", "enable", "sync", "--side", "remote")
     cli("plugins", "enable", "sync", "--side", "local")
@@ -394,7 +424,7 @@ def inside():
                   "uninstall_preserves_config_state_project_token_tmux": True,
                   "all_host_and_worker_processes_reaped": True,
                   "release_trust": "operator-supplied authenticated bundles; see host provenance",
-                  "transport": "loopback TLS only; runtime network disabled",
+                  "transport": layout["transport"],
                   "claude": "explicit test fixture, no account acceptance",
                   "external_peer_acceptance": "pending"}
         (evidence / "evidence.json").write_text(json.dumps(result, indent=2) + "\n")
@@ -481,7 +511,7 @@ def inside():
     preserved("user agent normal stop exits zero without service respawn", a)
     crash_evidence = {"unexpected_exits_same_version": 3, "diagnostic_state": "degraded", "reason": "AGENT_CRASH_LOOP", "stable_diagnostic_pid": blocked_pid, "stable_seconds": 15, "diagnostic_workers": [], "ordinary_start_refused": True, "explicit_recovery_ready": True, "recovery_cli_pid": manual_pid, "returned_to_user_service_pid": managed_pid, "normal_stop_exit": 0, "normal_stop_no_respawn_seconds": 15}
     phase("Starting ordinary-user active transfer probe")
-    activity = ActiveUpgradeProbe(user, env, home=home, evidence=evidence, cli=cli_binary, client_config=client_config, project=project["id"], session=session_id, remote_root=marker.parent, ledger=home / "upgrade-terminal-inputs")
+    activity = ActiveUpgradeProbe(user, env, home=home, evidence=evidence, cli=cli_binary, client_config=client_config, project=project["id"], session=session_id, remote_root=marker.parent, ledger=home / "upgrade-terminal-inputs", uid=uid, gid=gid, username=username, work=work, build=build, go_bin=go_bin, address=address, build_timeout=layout["build_timeout"])
     phase("Checking user-service upgrade, rollback, uninstall and preserved credentials")
     client_before = client_config.read_bytes()
     for operation, version, expected in (("install", b, b), ("rollback", b, a)):
@@ -531,7 +561,7 @@ def inside():
     active_upgrade_evidence = activity.finish()
     preserved("rollback", a)
     assert daemon_config.read_bytes() == config_before
-    tokens = json.loads(user(["/opt/shiki/current/shiki-daemon", "token", "list", "--config", daemon_config]).stdout)
+    tokens = json.loads(user([prefix / "current/shiki-daemon", "token", "list", "--config", daemon_config]).stdout)
     assert len(tokens) == 1
     phase("Checking uninstall preserves data, credentials and tmux")
     old_pid, old_workers = main_pid(), workers(main_pid())
@@ -539,8 +569,8 @@ def inside():
     assert result["state"] == "uninstalled"
     wait_for(lambda: gone([old_pid, *old_workers]))
     assert not Path("/etc/systemd/system/shiki-daemon.service").exists()
-    assert not Path("/opt/shiki/current").exists()
-    assert daemon_config.read_bytes() == config_before and token.exists() and Path("/var/lib/shiki").is_dir()
+    assert not (prefix / "current").exists()
+    assert daemon_config.read_bytes() == config_before and token.exists() and state.is_dir()
     assert marker.read_text() == "preserved across systemd lifecycle\n" and int(user(tmux_args).stdout.strip()) == pane
     tokens = json.loads(user([bundles[a][0] / "shiki-daemon", "token", "list", "--config", daemon_config]).stdout)
     assert len(tokens) == 1
@@ -551,7 +581,7 @@ def inside():
     preserved("reinstall after uninstall", a)
     (evidence / "agent-unit.txt").write_text(agent_ctl("cat", "shiki-agent.service").stdout)
     (evidence / "journal.txt").write_text(ctl("status", "shiki-daemon.service", "--no-pager").stdout + run(["journalctl", "-u", "shiki-daemon.service", "--no-pager"]).stdout)
-    data = {"systemd": run(["systemctl", "--version"]).stdout.splitlines()[0], "go": run(["/usr/local/go/bin/go", "version"]).stdout.strip(), "platform": run(["uname", "-m"]).stdout.strip(), "pid1": "systemd", "initial_processes": initial_processes, "operations": records, "uninstall_preserves_config_state_project_token_tmux": True, "user_agent_upgrade_rollback_uninstall_preserves_config_state_credentials": True, "token_count_before_reinstall": 1, "reinstall_issued_one_explicit_new_token": True, "transport": "loopback TLS only; runtime network disabled", "claude": "explicit test fixture, no account acceptance", "release_trust": "operator-supplied authenticated bundles; see host provenance" if prebuilt else "local build digests only; not publisher signatures", "external_peer_acceptance": "pending"}
+    data = {"systemd": run(["systemctl", "--version"]).stdout.splitlines()[0], "go": run([str(Path(go_bin) / "go"), "version"]).stdout.strip(), "platform": run(["uname", "-m"]).stdout.strip(), "pid1": "systemd", "initial_processes": initial_processes, "operations": records, "uninstall_preserves_config_state_project_token_tmux": True, "user_agent_upgrade_rollback_uninstall_preserves_config_state_credentials": True, "token_count_before_reinstall": 1, "reinstall_issued_one_explicit_new_token": True, "transport": layout["transport"], "claude": "explicit test fixture, no account acceptance", "release_trust": "operator-supplied authenticated bundles; see host provenance" if prebuilt else "local build digests only; not publisher signatures", "external_peer_acceptance": "pending"}
     data["user_agent_crash_loop"] = crash_evidence
     data["active_upgrade_transfers"] = active_upgrade_evidence
     (evidence / "evidence.json").write_text(json.dumps(data, indent=2) + "\n")

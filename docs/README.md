@@ -28,7 +28,7 @@
 
 当前候选的证据矩阵与待验条件：[19 本地验收收敛](./19-local-acceptance-closure.md)。完整长跑记录分析：[20 资源审查](./20-long-run-resource-review.md)。隔离签名演练：[21 密钥轮换与撤信](./21-release-key-rotation.md)。Homebrew渠道：[22 分发与安装](./22-homebrew-distribution.md)。官方网络与认证矩阵：[23 外部tsnet验收](./23-tsnet-external-acceptance.md)。
 
-公开包升级、回滚与兼容证据：[24 公开包验收](24-public-package-compatibility.md)。双客户端与硬崩溃验收：[25 双主机验收](25-multihost-acceptance.md)。
+公开包升级、回滚与兼容证据：[24 公开包验收](24-public-package-compatibility.md)。双客户端与硬崩溃验收：[25 双主机验收](25-multihost-acceptance.md)。完整产品的原生平台及WSL矩阵：[26 原生平台验收](26-native-platform-acceptance.md)。
 
 实施进展：[15 实施与验收记录](./15-implementation-status.md)。每批架构检查：[16 架构与文档一致性](./16-architecture-conformance.md)。
 
