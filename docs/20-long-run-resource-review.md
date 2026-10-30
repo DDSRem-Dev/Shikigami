@@ -102,3 +102,5 @@ Homebrew alpha.2自动分发和隔离测试密钥演练已独立完成，结果�
 此前明确的诊断保留链 `bound Close → Runtime → Supervisor.logs` 已在 `test/diagnostics/memoryprofile/child_test.go` 的closeBeforeCollection中释放，并有weak正对照；旧mapping事件缓存竞争也已由PublishEvent与configureMapping/RemoveMapping共享锁和revision重验修复，现有 `mapping_events_lifetime_test.go` 覆盖。它们不能再次列为尚未处理的生产根因，也无需为这些旧结论再跑短窗口。
 
 本批转向可证伪的新假设：慢读HTTP2订阅被取消后，其订阅队列和整个请求是否释放。客户端cancel/Close与WatchLogs通过，ReleaseFrontend则真实复现阻塞Send保留订阅；进一步复现业务handler退出后Connect最终envelope仍受流控阻塞。修复与专项证据见15/16；这是新的取消契约反例，不用来解释旧固定mapping/TLS工作负载的+228对象，也不把有界释放回归叫作当前候选12小时或无泄漏证明。
+
+后续已固定c4c5a56，对旧697未覆盖的新Stop自然退休/排空启动一次双平台默认轮换观察；先预检、再各一次正式运行，原11份default_rotation Go及脚本/阈值不改。启动证据见15当前长稳启动记录。该运行补当前候选的时间与恢复覆盖，不能生成旧数据缺失的heap根，也不把未调用的新RPC自动纳入其验收。

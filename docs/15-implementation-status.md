@@ -1,5 +1,7 @@
 # 实施与验收记录
 
+**当前候选双平台长稳已启动（2026-10-30）：** 上一批修复与公开包验收已提交master c4c5a56，CI41029690521四目标构建及Linux全套测试成功、macOS全套测试仍运行。为补齐旧697未覆盖的新Stop自然轮换/停机排空，固定c4c5a56启动一次macOS原生和一次Linux arm64容器默认12h凭据轮换，均已先通过预检和正常清理，再进入正式观察首checkpoint。四份快照同为690文件，558项Go/proto/module输入与提交一致；TTL、2分钟恢复预算、实际恢复后30分钟尾部与原资源阈值未改。北京时间10月31日初始最早结束分别为Linux05:32:35、Mac05:35:08，最终仍需实际恢复尾部/退出/清理核验；现在只记运行中。官方未使用key自然到期仍独立计划15:56执行。七类复核通过，原42条/32勾选保持；详见[当前长稳启动](15-implementation-status.md#evidence-current-default-rotation-start-20261030)。
+
 **公开包升级、兼容与取消回收完成（2026-10-30）：** 原始公开alpha.1→alpha.2→alpha.1在macOS原生LaunchAgent、Linux容器真实systemd下的活动升级/回滚通过，两平台alpha.2新装/重复/卸载通过。实际混合CLI/agent/daemon、原插件匹配/拒绝和同schema双向重开矩阵双平台各92命令通过，来源/身份/状态/清理有证据，见[24](24-public-package-compatibility.md)。新增慢订阅回归发现并修复ReleaseFrontend的阻塞Send、最终envelope及取消回调竞争；统一1秒仅取消收尾预算，保持原Canceled与同连接健康流。最终native四包race/vet、Linux最终agent增量race/vet及架构检查通过，较早源码范围分开记录，见[15专项](15-implementation-status.md#evidence-frontend-cancellation-20261030)。上一提交67fb0f3的CI41024681916六任务成功；本批提交CI另行记录。自然到期任务仍待10月31日15:56，原42条/32勾选保持，物理设备、主机、真实Claude、其余认证/平台及当前候选长期门槛不外推。
 
 **未使用key撤销与审批实测、自然到期已调度（2026-10-30）：** 精确99bee22的CI41005895032六job成功，未开启opt-in仍不算通过。独立未使用single-use/1天key撤销后，新隔离节点1.932秒明确INVALID_AUTH_KEY，正常退出0并删key。审批临时开启后，新节点NODE_APPROVAL_REQUIRED且有效Token仍不能访问；管理台仅提供Remove，移除待批节点后仍禁入，但旧reason不证明明确管理员拒绝分类。保留状态显式重新申请并批准后自动online，Token/原daemon ID/能力及原session重验通过；专用节点与进程已清理，审批恢复原关闭，主Mac/VPS正常。另补CLI对有效待审批attempt的有界等待，状态仍denied，明确key拒绝仍终止。独立未使用key自然到期任务已注册，最早北京时间10月31日15:56执行，结果仍待。原42条及32/42保持，完整认证矩阵/平台/主机/长期门槛继续保留，详见[23](23-tsnet-external-acceptance.md)。
@@ -920,3 +922,23 @@ Linux最终5文件与native冻结完全相同；agent整包race30.044秒、vet�
 较早native四包race34.613/2.469/11.245/4.896秒属于最后兜底修正前，不追认为最终源码。Linux首组四包race31.358/2.167/4.135/4.589秒及vet/architecture也属于兜底前；该组后续公开包矩阵被Docker bind所有者与父进程argv误匹配阻塞，未计通过，源与容器清理已核验。后组已用容器原生私有状态目录通过矩阵并对最终修改独立补验；没有重启旧检查或将旧源追认为新源。
 
 该缺口来自独立生命周期假设，不解释569源的+228对象；18份历史profile复核、已修旧根与长稳边界见20。原12小时不会追认为当前修复长稳，公开alpha.2也不包含本修复。
+
+<a id="evidence-current-default-rotation-start-20261030"></a>
+## 当前候选默认轮换启动与待验终态（2026-10-30）
+
+本批目的为取得c4c5a56当前候选对新Stop自然worker退休/排空及恢复尾部的实际覆盖。不是重跑旧697为其改结论，不以RSS斜率为理由追加短测；两侧11份default_rotation Go及test-default-rotation.sh与旧697字节相同，原TTL、断言、阈值和观察方式保持。正式产品为当前源码普通build，未冒充公开alpha.2归档。
+
+两平台先预检，再各自只启动一次正式观察：
+
+| 平台 | 预检 | 正式输入、证据及启动 |
+|---|---|---|
+| Linux arm64容器 | `/tmp/shiki-current-c4c5a56-linux-preflight/`；测试89.38秒，应用/collector0、无source变化、精确CID缺席及snapshot删除。预检不是12h验收。 | `/tmp/shiki-current-c4c5a56-linux-12h/`；collector53299，caffeinate53300；首checkpoint北京时间10/30 17:02:37.890598、9轮。 |
+| macOS arm64原生 | `/tmp/shiki-current-c4c5a56-native-e3fvvgvz/preflight/`；测试85.41秒、实际工作1m2.810s/15轮，应用/collector0、8 PID缺席、source/临时binary删除，无强制清理。 | 同base的 `formal/`，固定输入在 `input/`；collector58148、runner58257、caffeinate58149；首checkpoint北京时间10/30 17:05:12.470559、9轮。 |
+
+两预检和两正式source均690文件，manifest SHA256为 `7855442685b43d826e82aa8bc31aed1c3b5d89f721a4e11d8e46f36ff4ba9d08`；558份Go/proto/module输入与c4c5a56逐git对象匹配，正式源再次重hash保持。Linux冻结挂载只读，native从同一固定input再复制；Python自动pycache属于collector排除项，不作为产品源。两个长跑以独立session持久执行，受13小时外层截止约束；每组build -p=1，当前编译已结束。caffeinate仅随各collector生命周期抑制系统空闲休眠，不改电源设置或阻止显示器休眠。
+
+Linux最早自然到期为北京时间10/31 05:02:34.914992，初始最早终点05:32:35.343351；Mac分别为05:05:06.445537和05:35:08.305964。这些时间不是通过承诺：四角色必须各自然替换一次，满足新PID/birth/hash/UID/parent身份、旧socket消失和2分钟恢复预算；实际all_roles_recovered后仍须至少30分钟尾部，应用/collector退出0、冻结hash及精确资源清理均完成才可判定。
+
+原终端/stats保持；原held TCP结束且不重放；持久mapping/forward/revision及最后daemon ID/credential revision按原断言核验。轮换窗口暂停短周期文件业务，不声称覆盖任意在途提交。资源门禁仍是FD基线+4、测试harness goroutine+6、8秒内连续三次满足；不是生产goroutine或连续RSS硬上限，不构成无泄漏证明。测试禁用Tailscale，使用独立TLS/24h应用Token与证书、shell终端夹具；不覆盖真实Claude、官方tsnet认证或没有调用的慢前端RPC。官方未使用key到期任务及现有节点完全独立。
+
+当前正式结果为**运行中**，尚无自然轮换通过结论；旧495/697源记录保持原范围。根目录外的launcher JSON、正式evidence及run.log保存实际PID/命令/原始观察，PID只作为此启动记录，不可单独用作未来清理授权。

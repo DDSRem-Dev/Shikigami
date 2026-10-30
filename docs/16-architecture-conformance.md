@@ -1,5 +1,7 @@
 # 架构与文档一致性检查
 
+**当前候选双平台长稳已启动（2026-10-30）：** 上一批修复与公开包验收已提交master c4c5a56，CI41029690521四目标构建及Linux全套测试成功、macOS全套测试仍运行。为补齐旧697未覆盖的新Stop自然轮换/停机排空，固定c4c5a56启动一次macOS原生和一次Linux arm64容器默认12h凭据轮换，均已先通过预检和正常清理，再进入正式观察首checkpoint。四份快照同为690文件，558项Go/proto/module输入与提交一致；TTL、2分钟恢复预算、实际恢复后30分钟尾部与原资源阈值未改。北京时间10月31日初始最早结束分别为Linux05:32:35、Mac05:35:08，最终仍需实际恢复尾部/退出/清理核验；现在只记运行中。官方未使用key自然到期仍独立计划15:56执行。七类复核通过，原42条/32勾选保持；详见[当前长稳启动](15-implementation-status.md#evidence-current-default-rotation-start-20261030)。
+
 **公开包升级、兼容与取消回收完成（2026-10-30）：** 原始公开alpha.1→alpha.2→alpha.1在macOS原生LaunchAgent、Linux容器真实systemd下的活动升级/回滚通过，两平台alpha.2新装/重复/卸载通过。实际混合CLI/agent/daemon、原插件匹配/拒绝和同schema双向重开矩阵双平台各92命令通过，来源/身份/状态/清理有证据，见[24](24-public-package-compatibility.md)。新增慢订阅回归发现并修复ReleaseFrontend的阻塞Send、最终envelope及取消回调竞争；统一1秒仅取消收尾预算，保持原Canceled与同连接健康流。最终native四包race/vet、Linux最终agent增量race/vet及架构检查通过，较早源码范围分开记录，见[15专项](15-implementation-status.md#evidence-frontend-cancellation-20261030)。上一提交67fb0f3的CI41024681916六任务成功；本批提交CI另行记录。自然到期任务仍待10月31日15:56，原42条/32勾选保持，物理设备、主机、真实Claude、其余认证/平台及当前候选长期门槛不外推。
 
 **未使用key撤销与审批实测、自然到期已调度（2026-10-30）：** 精确99bee22的CI41005895032六job成功，未开启opt-in仍不算通过。独立未使用single-use/1天key撤销后，新隔离节点1.932秒明确INVALID_AUTH_KEY，正常退出0并删key。审批临时开启后，新节点NODE_APPROVAL_REQUIRED且有效Token仍不能访问；管理台仅提供Remove，移除待批节点后仍禁入，但旧reason不证明明确管理员拒绝分类。保留状态显式重新申请并批准后自动online，Token/原daemon ID/能力及原session重验通过；专用节点与进程已清理，审批恢复原关闭，主Mac/VPS正常。另补CLI对有效待审批attempt的有界等待，状态仍denied，明确key拒绝仍终止。独立未使用key自然到期任务已注册，最早北京时间10月31日15:56执行，结果仍待。原42条及32/42保持，完整认证矩阵/平台/主机/长期门槛继续保留，详见[23](23-tsnet-external-acceptance.md)。
@@ -1229,3 +1231,9 @@ v4普通/race分阶段profile均完整通过31.73/40.40秒：16次256KiB双向�
 | 行为/证据/声明 | 保留三种取消红绿、夹具失败和冻结源差异；18离线资源产物复核，不用RSS猜根因。08/15/16同步局部进度，原42条文字/顺序、32/42与外部/平台/长期门槛不变。 |
 
 独立review对最终生产diff无剩余必须修改项；最终native四包race/vet、Linux最终agent增量race/vet、架构及双平台公开版本矩阵已通过，精确范围见15终态记录，未运行的opt-in、真实Claude、主机重启/登录与其他物理平台不计通过。
+
+## 2026-10-30 当前候选长稳启动复核
+
+本批没有生产修改；独立只读审查覆盖七类：既有插件/SDK目录依赖保持；真实UDS、direct-TLS及CoreAPI准入与12h默认凭据不改；运行状态独立，持久mapping/forward/revision按原断言观察；四worker自然退休、2分钟恢复与实际恢复后30分钟尾部保持；终端/TCP不重放和资源门禁未弱化，轮换窗口不宣称在途文件提交；当前源码普通build和CLI/配置均隔离，不冒充公开归档；两平台预检/正式的690项manifest与558项执行输入一致。正式首checkpoint与源码/容器隔离已独立核验，最终退出/清理/自然轮换仍待。
+
+08/15/16同步为运行中，原42项/32勾选保持。没有为了启动长跑而重启旧任务或改变历史失败；该观察只补明确的当前生命周期覆盖，不扩大tsnet/Claude/物理平台/长期资源支持声明。
