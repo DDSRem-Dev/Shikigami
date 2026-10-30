@@ -1,5 +1,7 @@
 # 实施与验收记录
 
+**最终agent撤销恢复与CI/CLI补修（2026-10-30）：** 92fe17a的CI40998046799整体失败：Linux测试及四目标构建成功，macOS凭据检查在SDK活动时扫描缓存遭遇ENOENT，后续E2E未执行、终端专项跳过。已修正为SDK完全关闭后重开最终持久状态并严格扫描，未忽略文件错误；定向race三次通过。相同生产源码的candidate4再次由官方移除后，旧附件2→1、专用终端退出，主Mac与tmux保持；自身正确offline/NODE_CONTROL_UNAVAILABLE。最终agent经同一显式attempt的Chrome认证恢复online，Token/原daemon ID/能力重验及P2P连接通过，无诊断overlay。现场另发现CLI在active attempt的控制离线阶段提前退出，已补有界等待，CLI全包race40项/22.312秒通过，详见23。本轮仅补外部子项，不由控制失联断言明确撤销；保持32/42、10项部分完成与原42条要求，独立key撤销/到期、审批及其余门槛继续推进。
+
 **官方撤销回收、认证恢复与控制面断网验证（2026-10-30）：** 63924ce的六job CI已成功；官方移除专用节点后附件2→1、专用终端退出，主Mac与tmux保持正常，观察上界13/27秒包含Chrome操作与采样。用户完成Touch ID后，诊断构建重新认证online并重连原daemon；随后candidate4 clean构建保留同身份恢复。已分离控制面诊断与既有peer授权，修复登录完成/取消竞争、daemon误关健康流及CLI隐式登录；本地node按310.580/82.302/11.242秒三个源码范围分层race通过，server/architecture/CLI检查通过。官方控制面单进程阻断11.807秒期间，既有只读终端存活、新RPC成功，恢复online同地址；显式connect在独立断网场景ready且未触发登录。完整自身撤销分类、独立key过期/撤销、审批及其余认证/平台/长稳门槛保留，不把断联猜为denied。保持32/42、10项部分完成及原42条文字/顺序；本批新CI结果另行核验，详见[23 外部tsnet验收](23-tsnet-external-acceptance.md)。
 
 **上一批官方 tsnet 验收与 peer 撤销修复（2026-10-30，第二次移除前）：** Mac/VPS官方登录、进程身份保持、真实P2P/受控DERP业务流和恢复P2P已有证据；仅关闭Phase 2首条，原42条文字/顺序保持，当前32/42、10项部分完成。官方节点移除暴露旧流未及时回收，现已补入站/出站peer身份代际、状态校准与连接关闭；本地真实SDK和生命周期回归通过。完整node race226.285秒属于最后5秒观察预算修正前的冻结源；最终预算修正先红后绿，相关专项race106.481秒、vet通过，不追认为最终源码全包重跑。官方撤销修复复验尚未通过；前两次重新认证未完成，第三次fresh URL经Chrome提交后，诊断overlay的SDK Running、URL清除且NodeControl online，随后切换不含诊断代码的最终构建，重启后同地址online，Token/daemon ID/能力重验及P2P应用连接通过。Auth Key独立过期/撤销、审批及其余认证/平台/长稳门槛保留，详见[23 外部tsnet验收](23-tsnet-external-acceptance.md)。
@@ -874,3 +876,8 @@ Release于`2026-10-29T17:30:47Z`（北京时间2026-10-30 01:30:47）公开，�
 本地验证按冻结源码分层：node完整race310.580秒；随后注册/取消竞争专项82.302秒；最后仅取消观察改为串行queryStatus，6项专项11.242秒通过，各层无skip/race/失败。真实SDK已有URL测试与同key状态机单测是独立证据，不合称同key真实SDK闭环。server/architecture整包race43.386/1.378秒、CLI整包race20.597秒通过，相关vet/diff通过。清单`/tmp/shiki-control-outage-source-final.json`关联前两快照；candidate4/host-build.json记录97份生产/依赖输入构建前后相同，版本v0.0.1-alpha.2-local.tsnet.4、Commit unknown。七类审查见16；本批不覆盖公开alpha.2产物，不关闭完整认证矩阵。
 
 [CI40940419677](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40940419677)精确源码`63924ce4271345bcb1d463e94e59a773d6f29a59`六个job成功：macOS14/Ubuntu24.04的构建、lint、race、E2E、协议漂移及终端屏幕步骤，另四目标未签名包构建/校验。node整包race185.047/35.375秒、架构1.205/1.107秒、E2E239.568/177.592秒。它补充上批最后5秒预算补丁的双平台整包证据，不改写原本地226.285/106.481秒的不同冻结范围，也不覆盖本轮恢复实现。workflow无skipped步骤，但go test非verbose；真实LaunchAgent、systemd活动升级与12小时测试需opt-in，CI未启用，不能声称全套无skip。日志`/tmp/shiki-ci-40940419677-review.log`。
+
+
+## 最终agent官方撤销恢复与验收夹具修复（2026-10-30）
+
+本批最终agent官方移除、offline诊断、同进程显式认证及应用重新验证已通过，详见[23本轮记录](23-tsnet-external-acceptance.md#最终agent再次撤销与恢复cicli补修2026-10-30)。主Mac与原tmux保持，未重启agent、删除身份目录或使用诊断overlay。CLI在pending控制离线阶段提前退出已单独修复；不将后续GetStatus取URL恢复倒推为旧CLI成功。CI40998046799整体failure及其macOS未执行/跳过边界保留；凭据扫描夹具改为SDK关闭后检查最终store和全部文件，三次定向race13.190秒通过，不降低断言。CLI真实IPC先红后绿，最终完整包race40项/22.312秒通过，无skip或race；源码与日志摘要为`/tmp/shiki-ci-and-cli-pending-verification.json`。完整认证矩阵、平台/主机/长期条件保持待验，32/42不变。

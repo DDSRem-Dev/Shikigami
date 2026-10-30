@@ -117,13 +117,15 @@ func (a *app) nodeCommands() *cobra.Command {
 	return root
 }
 
-// NeedsLogin may be published while an accepted asynchronous login is still
-// obtaining its URL or authenticating an auth key. Only the active, unexpired
-// attempt is pending; cancellation, expiry and explicit rejection stay terminal.
+// NeedsLogin or a temporarily unavailable control plane may be reported while
+// an accepted asynchronous login obtains its URL or authenticates an auth key.
+// Only an active, unexpired attempt is pending; other offline failures,
+// cancellation, expiry and explicit rejection stay terminal.
 func nodeLoginActive(status *apb.NodeStatus) bool {
+	pendingControl := status.State == "needs_login" && status.ReasonCode == "NODE_AUTH_REQUIRED" ||
+		status.State == "offline" && status.ReasonCode == "NODE_CONTROL_UNAVAILABLE"
 	return status.State == "authenticating" ||
-		(status.State == "needs_login" && status.ReasonCode == "NODE_AUTH_REQUIRED" &&
-			status.LoginId != "" && status.LoginExpiresAt > time.Now().Unix())
+		pendingControl && status.LoginId != "" && status.LoginExpiresAt > time.Now().Unix()
 }
 
 func readPrivateSecret(path string, limit int64) ([]byte, error) {

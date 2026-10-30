@@ -416,7 +416,19 @@ func TestInvalidAuthKeyAndNoCredentialPersistence(t *testing.T) {
 	if !unchanged || node.snapshot().State != "online" {
 		t.Fatal("completed login worker replaced the current authenticated SDK")
 	}
-	snapshot, err := node.state.View()
+	// Stop the SDK and join its workers before inspecting its files. A live
+	// backend may replace or remove netmap-cache entries during filepath.Walk.
+	// Reopen the committed store so the decoded check includes shutdown writes,
+	// rather than only the live store's earlier in-memory snapshot.
+	if err := node.Close(); err != nil {
+		t.Fatal(err)
+	}
+	persisted, err := storage.Open(node.options.StateDir, storage.Options{DisableRecovery: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer persisted.Close()
+	snapshot, err := persisted.View()
 	if err != nil {
 		t.Fatal(err)
 	}

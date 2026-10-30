@@ -135,3 +135,14 @@ candidate4从上述最终node及对应host/CLI生产源构建，版本`v0.0.1-al
 [CI40940419677](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40940419677)在`63924ce4271345bcb1d463e94e59a773d6f29a59`完成双平台测试及四目标未签名包构建，共六job全部成功。macOS/Linux node整包race185.047/35.375秒，架构1.205/1.107秒，E2E239.568/177.592秒；协议漂移、模块/依赖扫描、构建/lint及终端屏幕步骤均成功。记录补充最终peer修复源码的双平台整包覆盖，不覆盖上述后来完成的控制状态、登录恢复与host/CLI修改。原本地226.285秒与最后106.481秒的不同冻结范围保持。
 
 workflow步骤无skip，但go test未开verbose，不能从日志无SKIP字样推导全套无skip；E2E中的真实LaunchAgent、systemd活动升级和12小时实验需要独立opt-in，CI未启用。node及architecture测试源码无Skip分支。日志留于`/tmp/shiki-ci-40940419677-review.log`，未为了补文档重新运行测试。
+
+
+## 最终agent再次撤销与恢复、CI/CLI补修（2026-10-30）
+
+candidate4的agent/CLI生产输入属于92fe17a，没有诊断overlay；VPS仍candidate3，主Mac仍公开alpha.2。两个只读终端稳定连接后，Chrome移除专用节点100.101.136.82：旧附件2→1，专用终端退出1，所有主Mac查询成功、主终端持续存活、tmux始终ready。附件回收观察上界9.923秒、终端退出观察上界22.960秒从Chrome提交前标记计时，包含UI操作与采样；不报告精确SDK撤销延迟。被移除节点最终offline/NODE_CONTROL_UNAVAILABLE，未再显示online；它仍不能区分明确撤销与普通控制断联。证据`candidate4-revoke-{preflight,observation,trigger,summary}.json`；原状态目录未删除，未重启agent绕过恢复。
+
+同一agent显式BeginLogin取得新attempt，candidate4 CLI却约1.3秒遇offline就提前退出；随后只读GetStatus取得该attempt的URL，证据`candidate4-relogin-pending.json`。通过用户Chrome同账户Connect后，最终agent报告online、URL清除、新地址100.71.129.114；无Touch ID再介入、无诊断overlay、无进程替换。重新连接完成Token、原daemon ID及能力验证，ready/tailscale-direct且attempts仅tsnet，两端查询原session仍ready，见`candidate4-reauth-result.json`与`candidate4-reauth-connect.json`。该闭环属于最终agent；现场CLI早退保持失败，后续CLI修复另行验证，不能追认为candidate4 CLI已通过。
+
+CLI根因是nodeLoginActive没有覆盖仍有有效attempt的offline/NODE_CONTROL_UNAVAILABLE。修复仅将该reason且login_id非空、expires在未来的状态纳入已有轮询；其他离线失败、无ID和过期仍终止，不再次BeginLogin或自动Cancel，不放宽自身/父截止。真实Unix/HTTP2 NodeControl序列先红后绿，交互URL和Auth Key在线结果、截止及拒绝分支覆盖单列；修前日志`/tmp/shiki-cli-control-pending-red.log`；最终CLI整包race40个顶层测试22.312秒通过，无skip或race，日志`/tmp/shiki-cli-control-pending-race.log`，源码及日志清单`/tmp/shiki-ci-and-cli-pending-verification.json`。独立七类审查通过；新远端CI待实际结果，不继承旧Linux通过。
+
+[CI40998046799](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40998046799)精确92fe17a整体failure。Ubuntu完整测试及四目标打包成功；macOS的TestInvalidAuthKeyAndNoCredentialPersistence在SDK仍活动时遍历netmap-cache遇lstat ENOENT，make test失败，随后test-e2e未执行、终端屏幕step跳过。日志`/tmp/shiki-ci-40998046799-failed.log`。夹具现先Node.Close并等待SDK/本地worker与store退出，再DisableRecovery重开最终持久store检查解码值，原Walk全文件和两种key检查保持，所有I/O错误仍失败。定向race三次均通过，总13.190秒，日志`/tmp/shiki-ci-key-persistence-race.log`；这是最终落盘与关闭后文件不含key证据，不是任意运行瞬间取证。没有修改SDK、生产状态存储或忽略ENOENT。

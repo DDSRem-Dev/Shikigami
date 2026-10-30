@@ -24,12 +24,15 @@ import (
 // Unix/HTTP2 transport. The status sequence models the SDK publishing NeedsLogin
 // before the control plane has supplied an interactive URL or accepted a key.
 func TestNodeLoginWaitsForPendingControlPlane(t *testing.T) {
-	for _, authKey := range []bool{false, true} {
-		name := "interactive_url"
-		if authKey {
-			name = "auth_key_online"
-		}
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range []struct {
+		name                    string
+		authKey, controlOffline bool
+	}{
+		{"interactive_url", false, false}, {"auth_key_online", true, false},
+		{"control_offline/interactive_url", false, true}, {"control_offline/auth_key_online", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			authKey := tc.authKey
 			pending := pendingLoginStatus()
 			last := proto.Clone(pending).(*apb.NodeStatus)
 			want := "https://login.example.invalid/test-only"
@@ -40,7 +43,13 @@ func TestNodeLoginWaitsForPendingControlPlane(t *testing.T) {
 			} else {
 				last.LoginUrl = want
 			}
-			probe := &nodeLoginProbe{statuses: []*apb.NodeStatus{pending, last}, authKey: authKey}
+			statuses := []*apb.NodeStatus{pending, last}
+			if tc.controlOffline {
+				offline := pendingLoginStatus()
+				offline.State, offline.ReasonCode = "offline", "NODE_CONTROL_UNAVAILABLE"
+				statuses = append([]*apb.NodeStatus{offline}, statuses...)
+			}
+			probe := &nodeLoginProbe{statuses: statuses, authKey: authKey}
 			socket := nodeLoginSocket(t, probe)
 			args := []string{"--wait-timeout", "2s"}
 			if authKey {
@@ -66,7 +75,7 @@ func TestNodeLoginWaitsForPendingControlPlane(t *testing.T) {
 			if stderr != "" || strings.Contains(out, "unit-test-auth-key") {
 				t.Fatal("unexpected diagnostics or auth-key disclosure")
 			}
-			probe.checkCalls(t, 2)
+			probe.checkCalls(t, len(statuses))
 		})
 	}
 }
@@ -79,6 +88,11 @@ func TestNodeLoginStopsForTerminalStatus(t *testing.T) {
 		{State: "needs_login", ReasonCode: "LOGIN_CANCELED"},
 		{State: "needs_login", ReasonCode: "LOGIN_EXPIRED"},
 		{State: "offline", ReasonCode: "LOGIN_START_FAILED"},
+		{State: "offline", ReasonCode: "LOGIN_START_FAILED", LoginId: "failed-attempt", LoginExpiresAt: time.Now().Add(time.Minute).Unix()},
+		{State: "offline", ReasonCode: "NODE_OFFLINE", LoginId: "unknown-offline", LoginExpiresAt: time.Now().Add(time.Minute).Unix()},
+		{State: "offline", ReasonCode: "NODE_CONTROL_UNAVAILABLE", LoginExpiresAt: time.Now().Add(time.Minute).Unix()},
+		{State: "offline", ReasonCode: "NODE_CONTROL_UNAVAILABLE", LoginId: "expired-attempt", LoginExpiresAt: 1},
+		{State: "offline", ReasonCode: "NODE_CONTROL_UNAVAILABLE", LoginId: "finished-attempt"},
 		{State: "needs_login", ReasonCode: "NODE_AUTH_REQUIRED"},
 		{State: "needs_login", ReasonCode: "NODE_AUTH_REQUIRED", LoginId: "expired-attempt", LoginExpiresAt: 1},
 	} {
@@ -95,17 +109,23 @@ func TestNodeLoginStopsForTerminalStatus(t *testing.T) {
 }
 
 func TestNodeLoginPendingWaitIsBounded(t *testing.T) {
-	for _, parentDeadline := range []bool{false, true} {
-		name := "wait_timeout"
-		if parentDeadline {
-			name = "earlier_parent_deadline"
-		}
-		t.Run(name, func(t *testing.T) {
-			probe := &nodeLoginProbe{statuses: []*apb.NodeStatus{pendingLoginStatus()}}
+	for _, tc := range []struct {
+		name                           string
+		parentDeadline, controlOffline bool
+	}{
+		{"wait_timeout", false, false}, {"earlier_parent_deadline", true, false},
+		{"control_offline/wait_timeout", false, true}, {"control_offline/earlier_parent_deadline", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pending := pendingLoginStatus()
+			if tc.controlOffline {
+				pending.State, pending.ReasonCode = "offline", "NODE_CONTROL_UNAVAILABLE"
+			}
+			probe := &nodeLoginProbe{statuses: []*apb.NodeStatus{pending}}
 			socket := nodeLoginSocket(t, probe)
 			ctx := t.Context()
 			wait := "350ms"
-			if parentDeadline {
+			if tc.parentDeadline {
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithTimeout(ctx, 350*time.Millisecond)
 				defer cancel()
