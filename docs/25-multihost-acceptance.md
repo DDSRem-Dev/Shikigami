@@ -24,6 +24,8 @@ A为原生macOS27.0.1 arm64、UID501；B为已有Debian VPS原生amd64上的新�
 | 6 | 61.40秒失败：.3完整产品的普通上传SIGKILL恢复、基线核对与B流保持通过；冲突解决SIGKILL后重试返回Canceled | ListConflicts可返回扫描前持久化旧冲突；改为等待新worker同revision的active/conflicted，incomplete日志必须由后台恢复消除，再判断结果；不重试Canceled写请求 |
 | 7 | 85.84秒失败：两类SIGKILL完整恢复和条件写竞争均通过；重连旧attachment接管在agent返回PermissionDenied | 依13前端所有权先拒绝旧附件，夹具原NotFound预期属于后续daemon层；改为精确PermissionDenied，不放宽产品权限 |
 | 8 | 160.95秒失败：离线冲突、过期generation拒绝、KEEP_BOTH及真实Sync界面通过；副本碰撞前置下载已被5秒父截止终止 | 8MiB双向32KiB/25ms限速仅下载理论即≥6.4秒，误超13/14既有短RPC预算。碰撞专项改1MiB，保留同名注入/无覆盖断言；独立两类SIGKILL仍8MiB。不延长产品截止；异步RPC失败立即显示 |
+| 9 | 84.65秒失败：普通上传恢复通过；冲突解决重启后GetSyncState在恢复writer后等待超出单次5秒查询截止 | 先只读journal等待incomplete operation消除，再查询live状态；仅只读查询DeadlineExceeded在原60秒恢复上限内重观察，不重放写、不延长产品预算 |
+| 10 | 124.52秒失败：前八阶段通过；1MiB人工慢桥仍触发ResolveConflict默认5秒父截止，A映射归档清理失败但两helper退出清理通过 | 准备仅碰撞专项使用显式90秒诊断前端预算（产品本来允许caller指定），保持helper更早截止、其他默认前端/CLI与全部内容保护断言；不改生产默认 |
 
 每轮重新初始化专用状态并发行新的独立测试Token，保留失败结论；不在失败后重用已撤销凭据。原始临时证据位于本轮closeout目录，各轮events单独保存；最终清理后可用性以清理记录为准。
 
@@ -48,3 +50,7 @@ CI41039024257的Ubuntu启动IPC取消用例实际失败：caller已经取消后�
 ## 验收工具的发送终态
 
 独立review发现helper在条件写header/chunk发送EOF时直接返回会遮蔽远端Aborted/AlreadyExists。v5复用产品既有FinalSendError，仅EOF有界读取一次最终响应（1秒），caller取消/硬错误不额外读取，不重放消息；读取到空终态或成功也不能把失败发送升级为成功。四个原行为定向反证全部失败，最终整包race2.775秒及两平台构建通过，产物与完整冻结源码另存hash。该修正仅诊断工具，不改变产品授权、持久状态或限额。恢复屏障新增只读状态/日志判断，完整矩阵通过前不新增勾选。
+
+## 人工慢链路碰撞预算
+
+v6仅创建独立collision前端时显式传入90秒预算，ResolveConflict更早的helper90秒parent仍保持；其他前端、真实CLI/TUI及产品默认5秒不改。碰撞数据1MiB，两类SIGKILL8MiB保持；等待完整本地副本、核远端目标不存在、注入同名sentinel后解除限速，继续要求Aborted/AlreadyExists及原本地、原远端、sentinel三份内容保留。这是显式诊断预算下的条件碰撞验证，不能证明默认CLI在人工慢链路5秒内完成。真实UDS/H2行为测试覆盖独立预算与更早parent保留，完整helper race2.778秒、两平台构建通过。

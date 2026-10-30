@@ -267,9 +267,10 @@ class Matrix:
         self.record('conflict', {'device': device.name, 'value': value})
         return value
 
-    def resolve(self, device, conflict, choice, *, expect=None):
+    def resolve(self, device, conflict, choice, *, expect=None, frontend='default'):
         return device.rpc('ResolveConflict', {'mapping_id': device.mapping['id'], 'conflict_id': conflict['id'],
-                          'expected_generation': conflict['generation'], 'choice': choice, 'request_id': request_id()}, expect=expect)
+                          'expected_generation': conflict['generation'], 'choice': choice, 'request_id': request_id()},
+                          expect=expect, frontend=frontend)
 
     def pause(self, device, enabled):
         device.cli('sync', 'resume' if enabled else 'pause', device.mapping['id'])
@@ -668,13 +669,21 @@ class Matrix:
             # ListConflicts can expose the durable pre-crash entry before the
             # new worker has scanned it. Wait for live reconciliation, not just
             # frontend readiness; never replay a write on Canceled.
-            status = self.a.rpc('GetSyncState', self.a.scope())
-            if (status.get('mapping_revision') != prepared['mapping_revision']
-                    or status.get('state') not in ('active', 'conflicted')):
-                return None
             snapshot = self.a.call('sync.snapshot', snapshot_args)
             if operation.get('commit_state') == 'incomplete' and snapshot.get('operation') is not None:
                 return None  # This unchanged source/target must recover itself.
+            try:
+                status = self.a.rpc('GetSyncState', self.a.scope())
+            except OperationFailure as error:
+                if error.code != 'deadline_exceeded':
+                    raise
+                # A read may wait behind the recovery writer. Retry only this
+                # observation within the original 60s recovery bound.
+                self.record('recovery-read-busy', {'phase': phase, 'code': error.code})
+                return None
+            if (status.get('mapping_revision') != prepared['mapping_revision']
+                    or status.get('state') not in ('active', 'conflicted')):
+                return None
             conflict = next((c for c in self.a.rpc('ListConflicts', self.a.scope()).get('conflicts', []) if c['path'] == filename), None)
             if conflict:
                 require(conflict['local']['content_hash'] == digest(payload(pattern, size)), 'crash lost local payload')
@@ -716,8 +725,8 @@ class Matrix:
         self.hard_crash('resolution', 'resolve-crash.bin', 'resolve-upload-', resolve=conflict)
 
     def copy_collision(self):
-        # Keep the collision window inside the documented 5s frontend unary
-        # budget. The separate SIGKILL scenarios still transfer 8 MiB.
+        # This controlled slow-link collision uses an explicit caller budget.
+        # Other frontends retain their defaults; SIGKILL still uses 8 MiB.
         name, pattern, size = 'copy-collision.txt', 'remote-copy-payload-', 1 << 20
         self.pause(self.a, False)
         self.a.write(name, 'A collision local version\n')
@@ -725,8 +734,11 @@ class Matrix:
         self.settled(name, payload(pattern, size), [self.b], timeout=60)
         self.pause(self.a, True)
         conflict = self.conflict(self.a, name)
+        self.a.call('frontend.open', {'name': 'collision', 'timeout_seconds': 90})
+        self.record('collision-caller-budget', {'frontend': 'collision', 'timeout_seconds': 90,
+                    'helper_request_timeout_seconds': 90, 'payload_bytes': size})
         self.a.call('proxy.mode', {'handle': self.proxy['handle'], 'slow': True, 'paused': False})
-        pending = self.pool.submit(lambda: self.resolve(self.a, conflict, 'KEEP_BOTH'))
+        pending = self.pool.submit(lambda: self.resolve(self.a, conflict, 'KEEP_BOTH', frontend='collision'))
         def local_copy():
             if pending.done():
                 pending.result()  # Surface an early RPC failure instead of polling.
@@ -753,7 +765,10 @@ class Matrix:
             self.record('keep-both-copy-collision', {'copy_path': copy['path'], 'destination_sentinel_preserved': True,
                         'original_local_and_remote_preserved': True, 'pending_conflict_archived_on_cleanup': True})
         finally:
-            self.a.call('proxy.mode', {'handle': self.proxy['handle'], 'slow': False, 'paused': False})
+            try:
+                self.a.call('proxy.mode', {'handle': self.proxy['handle'], 'slow': False, 'paused': False})
+            finally:
+                self.a.call('frontend.close', {'name': 'collision'})
 
     def revoke_a(self):
         ta = self.open_term(self.a, 'a-revoked')
