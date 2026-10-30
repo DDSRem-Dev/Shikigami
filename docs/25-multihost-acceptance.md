@@ -1,6 +1,6 @@
 # Mac 与 VPS 双客户端验收
 
-2026-10-30进行中；本页尚不表示整项通过。按08原条目验收多设备路径映射、终端接管、后台冲突及06§9/12的恢复边界；不新增或拆小原42个checkbox。
+2026-10-30完整业务矩阵已通过，最终OS资源回收已独立通过。按08原条目验收多设备路径映射、终端接管、后台冲突及06§9/12的恢复边界；不新增或拆小原42个checkbox。
 
 ## 隔离环境与来源
 
@@ -26,6 +26,8 @@ A为原生macOS27.0.1 arm64、UID501；B为已有Debian VPS原生amd64上的新�
 | 8 | 160.95秒失败：离线冲突、过期generation拒绝、KEEP_BOTH及真实Sync界面通过；副本碰撞前置下载已被5秒父截止终止 | 8MiB双向32KiB/25ms限速仅下载理论即≥6.4秒，误超13/14既有短RPC预算。碰撞专项改1MiB，保留同名注入/无覆盖断言；独立两类SIGKILL仍8MiB。不延长产品截止；异步RPC失败立即显示 |
 | 9 | 84.65秒失败：普通上传恢复通过；冲突解决重启后GetSyncState在恢复writer后等待超出单次5秒查询截止 | 先只读journal等待incomplete operation消除，再查询live状态；仅只读查询DeadlineExceeded在原60秒恢复上限内重观察，不重放写、不延长产品预算 |
 | 10 | 124.52秒失败：前八阶段通过；1MiB人工慢桥仍触发ResolveConflict默认5秒父截止，A映射归档清理失败但两helper退出清理通过 | 准备仅碰撞专项使用显式90秒诊断前端预算（产品本来允许caller指定），保持helper更早截止、其他默认前端/CLI与全部内容保护断言；不改生产默认 |
+| 11 | 149.37秒失败：前九阶段及副本碰撞完整通过；撤A后旧终端/TCP已关闭，但新GetProject落在pool退役窗口返回Canceled，A归档因撤权后pause须验证远端而失败 | 先在凭据有效时暂停A映射，再撤权；观察ListServers稳定auth_required/CREDENTIAL_REJECTED后精确要求Unauthenticated。cleanup对已paused映射直接显式归档；不把Canceled记认证拒绝、不声称A同步由撤权终止 |
+| 12 | 157.31秒通过：10阶段全部完成；两helper及controller正常清理 | 两类8MiB强杀、三组条件竞争、离线/冲突/TUI、1MiB副本碰撞及撤A保B全部闭合；OS资源独立回收见下文 |
 
 每轮重新初始化专用状态并发行新的独立测试Token，保留失败结论；不在失败后重用已撤销凭据。原始临时证据位于本轮closeout目录，各轮events单独保存；最终清理后可用性以清理记录为准。
 
@@ -37,7 +39,7 @@ A为原生macOS27.0.1 arm64、UID501；B为已有Debian VPS原生amd64上的新�
 
 ## 有限验收矩阵
 
-尚待整轮实际结果确认：独立身份/映射、同机配置CAS与重叠拒绝、同/异路径条件提交和同名新建、A离线/B写入、修改与删除、相同内容采纳、第三次修改失效旧generation、预览与KEEP_LOCAL/REMOTE/BOTH、冲突副本碰撞保护、无前台冲突持久化、真实Sessions/Sync/Ports展示、同时接管唯一胜者及只读拒绝、重连新attachment、独立loopback转发、仅A撤权而B继续工作。
+第12轮已实际完成：独立身份/映射、同机配置CAS与重叠拒绝、同/异路径条件提交和同名新建、A离线/B写入、修改与删除、相同内容采纳、第三次修改失效旧generation、预览与KEEP_LOCAL/REMOTE/BOTH、冲突副本碰撞保护、无前台冲突持久化、真实Sessions/Sync/Ports展示、同时接管唯一胜者及只读拒绝、重连新attachment、独立loopback转发、仅A撤权而B继续工作。
 
 两类硬崩溃要求先观察远端真实部分临时文件与仍完整的公开目标、本地prepared记录/完整staging及旧baseline，再SIGKILL agent，确认旧host/worker退出、旧listener不可连接，B终端/TCP保持。新owner扫描恢复后核对完整内容、远端revision对应新baseline且无pending operation。缓冲可能使commit_state为possible，不强行称incomplete；不把该部分上传场景冒充提交后ACK丢失，后者沿用既有四场景syncack实测范围。
 
@@ -54,3 +56,17 @@ CI41039024257的Ubuntu启动IPC取消用例实际失败：caller已经取消后�
 ## 人工慢链路碰撞预算
 
 v6仅创建独立collision前端时显式传入90秒预算，ResolveConflict更早的helper90秒parent仍保持；其他前端、真实CLI/TUI及产品默认5秒不改。碰撞数据1MiB，两类SIGKILL8MiB保持；等待完整本地副本、核远端目标不存在、注入同名sentinel后解除限速，继续要求Aborted/AlreadyExists及原本地、原远端、sentinel三份内容保留。这是显式诊断预算下的条件碰撞验证，不能证明默认CLI在人工慢链路5秒内完成。真实UDS/H2行为测试覆盖独立预算与更早parent保留，完整helper race2.778秒、两平台构建通过。
+
+## 第12轮独立核验
+
+737条事件，157.309938秒，10个phase全部完成，result与两helper/controller-cleanup均passed；events SHA-256 `bc0f02950ba1979e1be4b1390c5448b703b06bde46455549fed8b23c687ba5f3`，controller `ca0396932dcddbaae0a48dc6b269a35785524f6da45916f68bd50682d1ea77a4`。两平台部署各8个产品/manifest/helper文件与冻结hash逐一相同；241个生产Go/模块/构建输入与当前源码逐字一致。
+
+普通上传和冲突解决的8,388,608字节源分别在远端仅有1,310,720和524,288字节时强杀；公开旧目标与旧基线保持，完整stage/source hash匹配，两次均prepared/incomplete→新进程后台committed，旧agent及两个worker消失、旧listener拒连、最终revision/hash对应新baseline且operation为空，B终端/TCP及原pane保持。三组条件写各一成功一拒绝，胜者未被覆盖；碰撞sentinel与原本地/远端版本保持。
+
+A映射先按13在有效凭据下暂停，再撤Token；旧A终端/TCP关闭，ListServers到auth_required/CREDENTIAL_REJECTED、remote_protocol为空且path=unknown后，新GetProject精确Unauthenticated。B同instance的终端、TCP和baseline.txt同步继续；不声称A同步由撤权终止。所有mapping显式归档、session/project删除、Token撤销、helper退出均通过；这一结果仍与OS账户/目录/SSH回收分别核验。原第1–11轮失败与第10/11轮controller归档失败均保留。
+
+## OS资源回收与当前结论
+
+最终清理先核inode/UID、全部Docker挂载及进程引用，然后删除本轮31个精确本地对象（runtime、v1–v6 helper、冻结构建、传输归档与生成缓存），VPS专用UID995账户/同名组、根目录和已无server/session的私有tmux目录；不停止共享tmux server、不触碰其他容器。SSH专用转发已取消，最后确认本轮无命令master没有其他复用client或listener，再通过准确control socket退出并删除空目录。原VPS SSH/Web/RustDesk监听PID保持；7897代理实际TCP可达；8个受保护进程PID/启动时刻/命令不变，c4 Linux容器仍运行，expiry非秘密输入hash和预约runs=0保持，未读取auth.key。
+
+清理回执SHA-256 `d60cc2425fd4951467a1fac21ab60afdb6e64841a917e9aabcc20ce85ab22597`。完整业务结果、部署hash、OS回收及独立审查一致；08/15/16关闭上述三个原项，计36/42。公开alpha.2不含本批产品修复；本批没有新tag/Release，正在运行的c4长测也不覆盖后续terminal/connection修复。CI858df71/92a35f1/423485a/aa394b4分别成功，原473710f取消竞态失败仍保留。

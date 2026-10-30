@@ -763,7 +763,7 @@ class Matrix:
                     'copy collision lost original local version')
             require(self.shared_stat(name)['sha256'] == digest(payload(pattern, size)), 'copy collision overwrote original remote version')
             self.record('keep-both-copy-collision', {'copy_path': copy['path'], 'destination_sentinel_preserved': True,
-                        'original_local_and_remote_preserved': True, 'pending_conflict_archived_on_cleanup': True})
+                        'original_local_and_remote_preserved': True, 'pending_conflict_requires_archive_on_cleanup': True})
         finally:
             try:
                 self.a.call('proxy.mode', {'handle': self.proxy['handle'], 'slow': False, 'paused': False})
@@ -771,6 +771,9 @@ class Matrix:
                 self.a.call('frontend.close', {'name': 'collision'})
 
     def revoke_a(self):
+        # PutMapping validates the remote project even for pause (docs 13).
+        # Finish the owned mapping before retiring its only credential.
+        self.pause(self.a, False)
         ta = self.open_term(self.a, 'a-revoked')
         state = self.wait('A forward listening before revoke', lambda: next((f for f in self.a.rpc('ListForwards')['forwards']
                          if f['spec']['id'] == self.forward['a']['spec']['id'] and f['state'] == 'listening'), None))
@@ -780,7 +783,12 @@ class Matrix:
         self.b.daemon_cli('token', 'revoke', self.env['daemon']['token_id_a'])
         self.wait('A terminal ends after token revoke', lambda: self.terminal_state(self.a, 'a-revoked').get('closed'))
         self.wait('A TCP ends after token revoke', lambda: self.a.call('tcp.state', {'handle': 'revoke-a'}).get('closed'))
-        self.a.rpc('GetProject', {'id': self.project['id']}, remote=True, expect=('unauthenticated', 'permission_denied'))
+        rejected = self.wait('A credential rejection settles after pool retirement', lambda: next((s for s in
+                    self.a.rpc('ListServers').get('servers', []) if s['config']['id'] == self.a.server
+                    and s.get('connection_state') == 'auth_required' and s.get('reason_code') == 'CREDENTIAL_REJECTED'), None))
+        require(not rejected.get('remote_protocol') and rejected.get('connection_path') == 'unknown',
+                'rejected credential retains stale protocol or ready route')
+        self.a.rpc('GetProject', {'id': self.project['id']}, remote=True, expect=('unauthenticated',))
         self.terminal_marker('B_SURVIVES_TOKEN_A_REVOKED')
         self.b.call('tcp.send', {'handle': 'forward-b', 'text': 'B_TCP_AFTER_REVOKE\n'})
         self.wait('B TCP retains own credential', lambda: self.b.call('tcp.state', {'handle': 'forward-b', 'match': 'B_TCP_AFTER_REVOKE'}).get('matched'))
@@ -788,7 +796,8 @@ class Matrix:
         self.settled('baseline.txt', 'B sync after A revoke\n', [self.b])
         require(self.b.rpc('GetStatus')['instance_id'] == b_status['instance_id'], 'revoking A restarted B')
         self.record('token-revocation-isolation', {'a_attachment': ta['attachment_id'], 'b_status': b_status,
-                    'a_terminal_and_tcp_closed': True, 'b_terminal_tcp_sync_continued': True})
+                    'a_terminal_and_tcp_closed': True, 'b_terminal_tcp_sync_continued': True,
+                    'a_sync_paused_before_revocation': True, 'a_credential_rejection': rejected})
 
     def cleanup(self):
         # Every step is independent, so a revoked credential or failed assertion
@@ -799,8 +808,10 @@ class Matrix:
             except Exception as error:
                 self.cleanup_errors.append({'step': label, 'error_type': type(error).__name__})
         def retire_mapping(device):
-            self.pause(device, False)
             current = next(m for m in device.rpc('ListMappings')['mappings'] if m['id'] == device.mapping['id'])
+            if current.get('sync_enabled'):
+                self.pause(device, False)
+                current = next(m for m in device.rpc('ListMappings')['mappings'] if m['id'] == device.mapping['id'])
             device.rpc('RemoveMapping', {'mapping_id': current['id'], 'expected_revision': current['revision'],
                                          'archive_pending': True, 'request_id': request_id()})
         for device in self.devices:
