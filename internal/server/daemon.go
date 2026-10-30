@@ -24,6 +24,7 @@ import (
 	"github.com/DDSRem-Dev/Shikigami/internal/server/tmux"
 	"github.com/DDSRem-Dev/Shikigami/pkg/config"
 	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
+	apb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/agent"
 	arpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/agent/agentconnect"
 )
 
@@ -213,6 +214,17 @@ func (r *Runtime) serve(server *http.Server, listener net.Listener, tlsEnabled b
 }
 
 func (r *Runtime) serveNode() {
+	r.serveNodeTransport(r.node, r.Service.Handler())
+}
+
+// The host owns HTTP serving; the node owns authorization and tailnet sockets.
+type nodeTransport interface {
+	Status() *apb.NodeStatus
+	DataPlaneAuthorized() bool
+	Listen(uint16) (net.Listener, error)
+}
+
+func (r *Runtime) serveNodeTransport(transport nodeTransport, handler http.Handler) {
 	defer r.wg.Done()
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
@@ -232,11 +244,12 @@ func (r *Runtime) serveNode() {
 	}
 	defer stop()
 	for {
-		status := r.node.Status()
-		if status.State == "online" && server == nil {
-			listener, err := r.node.Listen(uint16(r.cfg.Server.Port))
+		status := transport.Status()
+		authorized := transport.DataPlaneAuthorized()
+		if authorized && server == nil {
+			listener, err := transport.Listen(uint16(r.cfg.Server.Port))
 			if err == nil {
-				server, cancel = nodeHTTPServer(r.ctx, r.Service.Handler())
+				server, cancel = nodeHTTPServer(r.ctx, handler)
 				// The node loop owns this server. It closes it when node
 				// authorization ends, including already-established long streams.
 				serverDone = make(chan error, 1)
@@ -244,7 +257,7 @@ func (r *Runtime) serveNode() {
 				go func(active *http.Server, done chan error) { defer r.wg.Done(); done <- active.Serve(listener) }(server, serverDone)
 				r.markReady()
 			}
-		} else if status.State != "online" {
+		} else if !authorized {
 			stop()
 		}
 		r.mu.Lock()

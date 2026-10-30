@@ -13,6 +13,7 @@ import (
 	agentrpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/agent/agentconnect"
 	"github.com/DDSRem-Dev/Shikigami/pkg/protocol/version"
 	"google.golang.org/protobuf/proto"
+	"tailscale.com/client/local"
 	"tailscale.com/ipn"
 )
 
@@ -121,7 +122,7 @@ func (n *Node) beginLogin(request *agentpb.BeginLoginRequest) (*agentpb.NodeStat
 		n.mu.Unlock()
 		return nil, connect.NewError(connect.CodeResourceExhausted, "LOGIN_REQUEST_LIMIT")
 	}
-	attempt := &loginAttempt{id: identifier("login_"), requestID: request.RequestId, fingerprint: fingerprint, interactive: interactive, expires: time.Now().Add(LoginLifetime), done: make(chan struct{})}
+	attempt := &loginAttempt{id: identifier("login_"), requestID: request.RequestId, fingerprint: fingerprint, interactive: interactive, previousKey: n.selfKey, expires: time.Now().Add(LoginLifetime), done: make(chan struct{})}
 	if n.status.State == "online" {
 		// Even a successful no-op must reserve its request ID across restarts.
 		result := proto.Clone(n.status).(*agentpb.NodeStatus)
@@ -176,14 +177,7 @@ func (n *Node) runLogin(attempt *loginAttempt, key []byte) {
 	n.mu.Unlock()
 	if err == nil && active {
 		callCtx, cancel := context.WithTimeout(n.ctx, 5*time.Second)
-		if attempt.interactive {
-			err = lc.StartLoginInteractive(callCtx)
-		} else {
-			err = lc.Start(callCtx, ipn.Options{AuthKey: string(key)})
-			if err == nil {
-				err = lc.StartLoginInteractive(callCtx)
-			}
-		}
+		err = n.requestLogin(callCtx, lc, attempt, key)
 		cancel()
 	}
 	n.opMu.Unlock()
@@ -240,18 +234,22 @@ func (n *Node) cancelAttempt(id, reason string) (*agentpb.NodeStatus, error) {
 	// Do not stop a node that completed authentication while the request raced.
 	if lc != nil {
 		queryCtx, cancel := context.WithTimeout(n.ctx, 3*time.Second)
-		observed, err := lc.StatusWithoutPeers(queryCtx)
+		observed, err := n.queryStatus(queryCtx, lc, generation)
 		cancel()
 		if err == nil && observed.BackendState == "Running" {
-			n.applyStatus(generation, observed)
-			return n.snapshot(), nil
+			n.mu.Lock()
+			completed := attempt.finished
+			n.mu.Unlock()
+			if completed {
+				return n.snapshot(), nil
+			}
 		}
 	}
-	n.mu.Lock()
-	n.status = &agentpb.NodeStatus{State: "needs_login", ReasonCode: reason, LoginId: id}
-	err := n.finishAttemptLocked(attempt, n.status)
-	result := proto.Clone(n.status).(*agentpb.NodeStatus)
-	n.mu.Unlock()
+	result, err, stopped := n.commitCancellation(attempt, reason)
+	if !stopped {
+		return result, err
+	}
+
 	// SDK has no cancellation API for a login URL. Closing the pending SDK
 	// cancels its registration/followup and destroys its in-memory auth key. It
 	// does not revoke an online node or remove persisted identity data.
@@ -260,4 +258,67 @@ func (n *Node) cancelAttempt(id, reason string) (*agentpb.NodeStatus, error) {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, "NODE_STATE_WRITE_FAILED")
 	}
 	return result, nil
+}
+
+// commitCancellation is the final cancellation decision, after SDK status I/O.
+// Its caller holds opMu; observations may still complete the attempt meanwhile.
+func (n *Node) commitCancellation(attempt *loginAttempt, reason string) (*agentpb.NodeStatus, error, bool) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if attempt.finished {
+		return proto.Clone(n.status).(*agentpb.NodeStatus), nil, false
+	}
+	n.status = &agentpb.NodeStatus{State: "needs_login", ReasonCode: reason, LoginId: attempt.id}
+	err := n.finishAttemptLocked(attempt, n.status)
+	return proto.Clone(n.status).(*agentpb.NodeStatus), err, true
+}
+
+func (n *Node) requestLogin(ctx context.Context, lc *local.Client, attempt *loginAttempt, key []byte) error {
+	// Keep pre-login observations from being published after the new request.
+	// runLogin provides the five-second context covering this permit and SDK I/O.
+	release, err := n.acquireStatusPermit(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+	n.mu.Lock()
+	attempt.sawAuthURL = false
+	n.mu.Unlock()
+	adoptURL := false
+	// Capture the existing key before requesting registration. SDK startup
+	// may already have loaded a cached Running map, which is not completion.
+	if attempt.interactive {
+		observed, observeErr := lc.StatusWithoutPeers(ctx)
+		if observeErr != nil {
+			err = observeErr
+		} else {
+			n.mu.Lock()
+			if observed.Self != nil && !observed.Self.PublicKey.IsZero() {
+				attempt.previousKey = observed.Self.PublicKey
+			}
+			if observed.AuthURL != "" {
+				attempt.sawAuthURL = true
+				adoptURL = true
+			}
+			n.mu.Unlock()
+		}
+	}
+	if err == nil && attempt.interactive {
+		// Adopt an existing registration. Calling StartLoginInteractive again
+		// could race its completion and silently begin a second registration.
+		if !adoptURL {
+			err = lc.StartLoginInteractive(ctx)
+		}
+	} else if err == nil {
+		err = lc.Start(ctx, ipn.Options{AuthKey: string(key)})
+		if err == nil {
+			err = lc.StartLoginInteractive(ctx)
+		}
+	}
+	n.mu.Lock()
+	if err == nil && n.attempt == attempt && !attempt.finished {
+		attempt.loginStarted = true
+	}
+	n.mu.Unlock()
+	return err
 }

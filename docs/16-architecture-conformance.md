@@ -1,6 +1,8 @@
 # 架构与文档一致性检查
 
-**官方 tsnet 验收与 peer 撤销修复（2026-10-30）：** Mac/VPS官方登录、进程身份保持、真实P2P/受控DERP业务流和恢复P2P已有证据；仅关闭Phase 2首条，原42条文字/顺序保持，当前32/42、10项部分完成。官方节点移除暴露旧流未及时回收，现已补入站/出站peer身份代际、状态校准与连接关闭；本地真实SDK和生命周期回归通过。完整node race226.285秒属于最后5秒观察预算修正前的冻结源；最终预算修正先红后绿，相关专项race106.481秒、vet通过，不追认为最终源码全包重跑。官方撤销修复复验尚未通过；前两次重新认证未完成，第三次fresh URL经Chrome提交后，诊断overlay的SDK Running、URL清除且NodeControl online，随后切换不含诊断代码的最终构建，重启后同地址online，Token/daemon ID/能力重验及P2P应用连接通过。Auth Key独立过期/撤销、审批及其余认证/平台/长稳门槛保留，详见[23 外部tsnet验收](23-tsnet-external-acceptance.md)。
+**官方撤销回收、认证恢复与控制面断网验证（2026-10-30）：** 63924ce的六job CI已成功；官方移除专用节点后附件2→1、专用终端退出，主Mac与tmux保持正常，观察上界13/27秒包含Chrome操作与采样。用户完成Touch ID后，诊断构建重新认证online并重连原daemon；随后candidate4 clean构建保留同身份恢复。已分离控制面诊断与既有peer授权，修复登录完成/取消竞争、daemon误关健康流及CLI隐式登录；本地node按310.580/82.302/11.242秒三个源码范围分层race通过，server/architecture/CLI检查通过。官方控制面单进程阻断11.807秒期间，既有只读终端存活、新RPC成功，恢复online同地址；显式connect在独立断网场景ready且未触发登录。完整自身撤销分类、独立key过期/撤销、审批及其余认证/平台/长稳门槛保留，不把断联猜为denied。保持32/42、10项部分完成及原42条文字/顺序；本批新CI结果另行核验，详见[23 外部tsnet验收](23-tsnet-external-acceptance.md)。
+
+**上一批官方 tsnet 验收与 peer 撤销修复（2026-10-30，第二次移除前）：** Mac/VPS官方登录、进程身份保持、真实P2P/受控DERP业务流和恢复P2P已有证据；仅关闭Phase 2首条，原42条文字/顺序保持，当前32/42、10项部分完成。官方节点移除暴露旧流未及时回收，现已补入站/出站peer身份代际、状态校准与连接关闭；本地真实SDK和生命周期回归通过。完整node race226.285秒属于最后5秒观察预算修正前的冻结源；最终预算修正先红后绿，相关专项race106.481秒、vet通过，不追认为最终源码全包重跑。官方撤销修复复验尚未通过；前两次重新认证未完成，第三次fresh URL经Chrome提交后，诊断overlay的SDK Running、URL清除且NodeControl online，随后切换不含诊断代码的最终构建，重启后同地址online，Token/daemon ID/能力重验及P2P应用连接通过。Auth Key独立过期/撤销、审批及其余认证/平台/长稳门槛保留，详见[23 外部tsnet验收](23-tsnet-external-acceptance.md)。
 
 **历史计划盘点（2026-10-30，官方tsnet验收前）：** 已按原42项核对完成31项、部分完成11项，逐项剩余条件及自主/用户协助分工见[08](08-roadmap.md#剩余工作分工2026-10-30)和[19](19-local-acceptance-closure.md#plan-inventory-20261030)。修正汇总中仍等待alpha.2分发、原697尾部和永久沿用首发无历史版本的过期描述；公开alpha.1→alpha.2可开展真实包组合验收。原12小时、资源报告、密钥演练与自动Homebrew已完成；本批仅整理计划，没有启动新负载/部署或扩大支持声明，原条目文字/顺序及31/42保持。
 
@@ -1174,3 +1176,19 @@ v4普通/race分阶段profile均完整通过31.73/40.40秒：16次256KiB双向�
 | 行为测试/证据/声明 | 旧流回收与5秒许可各有修前失败；最终测试区分226.285秒完整旧冻结源与106.481秒最后预算修正专项，无skip。错误观察保留另一peer、队列/迟到回调/身份重加/同步关闭均有回归。官方修复复验尚未通过；第三次诊断overlay重新认证已有SDK/NodeControl online证据，随后不含诊断代码的最终构建重启后同地址online，双客户端重连同一daemon ID并协商能力成功，不用网页提交代替。 |
 
 架构测试已于本次peer适配审查通过0.404秒；最终仅观察预算与其测试变化，不重复成功的架构检查。最终生产摘要在`/tmp/shiki-peer-lifetime-source-final.json`，相关vet/diff检查通过。08/15/16文首摘要一致，保持32/42；Phase 0认证矩阵、Phase 4主机条件及其他外部/平台/长稳门槛保留。原官方P2P/DERP与进程持久化通过不被这次尚未完成的撤销复验冒充扩大。
+
+## 官方撤销、认证恢复与控制面失联最终复核（2026-10-30）
+
+按01/02/06/07/09/10/13/14对当前实现完成七类只读独立复核，发现的取消竞争、旧注册观察回填和host误关健康流均已修复，最终未见新增阻塞偏差。证据见[15](15-implementation-status.md#evidence-official-revocation-recheck-20261030)与[23](23-tsnet-external-acceptance.md)。
+
+| 范围 | 最终复核结果 |
+|---|---|
+| 目录/依赖/SDK-host-plugin归属 | internal/node拥有SDK和授权生命周期；host最小nodeTransport接口只供HTTP服务决策，插件仍在plugins/sync与plugins/port，生产依赖边界未变；架构race1.378秒通过。 |
+| RPC/准入/版本能力/授权 | offline是控制诊断，不凭断联猜denied；已有有效lease保留，新鲜Self/公钥/地址与控制观察才建立初始lease；peer删除/换钥/明确过期仍撤回旧流，Token/daemon身份/能力校验保持。 |
+| 持久/运行状态、原子性/revision/去重 | 不删除身份目录或增加持久schema。登录启动与状态观察共用有界permit，当前注册证据决定完成；取消最终在同锁重查finished，保留request去重。connect原有UpsertServer仍新建revision并退役旧池，断网保流验证不能混入该主动变更。 |
+| 进程/启停/取消/恢复 | daemon按授权lease维护HTTP服务，不因控制诊断offline关闭健康流；本地HTTP2测试在offline后发送新字节成功，撤权仍取消。官方附件回收、诊断认证及clean进程恢复分开记录，未替代主机重启。 |
+| 文件/终端/网络/限额 | 5秒状态许可与3秒取消查询截止保持；官方控制阻断仅专用Mac进程代理，不改变系统网络或VPS。原只读终端存活与新RPC通过，不冒充新终端payload；失败夹具与主动connect断流证据保留。 |
+| CLI/TUI/配置/安装/产物 | CLI只在offline/NODE_CONTROL_UNAVAILABLE跳过自动login，随后真实连接探测；用户显式登录仍有效。candidate4只构建Mac两个host，版本/Commit unknown和hash明确，公开发行及安装布局不变。 |
+| 行为测试/证据/声明 | node310.580/82.302/11.242秒属三个冻结范围；host43.386秒、CLI20.597秒及vet通过。63924ce六job CI不能覆盖新修复，CI opt-in跳过不算通过。官方两独立断网场景与恢复已有证据，32/42与原42条保持。 |
+
+08/15/16同步本批最终结果。SDK无可靠公开自身删除标志，仍不能将控制断联等同明确撤销；自身撤销分类、独立key自然过期/撤销、审批及其余认证/平台/长稳门槛继续保留。正常恢复专用agent原代理后停止测试代理；未重跑旧长测或修改真实发行资产。

@@ -32,11 +32,11 @@ func (n *Node) Dial(ctx context.Context, network, address string) (net.Conn, err
 		return nil, errors.New("invalid tailnet endpoint port")
 	}
 	n.mu.Lock()
-	server, lc, state := n.server, n.local, n.status.State
+	server, lc := n.server, n.local
 	generation := n.generation
 	lease := n.authorization
 	n.mu.Unlock()
-	if server == nil || lc == nil || state != "online" || lease == nil || lease.Err() != nil {
+	if server == nil || lc == nil || lease == nil || lease.Err() != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, "NODE_AUTH_REQUIRED")
 	}
 	status, err := n.queryStatus(ctx, lc, generation)
@@ -67,7 +67,7 @@ func (n *Node) Dial(ctx context.Context, network, address string) (net.Conn, err
 		return nil, err
 	}
 	n.mu.Lock()
-	current := n.generation == generation && n.server == server && n.status.State == "online" && n.authorization == lease
+	current := n.generation == generation && n.server == server && n.authorizedLocked() && n.authorization == lease
 	n.mu.Unlock()
 	if !current || lease.Err() != nil {
 		_ = conn.Close()
@@ -122,10 +122,10 @@ func (n *Node) Listen(port uint16) (net.Listener, error) {
 		return nil, errors.New("tailnet listener requires a fixed port")
 	}
 	n.mu.Lock()
-	server, state := n.server, n.status.State
+	server, authorized := n.server, n.authorizedLocked()
 	generation := n.generation
 	n.mu.Unlock()
-	if server == nil || state != "online" {
+	if server == nil || !authorized {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, "NODE_AUTH_REQUIRED")
 	}
 	return n.listenPeerTCP(server, generation, port)

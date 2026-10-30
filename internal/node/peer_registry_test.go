@@ -25,6 +25,7 @@ func peerRegistryFixture(t *testing.T) (*Node, *countedAuthorizationContext, net
 	node.generation = 1
 	node.authorizationCancel = lease.cancel
 	node.status.Addresses = []string{"100.64.0.1"}
+	node.selfAddresses = []string{"100.64.0.1"}
 	address := netip.MustParseAddr("100.64.0.2")
 	identity := key.NewNode().Public()
 	status := &ipnstate.Status{BackendState: "Running", Peer: map[key.NodePublic]*ipnstate.PeerStatus{

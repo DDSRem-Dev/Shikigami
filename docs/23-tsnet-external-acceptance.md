@@ -1,6 +1,6 @@
 # 官方 tsnet 外部验收
 
-2026-10-30：用户已提供官方 tailnet、已登录的 Chrome，以及家庭宽带 Mac 与不同网络的 VPS。首次真实网络批次已关闭08的Phase 2首条；当前32/42，10项部分完成。其余认证矩阵和平台门槛不随此项关闭。后续官方节点移除暴露旧流残留，peer生命周期修复已有本地回归证据；第三次重新认证已online，随后不含诊断代码的最终构建重启及应用重连通过；官方撤销修复复验仍待。
+2026-10-30：用户已提供官方 tailnet、已登录的 Chrome，以及家庭宽带 Mac 与不同网络的 VPS。首次真实网络批次已关闭08的Phase 2首条；当前32/42，10项部分完成。其余认证矩阵和平台门槛不随此项关闭。后续官方节点移除暴露旧流残留，peer生命周期修复已有本地回归证据；第三次重新认证已online，随后不含诊断代码的最终构建重启及应用重连通过；官方再次移除已验证旧附件回收与主节点不受影响；自身状态分类与显式恢复的本地修复及分层回归已完成；旧63924ce诊断构建已重新认证并恢复应用连接，candidate4 clean重启同地址online。最终候选已完成两个独立的官方控制面受控断网场景：已有终端保持及控制恢复、无持有终端时显式connect复用授权。首轮混入主动连接重配的失败记录保留，完整认证矩阵未关闭。
 
 ## 来源与隔离范围
 
@@ -43,13 +43,13 @@ VPS普通网卡出现SDK PeerAPI TCP监听。核对固定SDK `ipn/ipnlocal/peera
 
 - CLI与向导真实UDS/HTTP2/PTY回归先红后绿，完整cmd/shiki race通过21.349秒，vet通过；日志 `/tmp/shiki-tsnet-cli-wizard-package.log`。
 - NodeControl真实SDK HealthTracker→LocalAPI bus回归修前失败，专项race12.873秒、完整internal/node race157.044秒通过，无skip、未重启测试；vet通过。日志 `/tmp/shiki-node-key-{health-red,health-race,full-race,vet}.log`。
-- 登录修复阶段原生架构测试0.415秒通过；后续peer适配审查架构测试0.404秒通过，不重复成功检查。七类源码/文档复核见16。此前文档CI40923247799、40924428349均已确认成功，本次修改的远端CI需单独记录。
+- 登录修复阶段原生架构测试0.415秒通过；后续peer适配审查架构测试0.404秒通过，不重复成功检查。七类源码/文档复核见16。此前文档CI40923247799、40924428349均已确认成功；peer修复精确63924ce的CI40940419677现已成功，范围及skip边界见下文。
 
-仍需独立未使用key的撤销/自然过期、节点审批等待/拒绝/批准、节点移除后的活动流撤权和重新认证、URL自然过期及控制面离线分类。测试用已消费key不能替代这些场景。节点移除原失败与本地修复范围见下节，官方修复复验尚未通过。
+仍需独立未使用key的撤销/自然过期、节点审批等待/拒绝/批准、URL自然过期及完整控制面离线分类。测试用已消费key不能替代这些场景。节点移除原失败、官方旧附件回收、后续重新认证和不同候选的证据见下节；完整自身撤销分类与最终候选再次移除后的恢复仍待；官方受控断网的两个限定场景已通过，不扩大为所有离线分类或自然网络切换通过。
 
 ## peer撤销修复与复验边界
 
-用户在最终操作时确认后，已通过Chrome移除专用一次性节点，当时控制台只剩主Mac/VPS两节点。原alpha.2移除后新请求5秒超时、旧终端最终canceled退出，路由offline/RECONNECT_EXHAUSTED且attempts仍仅tsnet；主Mac业务保持成功。但原agent仍显示缓存online，远端session附件计数仍为1，不能把最终网络超时当完整撤销验收通过。证据`node-removal-{start,observed,later,final}.json`；时间为采样上界，不宣称精确撤销时延。
+用户在最终操作时确认后，已通过Chrome移除专用一次性节点，当时控制台只剩主Mac/VPS两节点。原alpha.2移除后新请求5秒超时、旧终端最终canceled退出，路由offline/RECONNECT_EXHAUSTED且attempts仍仅tsnet；主Mac业务保持成功。但原agent仍显示online，远端session附件计数仍为1，不能把最终网络超时当完整撤销验收通过。证据`node-removal-{start,observed,later,final}.json`；时间为采样上界，不宣称精确撤销时延。
 
 源码确认旧入站listener没有按peer撤销关闭已接受连接，出站连接也仅绑定自身节点授权生命周期。现对入站和出站连接保存peer公钥、地址、身份代际及SDK代际：入站使用固定SDK公开flow回调，仅接当前节点精确地址和配置端口，在连接排队前捕获身份；出站在握手前捕获。登记与peer状态发布互斥，删除、换钥、明确过期或删除后重加均关闭旧连接，不按重新分配后的同一IP认领旧流。此绑定依赖SDK的WireGuard与peer观察，不是密码学socket身份或全局原子控制面事务。
 
@@ -69,10 +69,69 @@ SDK初始NetMap的Peers可能陈旧，通知队列也可能丢事件；实现以
 
 第三次重新认证已有实际成功证据：前两次Chrome提交后fresh SDK仍NeedsLogin，失败记录保留，根因未确定。第三次由基于最终生产源的诊断overlay生成新key和fresh URL，经Chrome同账户Connect后，SDK RegisterReq报告machineAuthorized=true、authURL=false，随后authRoutine成功并进入Running；NodeControl online，内嵌地址100.118.23.89，控制台显示Connected。证据`node-reauthenticated.json`明确attempt=3、diagnostic_only_overlay=true及最终生产源码manifest。密钥、登录URL及原始诊断文本不写入本记录；不能将成功倒推为前两次失败原因已确定。
 
-**外部仍待：** 官方控制面的修复后节点撤销/附件回收尚未通过。第三次认证最初使用诊断overlay，之后正常停止诊断agent并换为不含诊断代码的最终构建；进程重启后同地址online，重新校验Token、原daemon ID和能力并恢复P2P应用连接。peer修复不凭空推断被移除节点自身缓存online应属于何种拒绝原因。此节的局部结果不扩大原Phase 2通过范围或提前关闭Phase 0完整认证矩阵。
+**第二次移除前的记录：** 当时官方控制面的修复后节点撤销/附件回收尚未通过；后续结果见下节。第三次认证最初使用诊断overlay，之后正常停止诊断agent并换为不含诊断代码的最终构建；进程重启后同地址online，重新校验Token、原daemon ID和能力并恢复P2P应用连接。peer修复不凭空推断被移除节点自身仍报online应属于何种拒绝原因。此节的局部结果不扩大原Phase 2通过范围或提前关闭Phase 0完整认证矩阵。
 
 完整Claude使用、主机开机/重新登录、自然网络变化、第二台物理客户端、其余原生平台、当前候选长期资源和macOS完整Homebrew仍待。当前不需要再次提供VPS密码或已有tailnet账户；新增凭据与影响账号的必要操作按具体步骤引导。
 
 ### 重新认证后的最终构建复核
 
-四个Mac/Linux宿主从最终生产源码重新构建，版本`v0.0.1-alpha.2-local.tsnet.3`、Commit `unknown`、BuiltAt `2026-10-29T19:25:28Z`，不冒充已提交或已发布产物；参数与摘要见私有`candidate3/host-build.json`。双平台插件与manifest保持此前匹配版本，哈希未变。最终Linux daemon在原隔离service内替换，全部部署文件哈希与最终清单一致。Mac测试agent在原状态目录恢复，同地址online；专用节点与主Mac均通过Token认证、原daemon ID校验和能力协商，路径`tailscale-direct`、attempts仅`tsnet`。原tmux会话仍ready。证据`reauth-clean-restart.json`、`reauth-clean-connect.json`、`main-final-connect.json`及`reauth-session-list.json`。这不是主机重启、完整长稳或修复后再次撤销验收；专用节点目前保留在线认证状态。
+四个Mac/Linux宿主从最终生产源码重新构建，版本`v0.0.1-alpha.2-local.tsnet.3`、Commit `unknown`、BuiltAt `2026-10-29T19:25:28Z`，不冒充已提交或已发布产物；参数与摘要见私有`candidate3/host-build.json`。双平台插件与manifest保持此前匹配版本，哈希未变。最终Linux daemon在原隔离service内替换，全部部署文件哈希与最终清单一致。Mac测试agent在原状态目录恢复，同地址online；专用节点与主Mac均通过Token认证、原daemon ID校验和能力协商，路径`tailscale-direct`、attempts仅`tsnet`。原tmux会话仍ready。证据`reauth-clean-restart.json`、`reauth-clean-connect.json`、`main-final-connect.json`及`reauth-session-list.json`。这不是主机重启、完整长稳或修复后再次撤销验收；当时专用节点保留在线认证状态，随后开展下述再次移除复验。
+
+## 官方再次移除：旧附件回收与后续恢复
+
+本轮使用上批最终clean构建，证据`revocation-fixed-observation.json`记录精确源码63924ce。主Mac和专用节点同时只读attach同一tmux会话，client_count为2；Chrome移除专用节点后降为1，主Mac全部查询成功，主终端保持至观察完成，tmux一直ready。控制台确认仅主Mac/VPS两节点，观察完成后正常detach主终端。最初临时观察器遗漏PTY尺寸，两终端在任何删除动作前exit1；补齐尺寸后才建立有效前置状态并执行移除，不把夹具准备失败归为产品失败。
+
+| 观察 | 结果 | 计时边界 |
+|---|---|---|
+| 远端旧附件回收 | client_count 2→1 | row时间在查询前，使用首次count1的下一条row作为保守上界，向上取整13秒；从Chrome提交前计时，非精确撤销时延 |
+| 被移除节点终端 | exit1 | 同一标记后26.809秒检测退出，向上取整上界27秒；不等于服务端附件回收时点 |
+| 主Mac与远端tmux | 查询全部成功、主终端未退出、tmux ready | 仅本轮观察窗口；非长期无中断证明 |
+| 被移除节点自身状态 | NodeControl仍online | 旧适配仅依据SDK Running；当时未记录Self.Online，不能断言磁盘缓存是本次原因 |
+| 最初显式重新认证 | clean进程重启后BeginLogin仍no-op且没有URL | 当时恢复失败；后续独立认证成功见下文，不覆盖本条失败 |
+
+触发后的53个样本中，最大相邻采样起点间隔0.712秒；主Mac查询全部成功、终端保持。该次观察终态专用路由为connecting/unknown且attempts为空，不能报告offline或假定已尝试回退；主路由为ready/tailscale-direct、attempts仅tsnet。32/42和Phase 0完整认证矩阵未关闭。
+
+### 自身状态调查与重新认证
+
+固定SDK的LocalAPI `Self.Online`由`health.GetInPollNetMap()`填充，表示当前是否处于控制面map连接；SDK `Running`及已有map不能单独证明控制连接仍有效。map请求普通错误可保留旧Running状态，但该结构化连接信号不能区分节点撤销、普通断网和超时，不得据此报告denied或INVALID_AUTH_KEY。
+
+SDK支持磁盘netmap缓存，但本事件没有成功加载缓存的证据。next2诊断中的`load netmap from cache:`只在读取失败时记录；成功标签为`loaded netmap from disk cache`。当次Self.InNetworkMap=false，NoState随后转为NeedsLogin，注册响应machineAuthorized=false、authURL=true。源码的Cache.Load没有按年龄失效的TTL，缓存写入还要求控制面授予对应能力。因此不能把此前clean长时间online、后续诊断启动NeedsLogin的差异归因于缓存成功加载、自然到期或某个已确定的唯一根因。
+
+随后使用旧`63924ce`源码的`diagnostic-next2`隔离构建取得当前URL，由Chrome完成认证，NodeControl online、内嵌IPv4为`100.101.136.82`；证据`revocation-fixed-reauth-result.json`。此前一次仍NeedsLogin的结果保存在`revocation-fixed-reauth-retry.json`，没有改写为成功。重新连接经Token、原daemon ID和能力验证后ready，路径`tailscale-direct`、attempts仅`tsnet`，见`revocation-fixed-reconnect.json`。该恢复发生在新状态适配部署前，不能据此证明candidate4已完成官方移除后的恢复验收；全过程保留节点持久身份，没有删除状态目录。
+
+### 控制状态与peer授权分离的修复及回归
+
+最终实现用当前有效self、公钥、控制map连接及无待处理URL确认online。控制连接不可确认时显示offline/NODE_CONTROL_UNAVAILABLE；Running仍带认证URL时显示needs_login，避免隐藏待处理认证。已经建立且未被明确失效的peer授权生命周期保留，RPC复用、入站listener和新peer连接不因单纯控制面中断被取消；从未取得有效控制观察的缓存状态不能建立新授权。daemon按数据面授权保活HTTP服务，诊断仍显示控制面离线。明确节点过期/身份状态失效继续取消授权，普通断网不被猜为撤销。
+
+新的显式BeginLogin可从上述离线状态启动；健康online的重复登录仍保持原行为。登录启动与状态读取共享有界观察许可，清除旧URL标记；已有URL直接采用，不重复触发交互注册。只有当前注册启动后取得有效控制观察，并确认新key或已观察URL完成，才完成attempt。取消查询也使用共享观察许可，最终提交在锁内再次检查完成状态，避免迟到取消覆盖成功或旧查询回填。原request_id去重、单attempt、身份保留和5秒启动预算不变；取消不会凭缓存Running判定登录已完成。
+
+| 检查 | 结果与源码范围 |
+|---|---|
+| 状态分类/真实SDK断控制红绿与完整node race | 基础18文件冻结源`/tmp/shiki-control-outage-source.json`：完整node race 310.580秒、34项顶层测试通过，无skip；日志`/tmp/shiki-control-outage-node-race.log`。真实SDK夹具切断控制连接，已有终端、新RPC和新TCP流保持可用并在控制恢复后继续；不是本轮官方网络验收。 |
+| 注册启动与取消提交补充 | 已有URL被重复启动、成功后被迟到取消覆盖均先红后绿；注册阶段冻结源`/tmp/shiki-control-registration-source.json`专项race 82.302秒通过，日志`/tmp/shiki-control-final-race.log`。不同于前述整包源码，不追认310.580秒覆盖后续修改。 |
+| 最后取消观察串行化 | 最终冻结源`/tmp/shiki-control-outage-source-final.json`追加专项race 11.242秒通过，日志`/tmp/shiki-control-cancel-serial-race.log`；验证取消查询不能把旧状态跨观察顺序发布。最终源没有再跑一遍完整node包。 |
+| host与架构 | daemon真实HTTP2保活及明确撤权等关联race 43.386秒、架构race 1.378秒通过；`/tmp/shiki-control-outage-host-race.log`。 |
+| CLI与静态检查 | CLI关联race 20.597秒通过，`/tmp/shiki-cli-control-outage-race.log`；相关vet通过。 |
+
+candidate4从上述最终node及对应host/CLI生产源构建，版本`v0.0.1-alpha.2-local.tsnet.4`、Commit `unknown`、BuiltAt `2026-10-30T03:23:51Z`；精确参数、各生产文件与二进制摘要在`candidate4/host-build.json`。不含诊断overlay；专用节点clean进程重启后已观察到同一`100.101.136.82`地址online。它不是已发布资产，也不能替代主机重启、完整平台回归或官方撤销后的最终候选恢复验收。
+
+### 最终候选的官方控制面断网观察
+
+最终验证使用Mac专用candidate4 agent，临时代理只阻断该进程通往官方controlplane的连接；VPS继续运行candidate3，主Mac和系统网络设置不变。分为两个独立场景，避免将显式连接重配与无中断断网验收混在一起。
+
+| 场景 | 实际结果 | 证据与边界 |
+|---|---|---|
+| 已有终端与控制恢复 | 阻断窗口11.8069秒；NodeControl报告offline/NODE_CONTROL_UNAVAILABLE，新的sessions RPC持续成功；已有只读终端从断网前至恢复后全程存活。控制恢复后同地址online，正常detach退出0。 | `official-control-outage.json`，passed=true；仅专用Mac控制连接受控阻断，非自然网络切换、长期离线或VPS新host实现的官方验收。 |
+| 离线时显式connect | 另一个无持有终端的阻断窗口中connect成功ready、路径tailscale-direct、attempts仅tsnet；NodeControl仍offline/NODE_CONTROL_UNAVAILABLE，login_id未改变，没有自动发起认证。 | `official-control-outage-connect.json`，passed=true；证明保留授权仍可连接，不将connect期间的路由替换当作旧流连续性。 |
+
+失败与准备记录保留：首轮在持有终端期间执行connect，终端随后exit1，见`official-control-outage-connect-failed.json`。源码确认connect无条件UpsertServer会改变revision，继而retireLocked/cancel旧连接池；该动作混入主动断流，原轮保持失败，不归因于控制恢复。另一前置观察仅等待12秒，短于产品15秒预算，记录在`official-control-outage-preflight-failed.json`，不把夹具提前退出算产品超时或通过。最终两个场景均为独立执行，未覆盖这些失败记录。官方保流仅观察既有终端存活及正常detach退出0，没有发送新的终端marker，不能扩大为断网期间新终端payload已读回；本地host真实HTTP2的新字节验证另属本地证据。
+
+验证后已恢复专用agent原普通代理配置（7897端口），candidate4同地址online且connect ready；临时代理进程已停止并确认不存在，见`candidate4-normal-restored.json`。
+
+本轮关闭的是上述限定控制面断网子场景。独立未使用Auth Key的撤销/自然到期、节点审批、URL自然过期、明确自身撤销分类、candidate4再次移除后的完整恢复和其他平台/主机/长期门槛继续保留。
+
+## 精确提交CI补证
+
+[CI40940419677](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40940419677)在`63924ce4271345bcb1d463e94e59a773d6f29a59`完成双平台测试及四目标未签名包构建，共六job全部成功。macOS/Linux node整包race185.047/35.375秒，架构1.205/1.107秒，E2E239.568/177.592秒；协议漂移、模块/依赖扫描、构建/lint及终端屏幕步骤均成功。记录补充最终peer修复源码的双平台整包覆盖，不覆盖上述后来完成的控制状态、登录恢复与host/CLI修改。原本地226.285秒与最后106.481秒的不同冻结范围保持。
+
+workflow步骤无skip，但go test未开verbose，不能从日志无SKIP字样推导全套无skip；E2E中的真实LaunchAgent、systemd活动升级和12小时实验需要独立opt-in，CI未启用。node及architecture测试源码无Skip分支。日志留于`/tmp/shiki-ci-40940419677-review.log`，未为了补文档重新运行测试。

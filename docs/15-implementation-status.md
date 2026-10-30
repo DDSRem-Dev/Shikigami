@@ -1,6 +1,8 @@
 # 实施与验收记录
 
-**官方 tsnet 验收与 peer 撤销修复（2026-10-30）：** Mac/VPS官方登录、进程身份保持、真实P2P/受控DERP业务流和恢复P2P已有证据；仅关闭Phase 2首条，原42条文字/顺序保持，当前32/42、10项部分完成。官方节点移除暴露旧流未及时回收，现已补入站/出站peer身份代际、状态校准与连接关闭；本地真实SDK和生命周期回归通过。完整node race226.285秒属于最后5秒观察预算修正前的冻结源；最终预算修正先红后绿，相关专项race106.481秒、vet通过，不追认为最终源码全包重跑。官方撤销修复复验尚未通过；前两次重新认证未完成，第三次fresh URL经Chrome提交后，诊断overlay的SDK Running、URL清除且NodeControl online，随后切换不含诊断代码的最终构建，重启后同地址online，Token/daemon ID/能力重验及P2P应用连接通过。Auth Key独立过期/撤销、审批及其余认证/平台/长稳门槛保留，详见[23 外部tsnet验收](23-tsnet-external-acceptance.md)。
+**官方撤销回收、认证恢复与控制面断网验证（2026-10-30）：** 63924ce的六job CI已成功；官方移除专用节点后附件2→1、专用终端退出，主Mac与tmux保持正常，观察上界13/27秒包含Chrome操作与采样。用户完成Touch ID后，诊断构建重新认证online并重连原daemon；随后candidate4 clean构建保留同身份恢复。已分离控制面诊断与既有peer授权，修复登录完成/取消竞争、daemon误关健康流及CLI隐式登录；本地node按310.580/82.302/11.242秒三个源码范围分层race通过，server/architecture/CLI检查通过。官方控制面单进程阻断11.807秒期间，既有只读终端存活、新RPC成功，恢复online同地址；显式connect在独立断网场景ready且未触发登录。完整自身撤销分类、独立key过期/撤销、审批及其余认证/平台/长稳门槛保留，不把断联猜为denied。保持32/42、10项部分完成及原42条文字/顺序；本批新CI结果另行核验，详见[23 外部tsnet验收](23-tsnet-external-acceptance.md)。
+
+**上一批官方 tsnet 验收与 peer 撤销修复（2026-10-30，第二次移除前）：** Mac/VPS官方登录、进程身份保持、真实P2P/受控DERP业务流和恢复P2P已有证据；仅关闭Phase 2首条，原42条文字/顺序保持，当前32/42、10项部分完成。官方节点移除暴露旧流未及时回收，现已补入站/出站peer身份代际、状态校准与连接关闭；本地真实SDK和生命周期回归通过。完整node race226.285秒属于最后5秒观察预算修正前的冻结源；最终预算修正先红后绿，相关专项race106.481秒、vet通过，不追认为最终源码全包重跑。官方撤销修复复验尚未通过；前两次重新认证未完成，第三次fresh URL经Chrome提交后，诊断overlay的SDK Running、URL清除且NodeControl online，随后切换不含诊断代码的最终构建，重启后同地址online，Token/daemon ID/能力重验及P2P应用连接通过。Auth Key独立过期/撤销、审批及其余认证/平台/长稳门槛保留，详见[23 外部tsnet验收](23-tsnet-external-acceptance.md)。
 
 **历史计划盘点（2026-10-30，官方tsnet验收前）：** 已按原42项核对完成31项、部分完成11项，逐项剩余条件及自主/用户协助分工见[08](08-roadmap.md#剩余工作分工2026-10-30)和[19](19-local-acceptance-closure.md#plan-inventory-20261030)。修正汇总中仍等待alpha.2分发、原697尾部和永久沿用首发无历史版本的过期描述；公开alpha.1→alpha.2可开展真实包组合验收。原12小时、资源报告、密钥演练与自动Homebrew已完成；本批仅整理计划，没有启动新负载/部署或扩大支持声明，原条目文字/顺序及31/42保持。
 
@@ -858,4 +860,17 @@ Release于`2026-10-29T17:30:47Z`（北京时间2026-10-30 01:30:47）公开，�
 
 源码基于54feb47工作树；最终逐文件摘要为`/tmp/shiki-peer-lifetime-source-final.json`，前一冻结源为`/tmp/shiki-peer-lifetime-source.json`。前一冻结源完整internal/node race226.285秒通过，日志`/tmp/shiki-peer-final-node-race.log`；最后仅node.go及peer_registry_test.go变化，最终相关专项race106.481秒通过、无skip，覆盖真实入站/出站移除、无bus的明确过期、取消/许可、观察失败保留其他peer及5秒自身截止；vet与diff检查通过。日志`/tmp/shiki-peer-status-cap-{red,green}.log`；不能把两个来源合写为最终源码整包race通过。
 
-七类审查见16。只增加本地实现/回归证据，计数保持32/42，原42条文字/顺序不变。官方撤销修复复验尚未通过。前两次Chrome重新认证提交后仍NeedsLogin，失败记录保留，不推断根因；第三次用基于最终生产源的诊断overlay生成fresh key/URL，经Chrome同账户Connect后，SDK报告machineAuthorized=true、authURL=false、authRoutine成功并进入Running，NodeControl online地址100.118.23.89，控制台Connected，证据`/tmp/shiki-tsnet-3vsvzo1b/node-reauthenticated.json`。该结果属于诊断overlay，clean最终构建的进程恢复与应用重连仍待验证。不持久化URL/凭据，不改公开alpha.2或原签名归档；后续外部结果独立追加。
+七类审查见16。只增加本地实现/回归证据，计数保持32/42，原42条文字/顺序不变。官方撤销修复复验尚未通过。前两次Chrome重新认证提交后仍NeedsLogin，失败记录保留，不推断根因；第三次用基于最终生产源的诊断overlay生成fresh key/URL，经Chrome同账户Connect后，SDK报告machineAuthorized=true、authURL=false、authRoutine成功并进入Running，NodeControl online地址100.118.23.89，控制台Connected，证据`/tmp/shiki-tsnet-3vsvzo1b/node-reauthenticated.json`。该次成功随后由clean最终构建的进程恢复、同地址online和应用重连独立核验，详见23；这不代表下述再次移除后的恢复已通过。不持久化URL/凭据，不改公开alpha.2或原签名归档；后续外部结果独立追加。
+
+<a id="evidence-official-revocation-recheck-20261030"></a>
+## 官方撤销旧附件回收、认证恢复与控制面失联（2026-10-30）
+
+在上批最终构建上开启主Mac与专用节点两个只读终端，远端client_count稳定为2。Chrome再次移除专用节点后，client_count降为1；row时间记在查询前，故采用首次count1下一条row时间作为回收保守上界并向上取整为13秒；专用终端首次检测exit1在26.809秒，向上取整为27秒。两者从Chrome提交前触发标记计时，包含UI操作和观察间隔，不是控制面撤销精确时延。全部主Mac查询成功、主终端保持至观察完成、tmux始终ready；控制台确认只剩主Mac/VPS两节点，完成观察后正常detach主终端。证据为私有`/tmp/shiki-tsnet-3vsvzo1b/revocation-fixed-observation.json`，源提交字段固定63924ce。最初临时观察器未设置PTY尺寸，两终端在删除前exit1；补齐夹具尺寸后才执行移除，该次准备失败不算产品撤销失败，也不算通过。
+
+被移除节点最初仍显示online，重启后BeginLogin无URL。SDK支持磁盘netmap缓存，但本轮日志的“load netmap from cache:”是加载错误，不能据此确认加载成功或唯一根因。Self.Online反映控制map轮询健康，Running/地址不能单独作为当前控制面在线证据。已修复控制状态与既有peer授权分离；未取得新鲜控制观察的缓存Running不得建立新授权。显式注册须满足当前attempt完成门槛，已有URL继续原注册，取消与完成同锁裁决，登录启动/取消观察共用有界许可。daemon按授权生命周期保留HTTP服务，CLI控制失联时继续真实连接探测，不自动重登录。
+
+本次Touch ID后使用63924ce诊断构建完成官方认证，online地址100.101.136.82、SDK Running且URL清除，Token/原daemon ID/能力重验后P2P ready；这不是candidate4重新登录的证据。随后candidate4 clean构建在原状态目录同地址恢复；仅为Mac CLI/agent，VPS仍candidate3。官方单进程代理仅阻断controlplane.tailscale.com约11.807秒：offline/NODE_CONTROL_UNAVAILABLE、新sessions RPC持续成功、原只读终端存活，放通约2.063秒后online同地址，正常detach退出0。未注入新终端输出，不把进程存活扩大为恢复后新payload验收。另独立场景验证断网期间connect ready且login_id未变化。最初12秒脚本预算早于产品15秒等待截止，另一次把会主动更新revision并退役连接池的connect混入保流测试，两次失败记录保留，均不用于宣称断网保流通过。完整证据与范围见23。
+
+本地验证按冻结源码分层：node完整race310.580秒；随后注册/取消竞争专项82.302秒；最后仅取消观察改为串行queryStatus，6项专项11.242秒通过，各层无skip/race/失败。真实SDK已有URL测试与同key状态机单测是独立证据，不合称同key真实SDK闭环。server/architecture整包race43.386/1.378秒、CLI整包race20.597秒通过，相关vet/diff通过。清单`/tmp/shiki-control-outage-source-final.json`关联前两快照；candidate4/host-build.json记录97份生产/依赖输入构建前后相同，版本v0.0.1-alpha.2-local.tsnet.4、Commit unknown。七类审查见16；本批不覆盖公开alpha.2产物，不关闭完整认证矩阵。
+
+[CI40940419677](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40940419677)精确源码`63924ce4271345bcb1d463e94e59a773d6f29a59`六个job成功：macOS14/Ubuntu24.04的构建、lint、race、E2E、协议漂移及终端屏幕步骤，另四目标未签名包构建/校验。node整包race185.047/35.375秒、架构1.205/1.107秒、E2E239.568/177.592秒。它补充上批最后5秒预算补丁的双平台整包证据，不改写原本地226.285/106.481秒的不同冻结范围，也不覆盖本轮恢复实现。workflow无skipped步骤，但go test非verbose；真实LaunchAgent、systemd活动升级与12小时测试需opt-in，CI未启用，不能声称全套无skip。日志`/tmp/shiki-ci-40940419677-review.log`。

@@ -300,6 +300,8 @@ message DaemonReadinessStatus {
 | BeginLogin | 同一节点最多一个登录 attempt；相同 request_id 幂等，其他 attempt 返回 AlreadyExists；无网络时保留状态，不清节点身份 |
 | CancelLogin | 取消指定登录等待并失效登录链接，不退出已 online 的节点、不撤销其他设备 |
 
+`offline/NODE_CONTROL_UNAVAILABLE` 表示内嵌SDK尚不能确认当前控制面map连接，不等于凭据被撤销。仅缓存的Running/地址不能建立新的授权生命周期；先前已确认的有效peer通道按06继续工作，daemon与agent不得仅因本地诊断状态离线关闭它们。普通connect引导在此状态继续实际连接/认证探测，不自动发起重新登录；用户显式`node login`才开始新的认证尝试。新attempt必须有本次注册完成证据，旧Running不得提前完成；取消与认证完成在同一状态锁下裁决，已完成online不得被随后到达的取消覆盖。
+
 有状态的本地变更 request_id 按 OS 用户、方法和请求内容去重，结果与配置事务持久化；相同 ID 不同内容返回 InvalidArgument。密码/Token/auth key 不进入通用请求日志或明文去重记录；登录 auth_key 仅在内存内完成当前 attempt，进程重启后原 attempt 标为中断，用户重启登录。
 
 已有 mapping/终端/forward 关联时不允许替换 ServerConfig.daemon_id；先明确移除关联，再重新登记目标。首次目标身份由受信 tsnet/TLS 连接和应用认证确认并固定，不能仅按显示名认领另一台 VPS。

@@ -23,6 +23,7 @@ import (
 	"tailscale.com/ipn/ipnstate"
 	"tailscale.com/logtail"
 	"tailscale.com/tsnet"
+	"tailscale.com/types/key"
 	"tailscale.com/types/logger"
 )
 
@@ -53,6 +54,8 @@ type Node struct {
 	watchCancel         context.CancelFunc
 	authorization       context.Context
 	authorizationCancel context.CancelFunc
+	selfAddresses       []string
+	selfKey             key.NodePublic
 	peers               peerMap
 	peerRevision        uint64
 	peerConnections     map[*peerConn]struct{}
@@ -69,14 +72,17 @@ type Node struct {
 }
 
 type loginAttempt struct {
-	id          string
-	fingerprint [32]byte
-	requestID   string
-	interactive bool
-	expires     time.Time
-	finished    bool
-	result      *agentpb.NodeStatus
-	done        chan struct{}
+	id           string
+	fingerprint  [32]byte
+	requestID    string
+	interactive  bool
+	loginStarted bool
+	previousKey  key.NodePublic
+	sawAuthURL   bool
+	expires      time.Time
+	finished     bool
+	result       *agentpb.NodeStatus
+	done         chan struct{}
 }
 
 func identifier(prefix string) string {
@@ -257,18 +263,11 @@ func (n *Node) queryStatus(ctx context.Context, lc *local.Client, generation uin
 	// LocalAPI request cannot indefinitely block peer-revocation observations.
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	n.mu.Lock()
-	if n.statusPermit == nil {
-		n.statusPermit = make(chan struct{}, 1)
+	release, err := n.acquireStatusPermit(ctx)
+	if err != nil {
+		return nil, err
 	}
-	permit := n.statusPermit
-	n.mu.Unlock()
-	select {
-	case permit <- struct{}{}:
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
-	defer func() { <-permit }()
+	defer release()
 	status, err := lc.Status(ctx)
 	if err != nil {
 		return nil, err // Failed observations are not evidence of revocation.
@@ -297,55 +296,86 @@ func (n *Node) applyStatus(generation uint64, observed *ipnstate.Status) {
 	if n.attempt != nil && n.attempt.finished && n.attempt.result.GetState() != "online" {
 		return
 	}
+	if observed.Self != nil {
+		n.selfKey = observed.Self.PublicKey
+	}
 	result := &agentpb.NodeStatus{State: "offline", ReasonCode: "NODE_OFFLINE"}
+	// A cached map can keep the SDK Running while its control poll is down.
+	// Only a fresh online observation may create an authorization lifetime;
+	// losing the control poll alone must not retire one already established.
+	usableIdentity := observed.BackendState == "Running" && observed.Self != nil && !observed.Self.PublicKey.IsZero() && !observed.Self.Expired && len(observed.TailscaleIPs) > 0
+	fresh := usableIdentity && observed.Self.Online && observed.AuthURL == ""
 	switch observed.BackendState {
 	case "Running":
 		if observed.Self != nil && observed.Self.Expired {
-			result.State = "expired"
-			result.ReasonCode = "NODE_KEY_EXPIRED"
-		} else if len(observed.TailscaleIPs) > 0 {
-			result.State = "online"
-			result.ReasonCode = ""
-			for _, ip := range observed.TailscaleIPs {
-				result.Addresses = append(result.Addresses, ip.String())
+			result.State, result.ReasonCode = "expired", "NODE_KEY_EXPIRED"
+		} else if usableIdentity {
+			result.ReasonCode = "NODE_CONTROL_UNAVAILABLE"
+			if observed.AuthURL != "" {
+				result.State, result.ReasonCode = "needs_login", "NODE_AUTH_REQUIRED"
+			} else if fresh {
+				result.State, result.ReasonCode = "online", ""
 			}
 		}
 	case "NeedsLogin":
-		result.State = "needs_login"
-		result.ReasonCode = "NODE_AUTH_REQUIRED"
+		result.State, result.ReasonCode = "needs_login", "NODE_AUTH_REQUIRED"
 	case "NeedsMachineAuth":
-		result.State = "denied"
-		result.ReasonCode = "NODE_APPROVAL_REQUIRED"
+		result.State, result.ReasonCode = "denied", "NODE_APPROVAL_REQUIRED"
 	case "Starting":
-		result.State = "authenticating"
-		result.ReasonCode = ""
+		result.State, result.ReasonCode = "authenticating", ""
 	case "NoState":
-		result.State = "uninitialized"
-		result.ReasonCode = ""
+		result.State, result.ReasonCode = "uninitialized", ""
 	}
 	if attempt := n.attempt; attempt != nil {
 		result.LoginId = attempt.id
-		if !attempt.finished && result.State != "online" {
-			result.LoginExpiresAt = attempt.expires.Unix()
-			if attempt.interactive && observed.AuthURL != "" && time.Now().Before(attempt.expires) {
-				result.LoginUrl = observed.AuthURL
+		if !attempt.finished {
+			if observed.AuthURL != "" {
+				attempt.sawAuthURL = true
 			}
-		}
-		if result.State == "online" && !attempt.finished {
-			if err := n.finishAttemptLocked(attempt, result); err != nil {
-				go n.stopGeneration(generation)
-				return
+			// A new interactive flow rotates the key; reopening an existing
+			// URL keeps its registration key. Either that key transition or
+			// completion of an observed URL must follow the login call.
+			complete := fresh && attempt.loginStarted && !observed.Self.PublicKey.IsZero() && (attempt.previousKey.IsZero() || observed.Self.PublicKey != attempt.previousKey || attempt.sawAuthURL)
+			if !complete {
+				if result.State == "online" {
+					result.State, result.ReasonCode = "authenticating", ""
+				}
+				result.LoginExpiresAt = attempt.expires.Unix()
+				if attempt.interactive && observed.AuthURL != "" && time.Now().Before(attempt.expires) {
+					result.LoginUrl = observed.AuthURL
+				}
+			} else {
+				for _, ip := range observed.TailscaleIPs {
+					result.Addresses = append(result.Addresses, ip.String())
+				}
+				if err := n.finishAttemptLocked(attempt, result); err != nil {
+					go n.stopGeneration(generation)
+					return
+				}
 			}
 		}
 	}
 	if result.State == "online" {
+		if len(result.Addresses) == 0 {
+			for _, ip := range observed.TailscaleIPs {
+				result.Addresses = append(result.Addresses, ip.String())
+			}
+		}
 		if n.authorization == nil {
 			n.authorization, n.authorizationCancel = context.WithCancel(n.ctx)
 		}
-	} else if n.authorizationCancel != nil {
+	}
+	if !usableIdentity && n.authorizationCancel != nil {
 		n.authorizationCancel()
-		n.authorization = nil
-		n.authorizationCancel = nil
+		n.authorization, n.authorizationCancel = nil, nil
+	}
+	if n.authorizedLocked() {
+		n.selfAddresses = nil
+		for _, ip := range observed.TailscaleIPs {
+			n.selfAddresses = append(n.selfAddresses, ip.String())
+		}
+	} else {
+		n.selfAddresses = nil
 	}
 	n.status = result
 }
@@ -382,6 +412,8 @@ func (n *Node) stopLocked() {
 	n.server = nil
 	n.local = nil
 	n.peers = nil
+	n.selfAddresses = nil
+	n.selfKey = key.NodePublic{}
 	n.generation++
 	n.mu.Unlock()
 	if cancel != nil {
@@ -428,3 +460,20 @@ func (n *Node) finishAttemptLocked(attempt *loginAttempt, result *agentpb.NodeSt
 
 // Done closes after SDK resources and the identity lock are released.
 func (n *Node) Done() <-chan struct{} { return n.closed }
+
+// acquireStatusPermit orders SDK observations with explicit login startup.
+// The caller supplies a bounded context and must release before returning.
+func (n *Node) acquireStatusPermit(ctx context.Context) (func(), error) {
+	n.mu.Lock()
+	if n.statusPermit == nil {
+		n.statusPermit = make(chan struct{}, 1)
+	}
+	permit := n.statusPermit
+	n.mu.Unlock()
+	select {
+	case permit <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	return func() { <-permit }, nil
+}

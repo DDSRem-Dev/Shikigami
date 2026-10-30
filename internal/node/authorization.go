@@ -7,6 +7,21 @@ import (
 	"connectrpc.com/connect/v2"
 )
 
+// authorizedLocked separates retained data-plane authorization from control
+// connectivity diagnostics. The caller must hold n.mu.
+func (n *Node) authorizedLocked() bool {
+	return n.authorization != nil && n.authorization.Err() == nil && n.ctx.Err() == nil
+}
+
+// DataPlaneAuthorized reports an established, unrevoked SDK authorization
+// lifetime. It remains true during a control-plane outage; it is not a claim
+// that control is online or that any particular peer is currently reachable.
+func (n *Node) DataPlaneAuthorized() bool {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.authorizedLocked()
+}
+
 // authorizeRPC runs even when HTTP/2 reuses a live TCP connection. Each RPC
 // belongs to the current online authorization lifetime, which is canceled on
 // an explicit SDK identity/state loss. A later online transition creates a new
@@ -15,7 +30,7 @@ func (n *Node) authorizeRPC(next connect.ClientFunc) connect.ClientFunc {
 	return func(ctx context.Context, spec connect.Spec) (connect.ClientStream, error) {
 		n.mu.Lock()
 		lease := n.authorization
-		online := n.status.State == "online" && lease != nil && n.ctx.Err() == nil
+		online := n.authorizedLocked()
 		n.mu.Unlock()
 		if !online || lease.Err() != nil {
 			return nil, connect.NewError(connect.CodeFailedPrecondition, "NODE_AUTH_REQUIRED")

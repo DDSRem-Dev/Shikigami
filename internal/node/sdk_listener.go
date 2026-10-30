@@ -35,7 +35,7 @@ type sdkPeerListener struct {
 func (n *Node) listenPeerTCP(server *tsnet.Server, generation uint64, port uint16) (net.Listener, error) {
 	listener := &sdkPeerListener{node: n, generation: generation, port: port, queue: make(chan *peerConn, peerAcceptQueueLimit), done: make(chan struct{}), registered: make(chan struct{})}
 	n.mu.Lock()
-	if n.generation != generation || n.server != server || n.status.State != "online" {
+	if n.generation != generation || n.server != server || !n.authorizedLocked() {
 		n.mu.Unlock()
 		return nil, connect.NewError(connect.CodeFailedPrecondition, "NODE_AUTH_REQUIRED")
 	}
@@ -73,9 +73,9 @@ func (l *sdkPeerListener) flow(src, dst netip.AddrPort) (func(net.Conn), bool) {
 	}
 	l.node.mu.Lock()
 	identity := l.node.peers[src.Addr()]
-	valid := l.node.generation == l.generation && l.node.status.State == "online" && !identity.key.IsZero() && !identity.expired
+	valid := l.node.generation == l.generation && l.node.authorizedLocked() && !identity.key.IsZero() && !identity.expired
 	local := false
-	for _, address := range l.node.status.Addresses {
+	for _, address := range l.node.selfAddresses {
 		if ip, err := netip.ParseAddr(address); err == nil && ip == dst.Addr() {
 			local = true
 			break

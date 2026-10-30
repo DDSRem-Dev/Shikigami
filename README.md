@@ -2,7 +2,7 @@
 
 通过本地 CLI/TUI 和常驻 agent，使用远端 VPS 上的 tmux / Claude Code。核心链路采用 Connect/protobuf over HTTP/2；文件同步和 TCP 转发由双端插件执行。
 
-**已提供公开 alpha，完整 Phase 0–5 尚未交付。** CLI、agent、daemon、真实 tmux 终端、双端同步/转发插件、监控、配置快照和 TUI 已有实现与本地验收。安装升级/回滚和内嵌产物已有隔离测试；原生macOS LaunchAgent和Linux容器真实systemd已通过限定生命周期验收，外部网络认证、原生VPS/重启登录持久化、完整平台与当前版本长期资源稳定仍待完成。证据见 [实施记录](docs/15-implementation-status.md) 和 [架构一致性检查](docs/16-architecture-conformance.md)，完整范围以 [路线图](docs/08-roadmap.md) 为准。
+**已提供公开 alpha，完整 Phase 0–5 尚未交付。** CLI、agent、daemon、真实 tmux 终端、双端同步/转发插件、监控、配置快照和 TUI 已有实现与本地验收。安装升级/回滚和内嵌产物已有隔离测试；原生macOS LaunchAgent和Linux容器真实systemd已通过限定生命周期验收，官方tsnet首次登录、进程身份保持及真实P2P/DERP业务流已有验收；完整认证生命周期、主机重启/登录恢复、完整平台与当前版本长期资源稳定仍待完成。证据见 [实施记录](docs/15-implementation-status.md) 和 [架构一致性检查](docs/16-architecture-conformance.md)，完整范围以 [路线图](docs/08-roadmap.md) 为准。
 
 ## 安装
 
@@ -46,7 +46,7 @@ make generate-proto
 - `pkg/config/`、`configs/`：严格 YAML 配置、迁移、条件保存与示例。
 - `pkg/plugin/`、`internal/plugin/`：双协议插件 SDK 与宿主生命周期、路由。
 - `plugins/sync/`、`plugins/port/`：独立插件入口和业务实现，分别以 `--side=client|server` 启动。
-- `internal/node/`：内嵌 tsnet 与本地 NodeControl；真实本地控制面测试，外部部署认证待验收。
+- `internal/node/`：内嵌 tsnet 与本地 NodeControl；真实本地控制面测试及限定官方网络验收；完整认证生命周期仍待。
 
 设计文档入口：[docs/README.md](docs/README.md)。代码仓库：[DDSRem-Dev/Shikigami](https://github.com/DDSRem-Dev/Shikigami)。公开版本、自动发布流程与安装方式见 [发布准备](docs/18-release-readiness.md)。
 

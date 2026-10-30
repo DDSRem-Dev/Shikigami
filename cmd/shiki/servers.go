@@ -323,6 +323,11 @@ func (a *app) prepareTailnetLogin(ctx context.Context, c *client.Client) error {
 	if status.State == "online" {
 		return nil
 	}
+	if status.State == "offline" && status.ReasonCode == "NODE_CONTROL_UNAVAILABLE" {
+		// Retained peer channels may still work. Let the normal authenticated
+		// connection probe decide; an automatic login would retire those channels.
+		return nil
+	}
 	if !a.interactive() {
 		return errors.New("server saved; embedded node is not online: run shiki node login, then retry connect")
 	}
