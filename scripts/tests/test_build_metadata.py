@@ -60,7 +60,7 @@ class BuildMetadataTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         calls = [json.loads(line) for line in self.log.read_text().splitlines()]
         if self.entrypoint == "build.sh":
-            self.assertEqual(calls[0], ["build", "./..."])
+            self.assertEqual(calls[0], ["build", "-trimpath", "./..."])
         builds = [call for call in calls if call[0] == "build" and "-o" in call]
         self.assertEqual(len(builds), 6)
         expected = PROGRAMS

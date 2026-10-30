@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source ./scripts/build-metadata.sh
-go build ./...
+go build -trimpath ./...
 mkdir -p bin
 # Emit executables only for implemented command entrypoints.
 for shiki_command in shiki shiki-agent shiki-daemon shiki-install; do

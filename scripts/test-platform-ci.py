@@ -119,7 +119,7 @@ class PlatformAcceptanceTests(unittest.TestCase):
             self.assertNotIn("secret", json.dumps(item))
 
     def test_concurrency_uses_measured_memory_and_cpu_with_conservative_fallback(self):
-        for cpu, memory, packages, procs in ((4, 16, 2, 2), (3, 7, 2, 1), (2, 8, 2, 1), (4, 4, 1, 2), (1, 8, 1, 1)):
+        for cpu, memory, packages, procs in ((4, 16, 2, 2), (3, 7, 1, 2), (2, 8, 1, 2), (4, 4, 1, 2), (1, 8, 1, 1)):
             value = parallelism(cpu, memory * GIB)
             self.assertEqual((value["package_parallelism"], value["gomaxprocs"]), (packages, procs))
             self.assertEqual(go_environment(value)["GOFLAGS"], f"-p={packages} -mod=readonly -buildvcs=false")
@@ -278,8 +278,40 @@ class PlatformAcceptanceTests(unittest.TestCase):
 
     def test_layout_paths_cannot_escape_owned_root(self):
         with patch.object(systemd, "hosted_guard"):
-            with self.assertRaisesRegex(ValueError, "unexpected native systemd root"):
-                systemd.validate_layout({"root": "/home/runner"})
+            for root in ("/home/runner", "/tmp/shiki-platform-systemd-owned"):
+                with self.subTest(root=root), self.assertRaisesRegex(ValueError, "unexpected native systemd root"):
+                    systemd.validate_layout({"root": root})
+
+    def test_account_setup_records_safe_outcomes_without_masking_failures(self):
+        secret = "private command stderr and token"
+        for code, outcome in ((0, "passed"), (9, "nonzero_exit"), (-15, "signal")):
+            result = {}
+            operation = lambda: SimpleNamespace(returncode=code, stdout=secret, stderr=secret)
+            with patch.object(systemd.time, "monotonic", side_effect=(1.0, 3.5)):
+                if code:
+                    with self.assertRaises(RuntimeError):
+                        systemd.account_step(result, "create-user", operation)
+                else:
+                    systemd.account_step(result, "create-user", operation)
+            public = public_systemd_result(result)
+            self.assertEqual(public["phase"], "create-user")
+            self.assertEqual(public["account_setup"], [{"phase": "create-user", "outcome": outcome, "seconds": 2.5}])
+            self.assertNotIn(secret, json.dumps(public))
+        result = {}
+        def timeout():
+            raise subprocess.TimeoutExpired(secret, 60, output=secret, stderr=secret)
+        with patch.object(systemd.time, "monotonic", side_effect=(0.0, 60.0)):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                systemd.account_step(result, "create-user", timeout)
+        result["account_setup"] += [
+            {"phase": secret, "outcome": "passed", "seconds": 1},
+            {"phase": "create-user", "outcome": secret, "seconds": 1},
+            {"phase": "create-user", "outcome": "passed", "seconds": float("nan")},
+            {"phase": "create-user", "outcome": "passed", "seconds": 999999},
+        ]
+        public = public_systemd_result(result)
+        self.assertEqual(public["account_setup"], [{"phase": "create-user", "outcome": "timeout", "seconds": 60.0}])
+        self.assertNotIn(secret, json.dumps(public))
 
 
 if __name__ == "__main__":

@@ -201,7 +201,8 @@ def require_verbose_pass(path, names):
             raise RuntimeError("required opt-in test failed or skipped: " + name)
 
 
-SYSTEMD_PHASES = frozenset(("setup-account", "copy-modules", "copy-build-cache", "check-layout", "service-scenario",
+ACCOUNT_PHASES = frozenset(("lookup-account", "lookup-group", "create-group", "create-user"))
+SYSTEMD_PHASES = ACCOUNT_PHASES | frozenset(("setup-account", "copy-modules", "copy-build-cache", "check-layout", "service-scenario",
                            "build-bundle-a", "build-bundle-b", "activate-daemon", "service-recovery", "crash-guard",
                            "active-transfer-probe", "agent-maintenance", "daemon-maintenance", "uninstall-retention",
                            "scenario-complete", "helper-result-missing", "unknown"))
@@ -238,6 +239,14 @@ def public_systemd_result(value):
     ][:20]
     if type(value.get("operations")) is int and 0 <= value["operations"] <= 100:
         result["operations"] = value["operations"]
+    result["account_setup"] = [
+        {"phase": item["phase"], "outcome": item["outcome"], "seconds": item["seconds"]}
+        for item in value.get("account_setup", []) if isinstance(item, dict)
+        and item.get("phase") in ACCOUNT_PHASES
+        and item.get("outcome") in ("passed", "nonzero_exit", "signal", "timeout", "failed")
+        and type(item.get("seconds")) in (int, float) and math.isfinite(item["seconds"])
+        and 0 <= item["seconds"] <= 86400
+    ][:4]
     allowed = {"agent-upgrade", "agent-rollback", "daemon-upgrade", "daemon-rollback"}
     result["active_upgrade_boundaries"] = sorted(name for name in value.get("active_upgrade_boundaries", []) if name in allowed)
     if value.get("uninstall_retains_data") is True:

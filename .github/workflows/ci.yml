@@ -98,9 +98,46 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-go@v7.0.0
+        id: go_setup
         with:
           go-version: '1.26.10'
-          cache: true
+          cache: false
+      - name: Identify optional Go cache inputs
+        id: cache_keys
+        continue-on-error: true
+        timeout-minutes: 1
+        run: python3 -B scripts/ci_go_cache.py prepare --role native --runner '${{ matrix.runner }}' --target-os '${{ matrix.goos }}' --target-arch '${{ matrix.goarch }}'
+      - name: Restore Go modules
+        id: module_cache
+        if: steps.cache_keys.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 3
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ${{ steps.cache_keys.outputs.modules_path }}
+          key: ${{ steps.cache_keys.outputs.modules_key }}
+      - name: Restore native Go build cache
+        id: build_cache
+        if: steps.cache_keys.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 3
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ${{ steps.cache_keys.outputs.build_path }}
+          key: ${{ steps.cache_keys.outputs.build_warm_key }}
+          restore-keys: |
+            ${{ steps.cache_keys.outputs.build_source_prefix }}
+            ${{ steps.cache_keys.outputs.build_prefix }}
+      - name: Record restored Go build entries
+        id: cache_baseline
+        if: steps.module_cache.outcome == 'success' && steps.build_cache.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          SHIKI_BUILD_CACHE_HIT: ${{ steps.build_cache.outputs.cache-hit }}
+          SHIKI_MODULE_CACHE_HIT: ${{ steps.module_cache.outputs.cache-hit }}
+          SHIKI_BUILD_CACHE_MATCHED: ${{ steps.build_cache.outputs.cache-matched-key }}
+        run: python3 -B scripts/ci_go_cache.py baseline
       - name: Verify actual native platform and freeze source identity
         run: python3 -B scripts/platform-ci.py preflight --evidence "$RUNNER_TEMP/shiki-platform"
       - name: Install runtime test dependencies
@@ -120,6 +157,7 @@ jobs:
       - name: Scan independent terminal analyzer dependencies
         run: go -C test/diagnostics/terminalstate/analyzer run golang.org/x/vuln/cmd/govulncheck@v1.1.4 -scan=package ./...
       - name: Complete native product, integration and end-to-end suite
+        id: product
         run: python3 -B scripts/platform-ci.py product --evidence "$RUNNER_TEMP/shiki-platform"
       - name: Verify terminal screen semantics
         run: python3 -B scripts/platform-ci.py terminal --evidence "$RUNNER_TEMP/shiki-platform"
@@ -127,10 +165,56 @@ jobs:
         timeout-minutes: 55
         run: python3 -B scripts/platform-ci.py maintenance --evidence "$RUNNER_TEMP/shiki-platform"
       - name: Verify source identity and record final acceptance
+        id: acceptance
         if: always() && steps.checkout.outcome == 'success'
         env:
           SHIKI_PLATFORM_JOB_STATUS: ${{ job.status }}
         run: python3 -B scripts/platform-ci.py finalize --evidence "$RUNNER_TEMP/shiki-platform"
+      - name: Check optional cache save budget and source identity
+        id: cache_plan
+        if: ${{ !cancelled() && steps.cache_baseline.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          SHIKI_CACHE_BUILD_OUTCOME: ${{ steps.product.outcome }}
+          SHIKI_CACHE_ACCEPTANCE_OUTCOME: ${{ steps.acceptance.outcome }}
+        run: python3 -B scripts/ci_go_cache.py plan
+      - name: Check whether this build cache already exists
+        id: cache_present
+        if: ${{ !cancelled() && steps.cache_plan.outcome == 'success' && steps.cache_plan.outputs.save_build == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ${{ steps.cache_keys.outputs.build_path }}
+          key: ${{ steps.cache_plan.outputs.build_save_key }}
+          lookup-only: true
+      - name: Save compiled native Go entries, including after test failure
+        if: ${{ !cancelled() && steps.cache_present.outcome == 'success' && steps.cache_present.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: ${{ steps.cache_keys.outputs.build_path }}
+          key: ${{ steps.cache_plan.outputs.build_save_key }}
+      - name: Check whether the module cache already exists
+        id: modules_present
+        if: ${{ !cancelled() && steps.cache_plan.outcome == 'success' && steps.cache_plan.outputs.save_modules == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ${{ steps.cache_keys.outputs.modules_path }}
+          key: ${{ steps.cache_keys.outputs.modules_key }}
+          lookup-only: true
+      - name: Save downloaded Go modules
+        if: ${{ !cancelled() && steps.modules_present.outcome == 'success' && steps.modules_present.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: ${{ steps.cache_keys.outputs.modules_path }}
+          key: ${{ steps.cache_keys.outputs.modules_key }}
       - uses: actions/upload-artifact@v7.0.2
         if: always() && steps.checkout.outcome == 'success'
         with:
@@ -170,10 +254,48 @@ jobs:
         with:
           ref: ${{ github.sha }}
       - uses: actions/setup-go@v7.0.0
+        id: go_setup
         with:
           go-version: '1.26.10'
-          cache: true
+          cache: false
+      - name: Identify optional Go cache inputs
+        id: cache_keys
+        continue-on-error: true
+        timeout-minutes: 1
+        run: python3 -B scripts/ci_go_cache.py prepare --role compile --runner ubuntu-24.04 --target-os '${{ matrix.goos }}' --target-arch '${{ matrix.goarch }}'
+      - name: Restore Go modules
+        id: module_cache
+        if: steps.cache_keys.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 3
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ${{ steps.cache_keys.outputs.modules_path }}
+          key: ${{ steps.cache_keys.outputs.modules_key }}
+      - name: Restore target Go build cache
+        id: build_cache
+        if: steps.cache_keys.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 3
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ${{ steps.cache_keys.outputs.build_path }}
+          key: ${{ steps.cache_keys.outputs.build_warm_key }}
+          restore-keys: |
+            ${{ steps.cache_keys.outputs.build_source_prefix }}
+            ${{ steps.cache_keys.outputs.build_prefix }}
+      - name: Record restored Go build entries
+        id: cache_baseline
+        if: steps.module_cache.outcome == 'success' && steps.build_cache.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          SHIKI_BUILD_CACHE_HIT: ${{ steps.build_cache.outputs.cache-hit }}
+          SHIKI_MODULE_CACHE_HIT: ${{ steps.module_cache.outputs.cache-hit }}
+          SHIKI_BUILD_CACHE_MATCHED: ${{ steps.build_cache.outputs.cache-matched-key }}
+        run: python3 -B scripts/ci_go_cache.py baseline
       - name: Build and verify unsigned release bundle
+        id: bundle
         shell: bash
         env:
           GOOS: ${{ matrix.goos }}
@@ -195,3 +317,48 @@ jobs:
             test "$shiki_archived_pin" = "$(cat "${shiki_archive}.checksums-pin")"
             test ! -e "${shiki_archive}.sig.json"
           )
+      - name: Check optional cache save budget and source identity
+        id: cache_plan
+        if: ${{ !cancelled() && steps.cache_baseline.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          SHIKI_CACHE_BUILD_OUTCOME: ${{ steps.bundle.outcome }}
+          SHIKI_CACHE_ACCEPTANCE_OUTCOME: ${{ steps.bundle.outcome }}
+        run: python3 -B scripts/ci_go_cache.py plan
+      - name: Check whether this build cache already exists
+        id: cache_present
+        if: ${{ !cancelled() && steps.cache_plan.outcome == 'success' && steps.cache_plan.outputs.save_build == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ${{ steps.cache_keys.outputs.build_path }}
+          key: ${{ steps.cache_plan.outputs.build_save_key }}
+          lookup-only: true
+      - name: Save compiled target Go entries, including after build failure
+        if: ${{ !cancelled() && steps.cache_present.outcome == 'success' && steps.cache_present.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: ${{ steps.cache_keys.outputs.build_path }}
+          key: ${{ steps.cache_plan.outputs.build_save_key }}
+      - name: Check whether the module cache already exists
+        id: modules_present
+        if: ${{ !cancelled() && steps.cache_plan.outcome == 'success' && steps.cache_plan.outputs.save_modules == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ${{ steps.cache_keys.outputs.modules_path }}
+          key: ${{ steps.cache_keys.outputs.modules_key }}
+          lookup-only: true
+      - name: Save downloaded Go modules
+        if: ${{ !cancelled() && steps.modules_present.outcome == 'success' && steps.modules_present.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: ${{ steps.cache_keys.outputs.modules_path }}
+          key: ${{ steps.cache_keys.outputs.modules_key }}

@@ -1,6 +1,6 @@
 # 官方 tsnet 外部验收
 
-**当前运行环境：** 已完成验收的三专用节点、相关测试进程与旧专用账户/目录已按用户要求回收；预约未使用key到期任务独立保留。以下online/连接结果是对应批次的历史证据，不代表节点仍在线。整体路线图现36/42（Homebrew、双主机与有限关键分支已关闭），完整认证项仍未关闭。
+**当前运行环境（2026-10-31 01:34 +08）：** 旧三专用节点/进程/账户目录已回收；本批另建并保留Mac/VPS两节点，实际online，同身份到期后重新认证及终端/双向文件/TCP恢复已验证，见文末。新环境仍有认证/安装依赖，不能提前清理。预约未使用Auth Key自然到期和c4双平台长测独立保留；以下早期节点结果属于对应历史范围。路线图36/42，完整认证项仍未关闭。
 
 2026-10-30：用户已提供官方 tailnet、已登录的 Chrome，以及家庭宽带 Mac 与不同网络的 VPS。首次真实网络批次已关闭08的Phase 2首条；该批当时32/42，10项部分完成。其余认证矩阵和平台门槛不随此项关闭。后续官方节点移除暴露旧流残留，peer生命周期修复已有本地回归证据；第三次重新认证已online，随后不含诊断代码的最终构建重启及应用重连通过；官方再次移除已验证旧附件回收与主节点不受影响；自身状态分类与显式恢复的本地修复及分层回归已完成；旧63924ce诊断构建已重新认证并恢复应用连接，candidate4 clean重启同地址online。最终候选已完成两个独立的官方控制面受控断网场景：已有终端保持及控制恢复、无持有终端时显式connect复用授权。首轮混入主动连接重配的失败记录保留，最新补验已完成最终agent再次撤销恢复和独立未使用Auth Key撤销，99bee22六job CI通过；独立自然到期调度待执行，审批待批/移除/批准及恢复原设置已实测，完整认证矩阵未关闭。
 
@@ -47,7 +47,7 @@ VPS普通网卡出现SDK PeerAPI TCP监听。核对固定SDK `ipn/ipnlocal/peera
 - NodeControl真实SDK HealthTracker→LocalAPI bus回归修前失败，专项race12.873秒、完整internal/node race157.044秒通过，无skip、未重启测试；vet通过。日志 `/tmp/shiki-node-key-{health-red,health-race,full-race,vet}.log`。
 - 登录修复阶段原生架构测试0.415秒通过；后续peer适配审查架构测试0.404秒通过，不重复成功检查。七类源码/文档复核见16。此前文档CI40923247799、40924428349均已确认成功；peer修复精确63924ce的CI40940419677现已成功，范围及skip边界见下文。
 
-仍需独立未使用key的撤销/自然过期、节点审批等待/拒绝/批准、URL自然过期及完整控制面离线分类。测试用已消费key不能替代这些场景。节点移除原失败、官方旧附件回收、后续重新认证和不同候选的证据见下节；完整自身撤销分类与最终候选再次移除后的恢复仍待；官方受控断网的两个限定场景已通过，不扩大为所有离线分类或自然网络切换通过。
+**早期批次的剩余记录（后续结果见下文）：** 当时仍需独立未使用key的撤销/自然过期、节点审批等待/拒绝/批准、URL自然过期及完整控制面离线分类。测试用已消费key不能替代这些场景。节点移除原失败、官方旧附件回收、后续重新认证和不同候选的证据见下节；完整自身撤销分类与最终候选再次移除后的恢复仍待；官方受控断网的两个限定场景已通过，不扩大为所有离线分类或自然网络切换通过。
 
 ## peer撤销修复与复验边界
 
@@ -224,6 +224,15 @@ Mac保留同一状态目录的新显式BeginLogin通过：官方两节点Connect
 
 到期分类现优先保留显式Self.Expired，否则仅同一SDK NeedsLogin观察、已知self公钥、非nil/非零KeyExpiry且严格超过该期限1秒才分类expired。额外1秒覆盖SDK秒级舍入；Running、控制失联、审批或单独本地时间均不能证明到期。11项定向race（node34.746秒、CLI9.695秒）及vet通过。CLI有效expired尝试沿原截止等待；现场m8另暴露SDK启动uninitialized使前端过早退出，同样只在有效attempt且reason为空时有界等待，最终CLI整包42顶层/183含子项race28.607秒、零skip/fail及vet通过，独立复核通过。
 
-诊断agent已正常停止，干净source8 agent启动并核验无诊断marker；重启后的SDK未保留可读SelfExpiry，实际NodeControl为needs_login，不能记为干净候选外部显示expired。01:28仅原子替换source9 CLI，SHA256 157f406627408e6bcded4c6fd1a593abf5e494ca45130b58421be5816e45191a，agent8/VPS7未重启。前一attempt在Chrome Google登录页持续空白后按原截止LOGIN_EXPIRED；新显式attempt使用CLI9已正常等到URL。浏览器认证与同daemon完整业务恢复待完成；不重触发已发生的官方到期，不删除保留节点或身份。
+诊断agent已正常停止，干净source8 agent启动并核验无诊断marker；重启后的SDK未保留可读SelfExpiry，实际NodeControl为needs_login，不能记为干净候选外部显示expired。01:28仅原子替换source9 CLI，SHA256 157f406627408e6bcded4c6fd1a593abf5e494ca45130b58421be5816e45191a，agent8/VPS7未重启。前一attempt在Chrome Google登录页持续空白后按原截止LOGIN_EXPIRED；新显式attempt使用CLI9已正常等到URL。后续恢复见下；不重触发已发生的官方到期，不删除保留节点或身份。
 
 调查中的SDK peer关闭、HTTP2 GOAWAY和共享pool probe取消测试各自通过，但不证明旧m6→m7 VPS错误已修复。认证证据位于隔离auth-m6-tybjjsuq/evidence，冻结source7/8/9与各构建摘要保留各自范围，预约自然auth key到期继续原CLI5/agent4。
+
+
+### 干净产品重新认证与业务恢复（01:34 +08）
+
+Chrome原Google标签持续空白，新标签继续同一OAuth流程后，官方页面显示Login successful及专用Mac hostname；NodeControl实际online、同IP100.123.245.42。没有再次connect、替换Token或重启agent，原server revision、credential revision及daemon_da4c559a0972fef4376d4df935a3d962保持，agent自动ready/tailscale-direct、attempts仅tsnet，未配置direct-TLS。
+
+在原session新建附件并显式取得控制，发送新唯一字符串后收到对应AUTH_REPLY，正常Ctrl+Q退出0；历史屏幕重绘不当作新payload。原mapping既有共同基线文件本地改动在VPS1.466秒收敛，随后VPS修改在Mac1.003秒收敛；原forward自动重建监听，新TCP连接精确回显新payload且无额外字节。证据clean-reauth-business-recovery.json，实际版本CLI9/agent8/VPS7；终端为shell夹具，不代表Claude。结合前述官方单次到期与旧终端/TCP关闭，已取得到期后干净产品同身份恢复证据；干净agent重启后未再暴露旧KeyExpiry，不补造其expired现场分类。未知VPS旧更新失败与15:56未使用auth key自然到期仍独立待验。
+
+最终本批文档对照和架构测试0.410秒通过；认证与CI分别按Conventional Commits提交bdab0f6、58806be，一次推送master触发新CI。保留所有仍有认证/安装依赖的专用节点、普通用户与身份，未清理受保护长测/预约或用户原有环境。

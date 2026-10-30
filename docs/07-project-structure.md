@@ -140,7 +140,7 @@ Makefile 已提供 generate-proto、build（client/agent/daemon/短时 installer
 
 CI 的 macOS/Linux 测试任务在常规检查后另调用 `scripts/test-terminal-state.sh`，用私有临时证据目录构建独立 VT analyzer 并执行终端语义专项；普通 `go test ./...` 缺少 analyzer 时的跳过不计为该专项通过。此入口只运行 `test/integration/terminalstate`，保留原有测试与超时，不重复整套或依赖生成。独立 analyzer 的依赖留在自身 module，不进入产品依赖。入口的本地验证与远端 CI 实际执行分开记录，见 [终端 CI 验收](15-implementation-status.md#evidence-terminal-ci-validation)。
 
-CI 的四目标编译任务使用固定 `v0.0.0-ci` 执行既有 `make release`：`build.sh` 首先保留全包 `go build ./...`，再构建六程序及双插件清单，宿主工具生成目标归档。明确清除 `SHIKI_SIGNING_KEY`，检查归档 SHA-256 sidecar 和归档内 `SHA256SUMS` 的 pin；只从归档读取清单，不解包或运行目标程序，也不上传、签名或发布。原生 macOS/Linux 测试任务仍显式测试和 vet 两个 `go:build ignore` 的 release 工具；新增入口补充的是实际构建到打包的四目标集成。固定 CI 版本与摘要仅用于本地完整性验证，不建立正式版本/签名身份；本地 Linux arm64 交叉打包及远端 Ubuntu CI 执行分别记录，见 [打包 CI 验收](15-implementation-status.md#evidence-release-ci-validation)。
+CI 的四目标编译任务使用固定 `v0.0.0-ci` 执行既有 `make release`：`build.sh` 首先保留全包 `go build -trimpath ./...`，与后续六程序使用相同路径裁剪参数，避免为同一产品依赖生成两套编译缓存；再构建六程序及双插件清单，宿主工具生成目标归档。明确清除 `SHIKI_SIGNING_KEY`，检查归档 SHA-256 sidecar 和归档内 `SHA256SUMS` 的 pin；只从归档读取清单，不解包或运行目标程序，也不上传、签名或发布。原生 macOS/Linux 测试任务仍显式测试和 vet 两个 `go:build ignore` 的 release 工具；新增入口补充的是实际构建到打包的四目标集成。固定 CI 版本与摘要仅用于本地完整性验证，不建立正式版本/签名身份；本地 Linux arm64 交叉打包及远端 Ubuntu CI 执行分别记录，见 [打包 CI 验收](15-implementation-status.md#evidence-release-ci-validation)。
 
 依赖扫描分别覆盖根 module 和独立终端 analyzer module；根目录的 `./...` 不包含嵌套 module。CI 保持原根扫描，另在 analyzer 目录以固定 `govulncheck v1.1.4` 执行 package 级扫描。记录数据库日期、实际目标及已导入包与仅模块公告的区别；静态目标扫描不作为目标平台运行或无漏洞证明。该入口的本地证据与远端 CI 执行分开记录，见 [analyzer 依赖扫描](15-implementation-status.md#evidence-terminal-analyzer-security-validation)。
 
@@ -149,3 +149,6 @@ Go module 路径为 `github.com/DDSRem-Dev/Shikigami`，当前已公开预发布
 日志使用统一结构化接口，context 私有类型键；错误映射统一 Connect 错误码。测试文件与模块邻近，跨进程集成放 test/；关键恢复/安全测试属于对应阶段交付，不推迟到发布前补做。
 
 CI第三方Action按用户选择使用常规稳定版本标签：`actions/checkout@v7.0.1`、`actions/setup-go@v7.0.0`，为2026-10-29查询的官方latest Release。两者使用Node24，现有GitHub托管Ubuntu/macOS任务参数已核对；不以Action升级或静态检查代替远端CI执行结果。
+
+
+CI的Go缓存按[26原生平台验收](26-native-platform-acceptance.md)分离模块与编译数据，显式restore/save使用`actions/cache@v6.1.0`子Action；编译键隔离任务/宿主/目标/CGO/依赖/实际输入，失败partial与成功warm分别保存。缓存命中不表示测试通过，原race/count=1/来源核验与完整安装门槛保持。缓存失败仅回退实际构建，不扩大workflow权限。

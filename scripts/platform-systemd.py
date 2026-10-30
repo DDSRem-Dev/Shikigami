@@ -37,6 +37,34 @@ def run(args, *, check=True, timeout=60):
     return result
 
 
+def account_step(result, name, operation):
+    """Record only fixed setup phases and outcomes; command output stays private."""
+    result["phase"] = name
+    record = {"phase": name, "outcome": "failed"}
+    result.setdefault("account_setup", []).append(record)
+    started = time.monotonic()
+    try:
+        response = operation()
+        if response is not None and response.returncode:
+            record["outcome"] = "signal" if response.returncode < 0 else "nonzero_exit"
+            raise RuntimeError("native account setup command failed")
+        record["outcome"] = "passed"
+        return response
+    except subprocess.TimeoutExpired:
+        record["outcome"] = "timeout"
+        raise
+    finally:
+        record["seconds"] = round(time.monotonic() - started, 3)
+
+
+def require_unused(lookup, name):
+    try:
+        lookup(name)
+    except KeyError:
+        return
+    raise RuntimeError("refusing to reuse a native acceptance account or group")
+
+
 def owned_processes(uid):
     result = {}
     for entry in Path("/proc").iterdir():
@@ -64,7 +92,7 @@ def validate_layout(layout):
     """Reject cross-user/path injection before inside() performs privileged writes."""
     hosted_guard()
     root = Path(layout["root"])
-    if root.parent != Path("/tmp") or not re.fullmatch(r"shiki-platform-systemd-[a-z0-9_]+", root.name):
+    if root.parent != Path("/opt") or not re.fullmatch(r"shiki-platform-systemd-[a-z0-9_]+", root.name):
         raise ValueError("unexpected native systemd root")
     if root.is_symlink() or root.resolve() != root or root.stat().st_uid != 0:
         raise ValueError("native systemd root must be a canonical root-owned directory")
@@ -225,7 +253,9 @@ def main():
     args = parser.parse_args()
     preflight(args.source, args.go, args.modules, args.cache, args.evidence)
     owner = args.evidence.parent.stat()
-    root = Path(tempfile.mkdtemp(prefix="shiki-platform-systemd-", dir="/tmp"))
+    # The installer's system command directory requires protected ancestors;
+    # /tmp is world-writable even when this run's immediate root is private.
+    root = Path(tempfile.mkdtemp(prefix="shiki-platform-systemd-", dir="/opt"))
     os.chmod(root, 0o755)  # private descendants; service/build paths need traversal
     username = "shikici" + str(os.getpid())
     account, group, created, tmux_owned = None, None, False, False
@@ -237,25 +267,15 @@ def main():
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, interrupted)
     try:
-        try:
-            pwd.getpwnam(username)
-        except KeyError:
-            pass
-        else:
-            raise RuntimeError("refusing to reuse a native acceptance account")
-        try:
-            grp.getgrnam(username)
-        except KeyError:
-            pass
-        else:
-            raise RuntimeError("refusing to reuse a native acceptance group")
+        account_step(result, "lookup-account", lambda: require_unused(pwd.getpwnam, username))
+        account_step(result, "lookup-group", lambda: require_unused(grp.getgrnam, username))
         # Avoid a signal between successful OS mutation and ownership recording.
         previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM})
         try:
-            run(["groupadd", username])
+            account_step(result, "create-group", lambda: run(["groupadd", username], check=False))
             group = grp.getgrnam(username)
             created = True
-            run(["useradd", "--gid", str(group.gr_gid), "--create-home", "--home-dir", root / "home", "--shell", "/bin/bash", username])
+            account_step(result, "create-user", lambda: run(["useradd", "--gid", str(group.gr_gid), "--create-home", "--home-dir", root / "home", "--shell", "/bin/bash", username], check=False))
             account = pwd.getpwnam(username)
         finally:
             signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)

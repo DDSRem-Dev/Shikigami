@@ -1304,7 +1304,7 @@ node.go生产摘要f04618ea165696707277f1f22d28e1b8b9eff1c64cc6a398a5198496d63b9
 
 后续VPS同状态更新m7后的自动连接恢复未通过，Mac侧出现不同REMOTE_TRUST_OR_PROTOCOL_REJECTED；本地真实SDK正常peer关闭专项未复现，暂不修改通用错误分类，需安全观测确认实际cause。原Mac启动缺口已通过与此新失败分别记录；不提前关闭认证/恢复复合门槛。
 
-2026-10-31官方节点key单次短期到期已实际发生：官方回读期限后SDK进入NeedsLogin但Self.Expired=false，旧终端和TCP已关闭。已修复组合证据分类（仅NeedsLogin、已知self公钥及非零期限且超过期限1秒，或显式Self.Expired），11项定向race与vet通过；CLI对有效expired/uninitialized尝试继续原有界等待，最终整包race42顶层/183含子项、28.607秒、零skip通过。干净m8重启后SDK不再提供旧期限，实际为needs_login；CLI9仅替换前端，Chrome重新认证与完整业务恢复仍待，不把本地覆盖追认外部通过，详见[23](23-tsnet-external-acceptance.md)。CI优化已实现四原生并发、按资源选择p1/p2、隔离用户复用私有缓存副本及安全失败行号；17项工具检查和独立七类审查通过，实际收益待新CI，旧失败保留，见[26](26-native-platform-acceptance.md)。原42条及36/42保持。
+2026-10-31官方节点key单次短期到期已实际发生：官方回读期限后SDK进入NeedsLogin但Self.Expired=false，旧终端和TCP已关闭。已修复组合证据分类（仅NeedsLogin、已知self公钥及非零期限且超过期限1秒，或显式Self.Expired），11项定向race与vet通过；CLI对有效expired/uninitialized尝试继续原有界等待，最终整包race42顶层/183含子项、28.607秒、零skip通过。干净m8重启后SDK不再提供旧期限，实际为needs_login；CLI9仅替换前端，01:34 Chrome重新认证后同IP/daemon/凭据自动ready，终端新回显、文件双向收敛及新TCP精确回显通过；不把该恢复追认干净候选到期分类已现场观测，详见[23](23-tsnet-external-acceptance.md)。CI优化已实现四原生并发、按资源选择p1/p2、隔离用户复用私有缓存副本及安全失败行号；17项工具检查和独立七类审查通过，实际收益待新CI，旧失败保留，见[26](26-native-platform-acceptance.md)。原42条及36/42保持。
 
 
 ### 到期适配、CLI等待与CI时长优化复核
@@ -1312,3 +1312,9 @@ node.go生产摘要f04618ea165696707277f1f22d28e1b8b9eff1c64cc6a398a5198496d63b9
 七类复核通过：SDK组合状态适配留在internal/node，未改变插件目录或依赖；SDK NeedsLogin既有授权退役保持，CLI等待不提升业务准入或能力；持久schema、身份、revision和请求去重不变，同代状态仍受锁保护；原attempt和父截止保持，不增加隐式登录、流重放或新定时器；CI并发取真实CPU/内存及当前cgroup-v2可见祖先限制，未知回退p1，缓存副本只属于本轮新UID；安装默认布局和Docker默认并发不变，失败/清理继续影响最终结论；证据仅公开已知测试文件/有效行号/固定类型/有界时间，不上传原始Output或认证信息。缓存30秒为目录/1MiB分块协作检查预算，不是阻塞文件系统调用硬截止。
 
 CI复现的obsolete-selection测试仅修正已有maintenance cooldown竞态允许Unavailable，同时加强auth_required/NODE_AUTH_REQUIRED、仅tsnet及nil RemoteProtocol断言；20次race重复3.811秒、7项相关回归1.990秒通过，生产未改。真实SDK关闭、HTTP2 GOAWAY及并发probe取消专项通过但没有定位旧VPS永久信任错误，保持该外部失败。同步插件WSL失败在本机未复现，不据猜测修改生产或弱化断言。17项工具检查、AST/actionlint/diff检查和独立审查通过，不将旧平台或冻结长测追认为本批代码结果。
+
+
+2026-10-31追加平台修复：已适配tmux3.8对已退出pane返回空PID的实际格式变化，仅dead缺PID记0，live缺PID仍拒绝；退出证据与精确tmux身份保持，PID0不进入信号/活跃归属。确定性修前红，本机3.7b两包race65顶层零skip/fail及vet、独立七类复核通过；真实3.8平台须待新CI，不用本机旧版本覆盖替代。Mac排队实测已降至Intel5秒/arm64 2分27秒，整轮耗时仍待，详见[26](26-native-platform-acceptance.md)。原42条及36/42保持。
+
+
+**2026-10-31 CI修复与性能收敛：** 首轮固定源原生Intel（tmux3.7c）完整产品及LaunchAgent验收通过；58806be轮Linux双架构与实际WSL全产品/E2E/embedded/terminal通过，两Linux全包race约17–19分钟降至9分钟。该轮Mac的tmux3.8空PID与GOMAX1期限失败已分别取得红绿和修复；systemd专属根移至满足既有安全契约的/opt，真实生产路径拒绝/允许对照通过。arm64 useradd超时仍待原因，新固定阶段诊断保持60秒预算。构建参数对齐实测185.545→152.838秒且六二进制/双manifest完全一致。新增按角色/平台/来源隔离的partial/warm缓存，16缓存、18平台、8构建元数据工具检查及独立七类审查通过，远端新缓存和修复后整轮结果待CI。详情及失败/源码范围见[26](26-native-platform-acceptance.md)；同身份官方到期恢复见[23](23-tsnet-external-acceptance.md)。原42条及36/42保持，受保护长测和预约key到期未修改。
