@@ -53,6 +53,7 @@ GetStatus 总耗时有界，读取真实宿主/listener 状态，对已启用插
 不支持或非规范响应保持 unknown。缺依赖、登录未报告成功或启用插件未 ready 返回 degraded。
 `local_application_ready` 仅证明这些本地条件；CLI 报告登录不证明远端账号端到端
 可用，`external_peer_acceptance=pending` 仍独立保留。
+当前交付的Claude验收范围见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)：真实登录/推理不作为路线图关闭条件，但本段运行时诊断语义保持；未登录不能返回ready，shell fixture不代表真实账号通过。
 诊断不创建会话、不改业务文件、不初始化身份、不发行 Token，不允许把这个状态
 重命名为整套部署已验收。协议新增运行态消息，不修改持久配置或认证状态 schema。
 

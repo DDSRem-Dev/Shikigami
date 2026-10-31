@@ -149,7 +149,7 @@ Shikigami 通过本地 CLI/TUI 和常驻 agent 使用远端普通用户的 tmux/
 - 受信本地 bundle 的固定版本安装、状态备份、原子切换、回滚及保留数据卸载。真实 systemd 容器和原生 macOS LaunchAgent 已验收，不能外推为所有部署环境通过。
 - agent 同版本五分钟内连续三次异常结束后保留诊断 IPC、停止业务自动恢复；修复原因后显式 `shiki agent start --recover-crash-loop`。损坏记录和时间回拨不由该命令绕过；配置/锁获取之前的明确错误不属于已取得实例身份的崩溃计数。
 
-这些是开发源码的实现/验收范围，不是正式版本的平台支持承诺。真实 Claude 账号、官方 Tailscale 政策、物理多设备、原生 VPS、重启/登录持久化、生产长稳和最终签名分发仍有待验收项。GUI、WSS、增量同步、文件快照、终端历史回放和多租户仍在首版之后。
+上述为历史开发候选的实现/验收边界，不是当前待办清单或正式版本的平台支持承诺；当时真实Claude账号、官方Tailscale政策、物理多设备、原生VPS、重启/登录持久化、生产长稳和最终签名分发仍有待验项。当前进度见08，真实Claude登录/推理已按[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)移出交付验收且未实测。GUI、WSS、增量同步、文件快照、终端历史回放和多租户仍在首版之后。
 
 ## 平台与证据矩阵
 
@@ -191,7 +191,7 @@ Shikigami 通过本地 CLI/TUI 和常驻 agent 使用远端普通用户的 tmux/
 
 此前608文件冻结源码的实际完整`make release`已在macOS arm64和普通用户Linux arm64容器通过：一次性测试密钥签名、可信源码verifier配合独立公钥验签、认证私有副本解包、六二进制版本核对、真实helper暂存（macOS client；Linux client/daemon）。仅生成可审查服务文件，未激活或发布；详见[完整签名构建](15-implementation-status.md#evidence-current-release-validation)。此证据补齐先前旧developer归档的构建来源范围，不建立正式发布者身份。
 
-- 安装器需要现存普通运行用户、明确服务 PATH、tmux 和可运行且已授权的 Claude。缺依赖会报告，不会静默代用户安装或登录。
+- 安装器需要现存普通运行用户、明确服务PATH、tmux和可运行的Claude可执行文件。应用ready另检查其实际登录报告；未登录时可保留已安装产物/服务，但报告application_pending，不宣称应用就绪。缺依赖会报告，不会静默代用户安装或登录。真实Claude登录/推理不作为当前交付验收条件，见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)。
 - 现有配置/身份保持。全新非交互配置需要私有 key 文件；首次非交互 daemon 激活需要新的私有 Token 输出路径。凭据不放命令行参数值或 journal。
 - 停止对应 host/worker 后再备份和切换；tmux 会话保留，但网络流需要重建。真实systemd容器活动传输中agent/daemon升级与回滚已专项通过（187.62秒、13次边界，同一pane保活），覆盖终端/TCP无重放、文件冲突保留及新监听恢复；证据快照不含随后Unix socket原子发布修改。原生macOS LaunchAgent的活动上传/下载/终端/TCP中A→B→A均已通过，此前下载87.29秒/同版上传85.03秒，含旧公开目标完整SHA断言；本批新安装源码另补上传90.41秒及systemd 13次边界验证；此前独立取消保留runner143/test1并验证清理，未重复追认到新夹具。daemon为普通TLS fixture。历史正式产物、重启/登录持久化和外部部署仍待验收，见[Linux升级报告](15-implementation-status.md#evidence-upgrade-validation)及[原生活动升级报告](15-implementation-status.md#evidence-launchd-activity-validation)。
 - 本批sync ledger迁至服务独立schema2的修复已通过限定双平台验收，旧写入方须拒绝新ledger；迁移保留原始备份，旧schema1历史未知操作不能因初始化空日志就视为安全。迁移恢复栅栏及SDK未来schema字段拒绝已实现，SDK原生受影响race和Linux故障矩阵已通过；最终同源双平台合并亦已通过；这些是当前开发格式的迁移验收，不替代历史正式产物/所有既有用户组合验收。核心安装schema保持其自身版本，不能将所有状态统一升至2。

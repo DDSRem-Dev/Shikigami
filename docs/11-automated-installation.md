@@ -1,6 +1,6 @@
 # 自动化安装与运维契约
 
-**本文保留安装流程契约。仓库已实现本地固定版本 bundle 校验、事务安装/回滚、服务渲染、异步登录引导与本地就绪诊断；真实 systemd 容器与原生 macOS LaunchAgent 已有下述限定环境生命周期证据；当前公开预发布 v0.0.1-alpha.2 已由 tag 自动构建、签名、发布并更新 Homebrew Formula，实际分发与平台证据见[22](22-homebrew-distribution.md)。五平台本地完整产品/服务验收已通过；真实外部身份跨安装器升级、服务恢复替代验收与Claude完整就绪仍需单独验收；按用户约束不重启实际Mac/VPS，方案见[替代验收](#no-host-reboot-acceptance-20261031)。**
+**本文保留安装流程契约。仓库已实现本地固定版本 bundle 校验、事务安装/回滚、服务渲染、异步登录引导与本地就绪诊断；真实 systemd 容器与原生 macOS LaunchAgent 已有下述限定环境生命周期证据；当前公开预发布 v0.0.1-alpha.2 已由 tag 自动构建、签名、发布并更新 Homebrew Formula，实际分发与平台证据见[22](22-homebrew-distribution.md)。五平台本地完整产品/服务验收已通过；真实外部身份跨安装器升级、服务恢复替代验收仍需单独验收；真实Claude登录/推理不纳入当前交付验收且未实测，见[验收范围](#claude-acceptance-scope-20261031)；按用户约束不重启实际Mac/VPS，方案见[替代验收](#no-host-reboot-acceptance-20261031)。**
 
 `scripts/install.sh`、`install-client.sh`、`uninstall.sh` 与短时运维 helper `shiki-install` 已存在；已完成专用公钥的四目标签名及验签。[当前公开 Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.2) 来自提交 `fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2`、成功自动发布运行 `40912019720`，公开资产的下载验证结果见[发行证据](./15-implementation-status.md#evidence-public-alpha2-release-20261030)。安装只接受本地 bundle、固定版本及调用者从独立可信渠道取得的 checksum pin。可信源码工具 `scripts/release-trust.go fetch` 提供显式HTTPS归档/签名地址、独立可信公钥和固定版本/平台的下载验签入口，先认证签名再下载归档，成功后生成私有副本/pin/receipt；解包与安装仍是显式后续步骤，工具不指定正式来源或建立公钥信任。GitHub下载地址会重定向，现有 `fetch` 拒绝重定向；应使用 `gh release download v0.0.1-alpha.2 --repo DDSRem-Dev/Shikigami` 取回资产，再用可信源码 verifier 和独立可信公钥离线验签。命令与限制见发布认证，本批验收进度见16。下列完整就绪和运维要求不因预发布成功而降低。
 
@@ -11,6 +11,21 @@
 - 安装文件和 system service 可需 sudo；daemon、插件、tmux、Claude 用指定普通用户运行。禁止默认 User=root。
 - 默认仅 tsnet listener :9527（Connect/protobuf over h2c），不监听普通网卡 `0.0.0.0:9527`。显式启用公网直连必须同时提供有效 TLS 配置并协商 HTTP/2；不为 Connect 安装额外 gRPC-Web 代理。
 - 首次加入 tailnet 仍需登录 URL 或预先提供的 auth key；“自动化安装”不等于免认证。Claude 登录也使用其官方流程，不生成或代管用户账号凭据。
+
+<a id="claude-acceptance-scope-20261031"></a>
+## Claude 验收范围调整（2026-10-31）
+
+用户明确无法提供真实Claude登录，要求将该环节从交付验收移除。真实Claude账户登录、授权后调用及推理闭环不纳入当前Phase 0–5交付验收，不再作为路线图关闭、发布或用户配合条件；相关实际功能保持**未实测**，不得宣称已验证支持。此项是用户明确调整验收范围，不是新测试通过记录，也不取消Tailscale登录、认证、审批、身份持久化或外部业务验收。
+
+保留以下可独立完成的验证：
+
+- 使用官方Claude CLI检查可执行文件、版本及未登录报告，确认普通运行用户的HOME/PATH和有界诊断行为；不索取账号、不启动新的登录授权或推理请求。
+- 分别记录产物/服务安装完成与应用就绪。未登录或无法确认登录时保持`reported_logged_out`/`unknown`、`degraded`及安装器`application_pending`/退出码3；安装receipt和版本切换不等于`local_application_ready`。
+- 用明确标识的shell fixture验证终端输入输出、tmux会话、状态保持、文件/TCP及安装器升级回滚。fixture不能证明真实Claude登录、推理、账号可用性或完整Claude界面体验。
+
+专用VPS普通用户下的官方Claude Code 2.1.309已实际执行`auth status --json`，退出码1、`loggedIn=false`；登录流程已取消，未取得登录凭据、未执行真实推理。该结果只证明官方CLI的未登录报告，安装器对它的状态映射及其余组合须以各自实际结果验收。已有正常/异常诊断夹具证据保留，不能改称真实账号正向验收。
+
+历史批次、复盘和已发布版本说明中“等待真实Claude账号”的内容只描述当时计划；当前关闭条件以本节为准。产品运行时继续检查实际依赖与登录状态，协议、权限、能力和ready判定不因本次验收范围调整而改变。
 
 ## Phase 0 必须验证的原型
 
@@ -26,14 +41,14 @@
 | Connect 传输 | 本地 NodeControl 使用 UDS/h2c；tsnet 上实际全双工；可选 TLS 协商 h2、证书拒绝及流式终态正确，见 14 | 禁止以 TCP 端口可达或普通 HTTP 200 显示安装成功 |
 | 服务进程保活 | systemd crash/restart 保留 tmux，同时插件/PTY attach 可回收；普通用户和真实 HOME/PATH 可用 | 保活承诺不得进入安装成功提示 |
 
-本地 NodeControl、固定 SDK 的测试控制面登录/身份保持、真实 tsnet/UDS/TLS 传输和普通用户宿主崩溃恢复已有运行证据，详见 15/16。真实 systemd PID1 容器的服务保活和普通用户 user-agent、原生 macOS 当前 GUI 登录域的 LaunchAgent 生命周期已有下述证据；官方Mac/原生VPS登录、key首用/复用拒绝、进程重启身份保持和P2P/DERP已验证，见[23](23-tsnet-external-acceptance.md)；独立未使用key撤销、最终agent节点撤销恢复及审批待批/移除/批准已有后续证据；独立未使用key自然到期拒绝现已通过，见[终态记录](23-tsnet-external-acceptance.md#unused-auth-key-expiry-final-20261031)；官方URL有效期、审批拒绝结果及原因未知回退的完整对照、服务恢复替代验收和Claude完整外部就绪仍待验；实际设备重启/重新登录保留为未实测范围，见[替代验收](#no-host-reboot-acceptance-20261031)。原型必须记录 SDK/OS 版本、步骤和输出，不记录 auth key 或登录 URL；只有相应门槛通过后才可宣称该安装流程已验收。
+本地 NodeControl、固定 SDK 的测试控制面登录/身份保持、真实 tsnet/UDS/TLS 传输和普通用户宿主崩溃恢复已有运行证据，详见 15/16。真实 systemd PID1 容器的服务保活和普通用户 user-agent、原生 macOS 当前 GUI 登录域的 LaunchAgent 生命周期已有下述证据；官方Mac/原生VPS登录、key首用/复用拒绝、进程重启身份保持和P2P/DERP已验证，见[23](23-tsnet-external-acceptance.md)；独立未使用key撤销、最终agent节点撤销恢复及审批待批/移除/批准已有后续证据；独立未使用key自然到期拒绝现已通过，见[终态记录](23-tsnet-external-acceptance.md#unused-auth-key-expiry-final-20261031)；官方URL有效期、审批拒绝结果及原因未知回退的完整对照、服务恢复替代验收仍待验；真实Claude登录/推理依[当前范围](#claude-acceptance-scope-20261031)不再作为关闭条件；实际设备重启/重新登录保留为未实测范围，见[替代验收](#no-host-reboot-acceptance-20261031)。原型必须记录 SDK/OS 版本、步骤和输出，不记录 auth key 或登录 URL；只有相应门槛通过后才可宣称该安装流程已验收。
 
 运行预构建产物不要求用户安装 Go/protoc；源码构建要求 Go ≥ 1.26.5，并锁定 Connect-Go 运行库与生成器 v2.0.2。安装器检查发行清单中的核心/插件应用协议能力；不能把 Connect 库版本当作 Shiki 协议 major。
 
 ## 安装流程
 
 1. 解析并验证全部参数。未知参数失败；非交互缺少运行用户、必要配置或认证材料时立即失败，不尝试 read 或进入无限等待。
-2. 检查 OS/arch/systemd、目标用户及 home、磁盘/权限、tmux、受支持的 Claude 可执行文件和登录可用性。只安装缺少且用户选择的依赖；Claude 安装/授权由官方流程完成并在结果中区分“已安装”和“已登录”。
+2. 检查 OS/arch/systemd、目标用户及 home、磁盘/权限、tmux、受支持的 Claude 可执行文件和登录可用性。只安装缺少且用户选择的依赖；Claude 安装/授权由官方流程完成并在结果中区分“已安装”和“已登录”；当前验收不执行真实Claude登录，验证未登录时准确报告应用未ready，见[验收范围](#claude-acceptance-scope-20261031)。
 3. 下载固定版本 manifest、daemon 与匹配服务端插件到临时目录，验证受信发布来源和校验信息后原子安装。单一未认证 checksum 不是签名信任链；发布前明确签名/校验分发方式。
 4. 初始化配置与目录：`/etc/shiki/daemon.yaml`、`/var/lib/shiki/`、插件和 tsnet 状态目录。由指定用户所有，敏感文件 0600、状态目录 0700。已有配置/密钥只验证和迁移，不覆盖或重新生成。
 5. 以运行用户身份一次性初始化 daemon ID、签名密钥、状态 schema。管理命令和 service 必须显式传同一 `--config`，否则可能生成另一把密钥导致 Token 全失效。
@@ -150,7 +165,7 @@ agent 必须使用与交互 shell 一致且明确的配置路径；launchd/syste
 
 daemon 的 admin.sock 另注册独立只读 DaemonReadiness（见 13），不扩大 NodeControl 或远端业务权限。安装器绑定选中 release/helper build、两套本地 instance 与 daemon_id，检查真实 state store、listener、已启用插件当前实例 Health 和实际能力。client 使用独立 Agent 握手验证选中 build，再确认状态/已启用插件，最后重查原 Node 实例，不能把中途重启的另一个宿主当作原版本成功。pending receipt 或 current/receipt 不一致时，probe 必须先拒绝，要求显式 rollback。
 
-Claude 版本通过受限 `--version` 查询；登录使用运行用户 HOME/PATH 下固定 `auth status --json`，3 秒、4 KiB 上限，只保留严格布尔 loggedIn 对应的 reported_logged_in/reported_logged_out。未知、不支持或无法可靠读取仍是 unknown，应用条件不满足返回具体 pending 原因。这个 CLI 报告不等于远端 Claude 账户端到端已验证。
+Claude 版本通过受限 `--version` 查询；登录使用运行用户 HOME/PATH 下固定 `auth status --json`，3 秒、4 KiB 上限，只保留严格布尔 loggedIn 对应的 reported_logged_in/reported_logged_out。未知、不支持或无法可靠读取仍是 unknown，应用条件不满足返回具体 pending 原因。这个 CLI 报告不等于远端 Claude 账户端到端已验证。当前交付以[验收范围](#claude-acceptance-scope-20261031)约束取证；不因排除真实账号验收而把reported_logged_out/unknown改为已登录或ready。
 
 节点与本地条件满足时返回 `local_application_ready`；`external_peer_acceptance=pending` 始终独立保留，本地结果不能改称“整套安装已验收”。节点登录或应用条件未满足返回退出码 3（node_* / application_pending），不再无条件把 online 变成同一个 application_pending。退出码 0 只表示所报告的本地产物/本地条件操作完成。
 
@@ -210,4 +225,4 @@ systemd 的 `WorkingDirectory` 使用规范 `~`（按 `User=` 或用户 manager 
 
 已有持久卷二次PID1启动、CLI auto_start关闭且服务先于CLI/probe出现、身份/资源/业务恢复证据见[二次启动](15-implementation-status.md#evidence-service-boot-validation)；原生当前GUI域LaunchAgent bootstrap、崩溃恢复、升级回滚与清理见[LaunchAgent](15-implementation-status.md#evidence-launchd-validation)，公开包维护及五平台证据见24/26。先复用这些已完成范围，新增重点是保留官方tsnet身份穿过真实安装器和专用服务管理流程；原手动进程替换不能当该组合已完成。若标准服务名称与用户既有安装冲突，改在清洁原生CI或隔离环境完成相应环节，记录其外部身份覆盖边界，不覆盖用户服务。
 
-这是用户明确环境约束下的替代执行方案，不是新验收通过记录。替代组合实际通过且其他条件齐备后，按其覆盖关闭对应功能门槛；真实设备重启继续作为未实测支持边界，不再无限等待用户提供该操作。真实Claude登录、其余认证和生产资源归因不由此免除；本次不改原42条文字、不增加勾选，也不更改生产状态枚举、协议或自动启动行为。
+这是用户明确环境约束下的替代执行方案，不是新验收通过记录。替代组合实际通过且其他条件齐备后，按其覆盖关闭对应功能门槛；真实设备重启继续作为未实测支持边界，不再无限等待用户提供该操作。其余Tailscale认证和生产资源归因不由此免除；真实Claude登录/推理按用户后续明确要求移出交付验收，见[验收范围](#claude-acceptance-scope-20261031)；本次不改原42条文字、不增加勾选，也不更改生产状态枚举、协议或自动启动行为。

@@ -1,10 +1,10 @@
 # 架构与文档一致性检查
 
-**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** 两项默认12小时轮换及恢复尾部、独立未使用Auth Key自然到期均已完成；五平台验收已通过。本批修复转发查询与停止交错导致的孤儿缓存、安装器在有效审批/身份到期登录期间重复开始及提前退出问题，相关race和独立七类复核通过。官方登录URL的7天期限仅有锁定SDK源码依据，尚无自然到期现场证据；Claude登录和同身份真实安装器验收继续推进。Mac/VPS均不重启，按[11替代矩阵](11-automated-installation.md#no-host-reboot-acceptance-20261031)验证服务恢复。认证、安装/升级、生产资源归因及最终支持声明仍待，不提前增加勾选。
+**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** 两项默认12小时轮换及恢复尾部、独立未使用Auth Key自然到期均已完成；五平台验收已通过。本批修复转发查询与停止交错导致的孤儿缓存、安装器在有效审批/身份到期登录期间重复开始及提前退出问题，相关race和独立七类复核通过。官方登录URL的7天期限仅有锁定SDK源码依据，尚无自然到期现场证据；同身份真实安装器验收继续推进；按用户明确要求，真实Claude登录/推理已移出交付验收，未实测范围见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)。Mac/VPS均不重启，按[11替代矩阵](11-automated-installation.md#no-host-reboot-acceptance-20261031)验证服务恢复。认证、安装/升级、生产资源归因及最终支持声明仍待，不提前增加勾选。
 
 **最近已核验CI（本批修复前）：** 文档提交3b2d360的[CI41131301002](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41131301002)已completed/success、13/13通过，实际32分43秒。代码提交045b463的[CI41125907702](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41125907702)也已13/13通过，五平台各730文件源码摘要、必需阶段及清理已独立核验；其整轮46分51秒→36分09秒的性能比较仍按冷暖缓存/并行/排队边界记录于[26](26-native-platform-acceptance.md#ci-045-final-20261031)。下述既有CI不代表本批新修改已通过远端CI；本批相关本地race已通过，未重跑12小时。
 
-以下是按各批源码范围保留的历史记录，当前状态以本摘要和原条目的最新部分进展为准。
+以下是按各批源码范围保留的历史记录，当前状态以本摘要和原条目的最新部分进展为准。历史批次中要求真实Claude账号的待办仅表示当时计划；当前范围以[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)为准，不再要求用户提供Claude登录。
 
 **上批收尾：36/42，剩余6项（2026-10-30）。** 四目标原生Homebrew已验；Mac/VPS最终10阶段矩阵157.31秒、两类8MiB真实强杀恢复、条件竞争、后台冲突/TUI和撤A保B通过，操作系统账户/目录/转发清理已独立核验。结合公开包版本/既有ACK专项与[CI41047781448](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41047781448)十任务全成功，新增关闭Phase0恢复/版本/多设备、Phase4多设备体验、Phase5审查/扫描/关键分支三条；连同本批Homebrew共减少四条门槛。原42条文字/顺序保留，详情及失败记录见[25](25-multihost-acceptance.md)。完整认证、主机生命周期/外部身份升级、其余原生平台、资源性能长稳及最终支持声明六项继续待验。以下较早批次计数是当时记录，不代表当前进度。
 
@@ -1396,4 +1396,13 @@ CI复现的obsolete-selection测试仅修正已有maintenance cooldown竞态允�
 
 独立七类复核通过：①改动限于internal/agent与internal/install及测试，未跨host/plugin/SDK边界；②RPC形状、准入与能力不变，有效登录尝试不等于业务授权；③去除过期查询对运行缓存的写入，持久schema/revision/去重保持；④无新锁/goroutine，安装器保留15秒总限/2秒查询/父取消，不重复BeginLogin；⑤转发仍返回实际worker观察，不重放流，文件/终端契约不变；⑥安装器私有URL仅到TTY、公开JSON不含URL，产物布局未变；⑦确定性StopForward交错及登录中间态红绿、相关整包race已通过，mock序列不充当官方认证证据。
 
-澄清installerLoginActive注释：authenticating保留原有有界等待，即使其元数据缺失也不扩大URL可见性；其他中间态必须有有效ID和未来期限。所有实际服务启动验收仍须独立记录。原42条和37勾保持，三份当前进度摘要同步；不因目标1–2项而降低URL自然到期、Claude、真实安装器和生产对象归因要求。
+澄清installerLoginActive注释：authenticating保留原有有界等待，即使其元数据缺失也不扩大URL可见性；其他中间态必须有有效ID和未来期限。所有实际服务启动验收仍须独立记录。原42条和37勾保持，三份当前进度摘要同步；不因目标1–2项而降低URL自然到期、真实安装器和生产对象归因要求；真实Claude登录/推理已由用户明确移出验收，按[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)披露未实测范围，运行时ready判定保持。
+
+
+## Claude验收范围调整对照（2026-10-31）
+
+本批依据用户明确要求将真实Claude登录/推理从交付验收移除，基准见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)；历史未实测事实保留，不追认shell fixture为账号或推理验收。原42条文字/顺序、37勾及08/15/16当前摘要保持一致；范围调整本身不增加勾选。
+
+七类对照：目录及host/plugin/SDK依赖、RPC准入/权限/能力、持久状态/schema/revision/去重、进程启停/取消/恢复、文件/终端/TCP语义与限制均未修改。CLI/安装运行时继续实际诊断Claude登录，未登录或unknown仍为degraded/application_pending，服务已安装不等于应用ready。行为证据保留官方CLI未登录观察、明确shell fixture以及各自来源；当前Claude账号待办移除，历史批次标注为历史范围，Tailscale认证与其他门槛未免除。仅修改文档，无产品测试重跑或额外环境操作。
+
+本批文档核验：697个相对链接目标、477个锚点引用均有效；原42条文字/顺序/状态与HEAD一致、37项勾选保持，08/15/16当前摘要字节一致，git diff --check通过。仅13份docs修改，未修改代码或运行额外产品测试。

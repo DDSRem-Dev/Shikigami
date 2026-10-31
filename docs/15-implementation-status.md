@@ -1,10 +1,10 @@
 # 实施与验收记录
 
-**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** 两项默认12小时轮换及恢复尾部、独立未使用Auth Key自然到期均已完成；五平台验收已通过。本批修复转发查询与停止交错导致的孤儿缓存、安装器在有效审批/身份到期登录期间重复开始及提前退出问题，相关race和独立七类复核通过。官方登录URL的7天期限仅有锁定SDK源码依据，尚无自然到期现场证据；Claude登录和同身份真实安装器验收继续推进。Mac/VPS均不重启，按[11替代矩阵](11-automated-installation.md#no-host-reboot-acceptance-20261031)验证服务恢复。认证、安装/升级、生产资源归因及最终支持声明仍待，不提前增加勾选。
+**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** 两项默认12小时轮换及恢复尾部、独立未使用Auth Key自然到期均已完成；五平台验收已通过。本批修复转发查询与停止交错导致的孤儿缓存、安装器在有效审批/身份到期登录期间重复开始及提前退出问题，相关race和独立七类复核通过。官方登录URL的7天期限仅有锁定SDK源码依据，尚无自然到期现场证据；同身份真实安装器验收继续推进；按用户明确要求，真实Claude登录/推理已移出交付验收，未实测范围见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)。Mac/VPS均不重启，按[11替代矩阵](11-automated-installation.md#no-host-reboot-acceptance-20261031)验证服务恢复。认证、安装/升级、生产资源归因及最终支持声明仍待，不提前增加勾选。
 
 **最近已核验CI（本批修复前）：** 文档提交3b2d360的[CI41131301002](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41131301002)已completed/success、13/13通过，实际32分43秒。代码提交045b463的[CI41125907702](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41125907702)也已13/13通过，五平台各730文件源码摘要、必需阶段及清理已独立核验；其整轮46分51秒→36分09秒的性能比较仍按冷暖缓存/并行/排队边界记录于[26](26-native-platform-acceptance.md#ci-045-final-20261031)。下述既有CI不代表本批新修改已通过远端CI；本批相关本地race已通过，未重跑12小时。
 
-以下是按各批源码范围保留的历史记录，当前状态以本摘要和原条目的最新部分进展为准。
+以下是按各批源码范围保留的历史记录，当前状态以本摘要和原条目的最新部分进展为准。历史批次中要求真实Claude账号的待办仅表示当时计划；当前范围以[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)为准，不再要求用户提供Claude登录。
 
 **前序认证与平台基线（2026-10-31，36/42）：** 原生四目标和实际WSL2的完整产品/终端/安装维护矩阵已实现，17项工具检查、actionlint与语法检查通过，首轮CI41090262712与42eb93e轮已有真实失败，完整平台尚未通过，详见[26](26-native-platform-acceptance.md)。认证状态的两处确定缺口已修复：显式Self.Expired不受BackendState限制；非空AuthURL使旧应用授权退役，而单纯控制失联保持已有有效peer通道。修前红、针对race34.610秒、node整包40项无skip/race322.712秒及vet通过，独立授权生命周期审查通过。官方m6候选两端已构建核验；Mac首轮登记后触发LOGIN_EXPIRED，第二轮两端实际online，当前不计完整认证通过，见[23](23-tsnet-external-acceptance.md#独立认证环境重建与状态修复2026-10-31)。VPS进程更新后另一处连接停在REMOTE_TRUST_OR_PROTOCOL_REJECTED，当前保留失败并调查。保护两项c4长测及预约key到期任务；专用新认证状态有后续依赖，暂保留而非提前清理。
 
@@ -1102,4 +1102,11 @@ Mac应用elapsed的计时起点晚于worker ready，原值保持；逐角色12�
 
 安装器在有效NODE_APPROVAL_REQUIRED/NODE_KEY_EXPIRED中间态会重复BeginLogin并提前结束，Native还会丢弃相应私有登录URL。现在与CLI采用相同的有界中间态判断，保留原attempt，不扩大业务授权；明确失败终止，15秒整体/2秒单次观察及父截止不变，authenticating沿用既有有界等待。URL继续仅经私有helper管道到控制TTY，不进入公开JSON。中间态/终态/父截止和Native私有URL回归先红后绿；完整install、cmd/shiki-install、architecture race分别8.906/1.494/1.196秒通过。该本地序列不冒充官方URL自然过期或真实审批拒绝实测。
 
-本批只关闭上述具体缺陷，不关闭完整资源或认证条目。Chrome只读确认保留Mac/VPS两节点Connected；真实安装器同身份组合仍在准备，官方Claude Code2.1.309仅安装到VPS专用普通用户HOME，官方登录流程已应用户疑问暂停且退出，先验证未登录提示及其余安装器组合，尚不声称Claude就绪或真实调用通过。实际Mac/VPS未重启、未注销。
+本批只关闭上述具体缺陷，不关闭完整资源或认证条目。Chrome只读确认保留Mac/VPS两节点Connected；真实安装器同身份组合仍在准备，官方Claude Code2.1.309仅安装到VPS专用普通用户HOME，官方登录流程已取消且退出；实际auth status退出1、loggedIn=false，未取得登录凭据、未执行真实推理。按用户后续明确要求，真实Claude登录/推理移出交付验收，继续验证未登录状态映射及其余安装器组合，见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)。实际Mac/VPS未重启、未注销。
+
+
+## 按用户要求调整Claude验收范围（2026-10-31）
+
+用户明确无法提供真实Claude登录，要求移除这一验收环节。当前Phase 0–5不再等待真实Claude账号登录、授权后调用或推理闭环；保留未实测支持范围，唯一基准见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)。这不是验收通过记录，原42条文字/顺序及37勾保持。同身份真实安装器升级回滚、服务恢复、Tailscale认证及生产资源归因继续推进。
+
+本轮官方Claude Code 2.1.309在专用VPS用户下返回auth status退出1、loggedIn=false，登录流程已取消且未取得凭据，未执行真实推理；该负向观察不代表安装器组合或真实账号通过。之后验证安装完成与应用pending分离，并继续用明确shell fixture验证会话/状态/升级恢复。产品readiness、认证权限和协议不变，不将unknown或未登录改称ready。当前待办、README、安装/发布/平台说明与历史范围标注已同步，不再请求用户提供该账号。

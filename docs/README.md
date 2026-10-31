@@ -1,6 +1,6 @@
 # Shikigami 设计文档导航
 
-**状态：当前公开预发布 v0.0.1-alpha.2 已通过 tag 全自动构建、签名、发布并更新 Homebrew Formula；Phase 0–5 尚未完整交付。** 三宿主命令、终端闭环、双端同步/端口插件、监控、配置快照、TUI 与诊断已有实现及本地测试；安装事务和产物工具已有隔离验收，原生macOS LaunchAgent及Linux容器真实systemd生命周期已通过；官方tsnet登录、进程身份保持与真实P2P/DERP业务流已通过；四目标原生Homebrew和Mac/VPS双客户端/关键恢复验收亦已通过，同源五平台完整产品与服务验收已通过，路线图37/42；完整认证生命周期、服务恢复替代验收、Claude及生产资源归因仍未完成；按用户明确约束不重启实际Mac/VPS，执行方案见[11替代验收](11-automated-installation.md#no-host-reboot-acceptance-20261031)。逐项进度见 [08 路线图](./08-roadmap.md)，证据与待完成门槛见 [15 实施记录](./15-implementation-status.md)。00–14 保留设计契约，不能仅凭示例认定功能已经可用。
+**状态：当前公开预发布 v0.0.1-alpha.2 已通过 tag 全自动构建、签名、发布并更新 Homebrew Formula；Phase 0–5 尚未完整交付。** 三宿主命令、终端闭环、双端同步/端口插件、监控、配置快照、TUI 与诊断已有实现及本地测试；安装事务和产物工具已有隔离验收，原生macOS LaunchAgent及Linux容器真实systemd生命周期已通过；官方tsnet登录、进程身份保持与真实P2P/DERP业务流已通过；四目标原生Homebrew和Mac/VPS双客户端/关键恢复验收亦已通过，同源五平台完整产品与服务验收已通过，路线图37/42；完整Tailscale认证生命周期、服务恢复替代验收及生产资源归因仍未完成；真实Claude登录/推理不纳入当前交付验收，且未实测，见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)；按用户明确约束不重启实际Mac/VPS，执行方案见[11替代验收](11-automated-installation.md#no-host-reboot-acceptance-20261031)。逐项进度见 [08 路线图](./08-roadmap.md)，证据与待完成门槛见 [15 实施记录](./15-implementation-status.md)。00–14 保留设计契约，不能仅凭示例认定功能已经可用。
 
 ## 文档清单
 

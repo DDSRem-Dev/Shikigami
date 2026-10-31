@@ -73,7 +73,7 @@ SDK初始NetMap的Peers可能陈旧，通知队列也可能丢事件；实现以
 
 **第二次移除前的记录：** 当时官方控制面的修复后节点撤销/附件回收尚未通过；后续结果见下节。第三次认证最初使用诊断overlay，之后正常停止诊断agent并换为不含诊断代码的最终构建；进程重启后同地址online，重新校验Token、原daemon ID和能力并恢复P2P应用连接。peer修复不凭空推断被移除节点自身仍报online应属于何种拒绝原因。此节的局部结果不扩大原Phase 2通过范围或提前关闭Phase 0完整认证矩阵。
 
-完整Claude使用、主机开机/重新登录、自然网络变化、第二台物理客户端、其余原生平台、当前候选长期资源和macOS完整Homebrew仍待。当前不需要再次提供VPS密码或已有tailnet账户；新增凭据与影响账号的必要操作按具体步骤引导。
+历史当批待办为完整Claude使用、主机开机/重新登录、自然网络变化、第二台物理客户端、其余原生平台、当时候选长期资源和macOS完整Homebrew；不代表当前剩余任务，当前Claude范围见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)。当前不需要再次提供VPS密码或已有tailnet账户；新增凭据与影响账号的必要操作按具体步骤引导。
 
 ### 重新认证后的最终构建复核
 
@@ -256,4 +256,4 @@ Chrome原Google标签持续空白，新标签继续同一OAuth流程后，官方
 
 自身撤销与两个官方控制面断网观察支持11/13的原因未知回退：NODE_CONTROL_UNAVAILABLE不被解释成撤销，明确节点授权失效仍撤回业务。此前待审批页面仅提供Approve/Remove，移除后仍拒绝业务、重新申请/批准恢复的范围保留，不伪造独立Reject动作或SDK分类。当前Chrome只读回读两台保留测试节点均Connected，没有更改审批、删除节点或产生新的Tailscale身份。
 
-本批安装器中间态引导缺口已修，见[15](15-implementation-status.md#evidence-forward-installer-auth-fixes-20261031)；完整Phase0仍保留官方URL自然到期现场证据与最终矩阵，不把SDK源码或本地mock当实测。真实Claude与安装器组合正在独立推进。
+本批安装器中间态引导缺口已修，见[15](15-implementation-status.md#evidence-forward-installer-auth-fixes-20261031)；完整Phase0仍保留官方URL自然到期现场证据与最终矩阵，不把SDK源码或本地mock当实测。同身份真实安装器组合正在独立推进；真实Claude登录/推理已按用户要求移出交付验收，未实测范围见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)。
