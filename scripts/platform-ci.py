@@ -28,7 +28,7 @@ IDENTITY_FIELDS = ("os", "arch", "machine", "go", "kernel", "wsl")
 
 
 class Acceptance:
-    def __init__(self, evidence):
+    def __init__(self, evidence, package_filter=None):
         self.root = Path(evidence).absolute()
         temporary = Path(os.environ["RUNNER_TEMP"]).resolve()
         if self.root.is_symlink() or self.root.parent.resolve() != temporary or not self.root.name.startswith("shiki-platform"):
@@ -41,6 +41,7 @@ class Acceptance:
             path.mkdir(mode=0o700, exist_ok=True)
         self.state = self.public / "stages.json"
         self.stages = json.loads(self.state.read_text()) if self.state.exists() else {}
+        self.package_filter = package_filter
 
     def run(self, label, args, *, timeout=1800, env=None, required=None, required_text=()):
         print(f"Platform acceptance: {label}", flush=True)
@@ -116,7 +117,15 @@ class Acceptance:
         self.run("build-lint", ["make", "build", "lint"])
         self.run("tool-tests", ["make", "test-tools"])
         self.run("platform-tool-tests", ["python3", "-B", "scripts/test-platform-ci.py"])
-        self.run("product-tests", ["go", "test", "-count=1", "-race", "-json", "./..."], required=REQUIRED_INTEGRATION)
+
+        # Build test package list with optional filtering
+        if self.package_filter:
+            packages = self.package_filter.split(",")
+            test_args = ["go", "test", "-count=1", "-race", "-json"] + packages
+        else:
+            test_args = ["go", "test", "-count=1", "-race", "-json", "./..."]
+
+        self.run("product-tests", test_args, required=REQUIRED_INTEGRATION)
         for name in ("release-trust", "release"):
             self.run(name + "-tests", ["go", "test", "-count=1", "-race", "-json", f"scripts/{name}.go", f"scripts/{name}_test.go"], required=())
         self.run("e2e-tests", ["go", "test", "-count=1", "-race", "-json", "-tags=e2e", "./test/e2e/..."], required=REQUIRED_E2E)
@@ -236,12 +245,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("stage", choices=("preflight", "product", "terminal", "maintenance", "linux-pipeline", "finalize"))
     parser.add_argument("--evidence", required=True)
+    parser.add_argument("--package-filter", help="Comma-separated list of packages to test (for sharding)")
     arguments = parser.parse_args()
     def interrupted(_signum, _frame):
         raise KeyboardInterrupt
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, interrupted)
-    acceptance = Acceptance(arguments.evidence)
+    acceptance = Acceptance(arguments.evidence, package_filter=arguments.package_filter)
     try:
         if arguments.stage not in ("preflight", "finalize"):
             if not (acceptance.public / "source.json").exists():
