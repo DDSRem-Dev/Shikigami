@@ -2,4 +2,4 @@
 
 package node
 
-func configureSDKNetworking() {}
+func configureSDKNetworking() error { return nil }

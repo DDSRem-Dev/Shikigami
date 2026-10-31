@@ -1,6 +1,6 @@
 # 实施与验收记录
 
-**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** VPS保留官方tsnet身份的实际安装、升级/回滚、专用systemd恢复及卸载保持已通过。Mac旧公开A和候选B的首装失败已定位：SDK强制物理接口无法访问系统VPN的fake-IP路由；macOS纯userspace适配已修复，node及架构race通过，同身份完整安装矩阵正在准备，尚不勾选。准入测试已移除计时窗口内的重复持久Token写入，受控同测红绿及文件/端口race通过，生产预算不变。默认12小时及未使用Auth Key到期测试已结束；完整认证、生产资源归因及最终支持仍待。真实Claude登录/推理按[11范围](11-automated-installation.md#claude-acceptance-scope-20261031)排除，Mac/VPS不重启、不注销。按用户最新要求，安装两项完成后清理全部专用测试节点、身份、文件及临时证据；当前依赖未结束，尚未执行最终清理，详情见[24](24-public-package-compatibility.md#external-installer-20261031)。
+**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** VPS同官方身份实际安装/升级/回滚、systemd恢复及卸载保持已通过。Mac已撤销被现场业务反证的全socket解绑方案，改为保留SDK默认UDP/接口策略并读取现有静态HTTP(S)系统代理；整包node/architecture race及代理优先/绕过/TLS回归通过，待冻结源码执行完整Mac安装矩阵。12小时、Auth Key到期、既有原生平台证据保留；完整认证、生产资源归因及最终支持仍待。真实Claude登录/推理按[11范围](11-automated-installation.md#claude-acceptance-scope-20261031)排除，Mac/VPS不重启、不注销。两项完成后按用户要求清理全部专用测试节点、身份和临时文件；当前依赖尚在，不提前勾选或宣称已清理，详见[24](24-public-package-compatibility.md#external-installer-20261031)。
 
 **最近已核验CI（本批修复前）：** 文档提交3b2d360的[CI41131301002](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41131301002)已completed/success、13/13通过，实际32分43秒。代码提交045b463的[CI41125907702](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41125907702)也已13/13通过，五平台各730文件源码摘要、必需阶段及清理已独立核验；其整轮46分51秒→36分09秒的性能比较仍按冷暖缓存/并行/排队边界记录于[26](26-native-platform-acceptance.md#ci-045-final-20261031)。下述既有CI不代表本批新修改已通过远端CI；本批相关本地race已通过，未重跑12小时。
 
@@ -1126,3 +1126,15 @@ Mac受管节点首装失败已通过独立SDK/普通OS拨号对照定位并修�
 另修复CI准入夹具：held请求的Token提前一次性持久生成，独立probe仍使用单独Token/连接，避免32次串行持久写与首帧5秒预算重叠。通过仅测试overlay给Manager.Create注入每次170ms延迟，原WatchFiles8.26秒失败→修复后0.45秒通过；文件/端口准入race33项、0失败/跳过，24.757秒。生产auth源码、5秒首帧、各类并发上限和父截止均未改。实际b30c585 CI41190701695为12/13成功，Intel该子用例7.43秒失败；公开脱敏artifact无原错误正文，受控复现不能宣称已证明其唯一根因。此前Linux useradd超时与旧node setup失败另保留。
 
 安全诊断新增8类固定node错误前缀分类，仅输出源码位置和固定kind，原始后缀/URL/key不输出，28项工具测试通过。受控实验源范围、hash与结果原在Darwin TMPDIR的`shiki-admission-setup-20261031-feis7ftc/experiment.json`；依用户最终清理要求届时移除原始临时证据，以本记录保留脱敏结论。
+
+
+## Mac现场差分与修复范围收窄（2026-10-31）
+
+13bcd0a全socket解绑方案未通过完整外部业务，已通过同版本/CLI/plugin/代理、仅网络adapter差异的诊断否定，见[24](24-public-package-compatibility.md#macos-route-counterexample-20261031)。此后实现保留SDK默认UDP/接口策略，仅为受管Mac补现有静态HTTP(S)系统代理解析；原始HTTP200、node online和本地race仍只代表各自范围。测试common文件的durable baseline等待也已修正，保留此前冲突/失败，不改变产品行为。三份当前摘要同步37/42，源码修复和完整安装矩阵完成后再记录实际关闭。
+
+
+## 静态系统代理替代实现完成（2026-10-31）
+
+Mac保留SDK原有UDP策略，仅为SDK HTTP(S)路径采用既有系统代理的启动快照；具体来源、支持限制与验证见[24](24-public-package-compatibility.md#macos-system-proxy-20261031)。node/architecture整包race51.199/1.373秒通过；新增scheme优先/系统读取错误/NO_PROXY等专项race1.548秒通过。真实CONNECT保留目标TLS校验，命令2秒/64KiB受限，显式凭据拒绝且错误不回显。原13bcd0a方案失败保留，完整实际安装矩阵尚未执行。
+
+13bcd0a的CI41194399587另发现Linux amd64隔离useradd60.061秒超时：该平台产品测试392.187秒及E2E181.386秒已通过，但systemd-lifecycle在账号创建阶段失败，未进入安装/升级；清理和源码一致性通过。不能将该CI整轮记成功，也不能从此前相同arm64超时推断具体NSS/锁根因或扩大预算。此CI不代表后续系统代理源码的检查结果。

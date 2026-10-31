@@ -119,7 +119,10 @@ func Open(parent context.Context, options Options) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	configureSDKNetworking()
+	if err := configureSDKNetworking(); err != nil {
+		_ = store.Close()
+		return nil, err
+	}
 	logtail.Disable()
 	ctx, cancel := context.WithCancel(parent)
 	n := &Node{ctx: ctx, cancel: cancel, options: options, instance: identifier("node_"), state: store, status: &agentpb.NodeStatus{State: "uninitialized"}, requests: map[string]*loginAttempt{}, started: make(chan struct{}), closed: make(chan struct{})}

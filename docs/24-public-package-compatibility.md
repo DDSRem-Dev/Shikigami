@@ -102,3 +102,21 @@ A为重新验签的公开v0.0.1-alpha.2，B为冻结提交b30c58563651271b044796
 修复限定Darwin SDK适配：节点启动前`netns.SetEnabled(false)`，匹配固定SDK `cmd/tailscaled/tailscaled.go`的userspace-networking策略；其他平台no-op。Shiki使用fake TUN/router、不安装内核路由，OS现有隧道是外层承载，不会回入同一Shiki节点。没有改变系统Tailscale/代理/路由；业务仍按peer身份和授权直入gVisor，不允许系统TCP回退。单独SetDisableBindConnToInterface会被netmap能力覆盖，故未采用；进程级策略不随单个Node退出恢复。HTTP(S)环境代理仍按SDK实现，ALL_PROXY隐式SOCKS包装不在支持范围，见[02](02-connection-model.md#代理与后续-websocket)。
 
 真实socket回归验证SDK不再替换普通拨号器Control，并模拟netmap接口开关变化，策略保持；node整包race48.272秒、架构race1.378秒通过。完整现场矩阵仍须独立执行。将从修复后同一冻结源码正常构建两个明确本地版本；它们证明安装器版本切换及外部身份恢复，历史实现兼容性仍沿用本文件公开alpha.1/alpha.2的独立真实包证据。不得篡改或追认旧公开alpha.2在当前fake-IP网络下的失败；本修复尚未发布。
+
+
+<a id="macos-route-counterexample-20261031"></a>
+### 全socket解绑方案被现场对照否定（2026-10-31）
+
+13bcd0a的Darwin `netns.SetEnabled(false)`虽使控制面/key和节点online通过，但随后的实际远端查询及终端失败。route2/route3及独立flow/proxy诊断均保留；后者证明普通sessions查询在terminal开始前也可能超时，不能写成“attach导致锁死”。Go栈没有确证的锁死，ready/direct是最近观察、不是每次业务链路可达性保证。
+
+严格单变量对照最终保持13bcd0a源码、构建Version/Commit/BuiltAt、新CLI/plugin及原HTTP(S)代理相同，仅在独立诊断副本将Darwin网络适配置为空，真实新终端回显与正常detach通过。不同诊断版本名的早期尝试触发plugin同构建检查而未执行业务，不能用于网络因果判断。最终对照来源为`mac-policy3-sdk-default-with-proxy-outcome.json`等收据。故全socket解绑不是最终修复，后续源码须保留SDK默认UDP策略，改为显式读取现有macOS静态HTTP(S)系统代理，边界以[02](02-connection-model.md#代理与后续-websocket)为准。上述HTTP200和node race不追认为完整外部业务通过，13bcd0a尚未公开发行。
+
+另外，验收辅助函数原先只等目标文件字节出现就立即开始下一轮停机/修改，未等共同基线持久化；专用common测试文件因此出现真实双边变更冲突。已只对该测试文件显式解决并留据，辅助函数增加每方向durable baseline与最终内容一致的等待，未修改产品冲突语义、原baseline或预先保留的暂停/冲突。之后各轮恢复原配置/身份和完整业务均核验，原失败不追认通过。当前安装复验和最终清理尚未完成。
+
+
+<a id="macos-system-proxy-20261031"></a>
+### macOS静态系统代理适配（2026-10-31，完整矩阵待执行）
+
+替代实现保留SDK默认UDP/接口及其原有ALL_PROXY机制，只在Darwin首个Node启动前以进程级sync.Once注册SDK HTTP(S)代理解析器。绝对路径scutil只读一次系统快照，执行2秒、共享输出64KiB、溢出取消及等待边界；系统设置变化须重启Shiki。显式同scheme环境代理优先，无效/含userinfo/非HTTP(S)URL固定错误拒绝；NO_PROXY明确绕过不落入系统代理，独立*条目不读取系统配置。缺失scheme才采用对应静态系统配置及例外，已由env覆盖的scheme不被系统fallback错误阻塞。全局配置与嵌套scoped配置隔离，PAC/自动发现/SOCKS-only和代理凭据不新增支持；SDK DERP可忽略解析错误后尝试原直连的边界明确保留。
+
+注册失败和无可用代理配置时不输出原始值，Node.Open失败释放状态锁；多Node共用不可变快照且关闭不重置。没有修改plist、系统代理、Tailscale或路由，也没有修改业务用户态TCP/授权。真实CONNECT测试验证目标TLS与hostname错误仍拒绝，loopback与各种绕过/优先、命令取消/输出上限有回归；Darwin真实socket测试确认SDK默认接口策略保留。整包node/architecture race51.199/1.373秒通过，最后新增scheme/PAC/readerror/无关坏字段/NO_PROXY=*回归另行race1.548秒通过。接下来以明确local.proxy.1/.2同源本地bundle实际安装，不能将上述测试替代现场矩阵。

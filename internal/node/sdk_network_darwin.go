@@ -2,15 +2,36 @@
 
 package node
 
-import "tailscale.com/net/netns"
+import (
+	"context"
+	"sync"
+	"time"
 
-// configureSDKNetworking follows tailscaled's userspace-networking policy.
-// Shiki never supplies a kernel TUN to tsnet or installs system routes, so its
-// underlay sockets must follow the user's OS routes, including VPN/fake-IP DNS
-// routes. Binding them to the physical default interface can make those DNS
-// answers unreachable. This process-wide SDK setting affects all underlay
-// sockets; application traffic still enters our authorized tsnet netstack.
-// Unlike the per-interface debug knobs, netmap updates do not reset this policy.
-func configureSDKNetworking() {
-	netns.SetEnabled(false)
+	"golang.org/x/net/http/httpproxy"
+	"tailscale.com/net/tshttpproxy"
+)
+
+var sdkProxyOnce sync.Once
+var sdkProxyError error
+
+// configureSDKNetworking preserves the SDK's physical-interface policy for
+// WireGuard/UDP. Only its HTTP(S) proxy resolver adopts the user's existing
+// static macOS proxy settings. The immutable process snapshot is shared by all
+// embedded nodes; restarting Shiki is required to read changed proxy settings.
+func configureSDKNetworking() error {
+	sdkProxyOnce.Do(func() {
+		resolver, err := systemProxyResolver(httpproxy.FromEnvironment(), func() ([]byte, error) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			return readProxyCommand(ctx, "/usr/sbin/scutil", "--proxy")
+		})
+		if err != nil {
+			sdkProxyError = err
+			return
+		}
+		if err := tshttpproxy.SetProxyFunc(resolver); err != nil {
+			sdkProxyError = errSDKProxyInitialization
+		}
+	})
+	return sdkProxyError
 }
