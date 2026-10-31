@@ -123,6 +123,13 @@ jobs:
         if: ${{ !cancelled() && steps.cache_baseline.outcome == 'success' }}
         continue-on-error: true
         timeout-minutes: 1
+        env:
+          # Reaching this step means the preflight build/lint and acceptance
+          # stages completed.  ci_go_cache.py uses these explicit outcomes to
+          # decide whether the native caches may be promoted for downstream
+          # jobs; without them every preflight run reported no_build.
+          SHIKI_CACHE_BUILD_OUTCOME: success
+          SHIKI_CACHE_ACCEPTANCE_OUTCOME: success
         run: python3 -B scripts/ci_go_cache.py plan
       - name: Check whether this build cache already exists
         id: cache_present

@@ -1012,6 +1012,8 @@ m6专用agent正常重启后，同一节点/IP已online，既有server却永久R
 
 **2026-11-01 CI长任务缓存修复：** 运行`41226652766`显示Linux、macOS ARM及多数阶段通过；macOS Intel E2E冷构建子进程被系统终止，heavy integration在内部45秒构建预算内超时，embedded测试通过但setup-go缓存归档触发10分钟job取消。修复在三个长任务中关闭setup-go自动缓存，恢复preflight生成的module/build缓存，并为E2E和embedded预取Go模块；embedded预算增至15分钟。`actionlint`、`git diff --check`、平台29项、脚本83项及架构race本地通过；新远端结果尚待验证，历史失败保留，不把本批修复写成已全绿。
 
+后续运行`41230062520`确认三个长任务均能执行缓存恢复，但preflight的`ci_go_cache.py plan`缺少成功状态变量，实际没有保存供下游复用的缓存；Intel heavy/E2E仍以`signal: killed`结束测试内编译并触发超时，其他任务与embedded通过。当前补丁为preflight缓存计划显式设置构建与验收成功状态，仍待下一轮远端验证；在此之前不宣称CI全绿。
+
 
 ## 原生CI安装路径修复与证据同步（2026-10-31）
 
