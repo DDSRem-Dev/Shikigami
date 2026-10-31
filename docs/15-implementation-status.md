@@ -1010,6 +1010,8 @@ m6专用agent正常重启后，同一节点/IP已online，既有server却永久R
 
 **2026-10-31 CI修复与性能收敛：** 首轮固定源原生Intel（tmux3.7c）完整产品及LaunchAgent验收通过；58806be轮Linux双架构与实际WSL全产品/E2E/embedded/terminal通过，两Linux全包race约17–19分钟降至9分钟。该轮Mac的tmux3.8空PID与GOMAX1期限失败已分别取得红绿和修复；systemd专属根曾移至/opt，0755隔离容器的生产路径对照通过；后续发现托管镜像可将/opt设为0777，修复并未覆盖这一环境，现补/var/lib及逐层前置校验。arm64 useradd超时仍待原因，新固定阶段诊断保持60秒预算。构建参数对齐实测185.545→152.838秒且六二进制/双manifest完全一致。新增按角色/平台/来源隔离的partial/warm缓存，16缓存、18平台、8构建元数据工具检查及独立七类审查通过，远端新缓存和修复后整轮结果待CI。详情及失败/源码范围见[26](26-native-platform-acceptance.md)；同身份官方到期恢复见[23](23-tsnet-external-acceptance.md)。原42条及36/42保持，受保护长测和预约key到期未修改。
 
+**2026-11-01 CI长任务缓存修复：** 运行`41226652766`显示Linux、macOS ARM及多数阶段通过；macOS Intel E2E冷构建子进程被系统终止，heavy integration在内部45秒构建预算内超时，embedded测试通过但setup-go缓存归档触发10分钟job取消。修复在三个长任务中关闭setup-go自动缓存，恢复preflight生成的module/build缓存，并为E2E和embedded预取Go模块；embedded预算增至15分钟。`actionlint`、`git diff --check`、平台29项、脚本83项及架构race本地通过；新远端结果尚待验证，历史失败保留，不把本批修复写成已全绿。
+
 
 ## 原生CI安装路径修复与证据同步（2026-10-31）
 
