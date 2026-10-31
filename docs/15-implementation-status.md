@@ -2,6 +2,8 @@
 
 **当前进度（2026-10-31）：39/42，剩余3个复合门槛。** 已关闭Phase 4安装器/服务及升级回滚/卸载两项：Mac冻结8fdfe25的实际安装、重复、A→B→A、SIGKILL自动恢复、管理器重注册及卸载保持全通过，结合VPS官方身份systemd矩阵和既有历史公开包/平台证据，Phase 4为6/6。原身份/凭据、持久状态及新终端/双向同步/TCP保持，旧流不重放且旧worker回收；详见[24终态](24-public-package-compatibility.md#installer-final-20261031)。两端专用测试进程、VPS测试账户/home及两个Tailscale节点已移除；Mac已清理233个专用临时根及测试home、旧tmux会话，正式签名备份保持。完整Tailscale认证、生产资源归因及最终支持声明仍未关闭。实际主机重启/重新登录未执行；真实Claude登录/推理按用户要求排除且未实测。当前修复在master，尚未发布新版本；历史失败和CI账号创建超时保留。
 
+**扩大范围复查（2026-10-31）：** 继续检查Mac全HOME及可读系统/临时目录、VPS完整可持久文件系统，额外删除Mac377项测试残留（98,262,156文件字节，含358个失效tmux测试socket）和VPS旧测试服务drop-in目录/配置（2项154字节）。VPS复扫项目名/已知测试标识无命中、无遍历错误，进程/账户/服务/容器挂载及cron无项目残留；本轮SSH连接和socket已关闭移除。Mac部分TCC、废纸篓及root/系统私有区域无权限，不能宣称全盘零残留；源码、发布签名备份和其他项目保持。39/42不变，详见[全机复查](24-public-package-compatibility.md#whole-host-cleanup-audit-20261031)。
+
 **本轮CI状态（2026-10-31）：** 最终源码8fdfe25的[CI41197195478](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41197195478)尚未全绿：Linux arm64在原生安装/服务生命周期/升级维护阶段运行60秒后失败，内部具体步骤因安全artifact读取TLS超时尚未核实；不能套用上一轮13bcd0a的useradd超时结论。其他仍在运行的任务不计通过，最终支持门槛继续保留。本机相关race与实际Mac/VPS安装矩阵各自范围的通过不等同整轮远端CI成功。
 
 **最近已核验CI（本批修复前）：** 文档提交3b2d360的[CI41131301002](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41131301002)已completed/success、13/13通过，实际32分43秒。代码提交045b463的[CI41125907702](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41125907702)也已13/13通过，五平台各730文件源码摘要、必需阶段及清理已独立核验；其整轮46分51秒→36分09秒的性能比较仍按冷暖缓存/并行/排队边界记录于[26](26-native-platform-acceptance.md#ci-045-final-20261031)。下述既有CI不代表本批新修改已通过远端CI；本批相关本地race已通过，未重跑12小时。

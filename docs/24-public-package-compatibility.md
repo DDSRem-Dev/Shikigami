@@ -153,3 +153,23 @@ Mac最终使用冻结提交`8fdfe25f1e78bf996b974c3c24e9c45b9e26c0fd`的738个�
 产品uninstall保留数据的断言先已通过；以下是用户随后明确授权的专用测试数据销毁，不改变产品卸载语义。两端测试进程均正常停止；VPS专用UID995/GID993账户、组、home及tmux socket移除，home143项239,934,006字节，6个用户进程与root runuser wrappers确认不存在，标准服务未遗留。Chrome移除两个专用节点后刷新显示Add your first device；有效Auth Key和API access token均为0。控制台3条失效key历史仍保留，未删除账户或更改其他策略。
 
 Mac最终删除233个已确权专用临时根（含测试home、scripts/tests/__pycache__、旧tmux socket、5份历史文档辅助脚本及补充确权的52份早期内存实验/辅助对象），共17,926个目录/文件项、5,438,336,449文件字节；符号链接只移除本身，不遍历目标。另发现旧测试tmux server及3个shell pane，按源码测试名和cwd确权后逐会话停止，4个进程均不存在。标准LaunchAgent/job/plist、专用agent/daemon/plugin、测试home及清单路径均无残留，SSH控制连接已关闭；VPS只读复查确认无专用账户、服务、进程或目标目录。Docker八个原有容器无测试路径挂载，全部保持；虚拟化进程的历史文件共享句柄不作为活动测试，也不为清缓存重启Docker。正式签名备份的全部文件大小、权限及mtime与清理前逐项一致。正式发布签名密钥备份、仓库源码/开发工具和不属于Shiki的缓存、其他项目临时文件保留。所有此前临时路径只是当时证据来源；按用户要求移除原始临时证据后，以本文件和15/16的脱敏结论为记录，不再声称这些本机原始文件仍可重读。
+
+
+<a id="whole-host-cleanup-audit-20261031"></a>
+## 全机扩大范围复查与补充清理（2026-10-31）
+
+用户要求再次检查整台Mac和整台VPS。本轮采用不跟随符号链接的文件名/路径/元数据遍历，并对候选内容、测试源码和活动引用定点确权；没有按“test”“shiki”模糊名称批量删除其他项目或共享缓存。Mac HOME/Shared约350万项，系统侧约122万项（Applications、Library、opt、usr/local及可读private/var与临时目录）已检查；仓库源码、正式发布签名备份和用户工作历史保留。可读桌面/下载/文档/共享目录未发现其他专用测试残留。149个文档/诊断脚本字面临时路径均已不存在。
+
+| 补充发现 | 确权与清理结果 |
+|---|---|
+| Mac tmux测试socket | `/private/tmp/tmux-501`内357个`shiki-test-*`及1个`shiki-probe`均为UID501失效socket；前者与`internal/server/tmux/tmux_test.go`生成规则对应，后者为旧探测。无tmux进程和打开引用，358个均删除。 |
+| Homebrew测试残留 | 删除alpha.1 Darwin arm64下载归档93,550,334字节及其快捷链接、空`shiki-acceptance` tap目录与空`shikigami.formula.lock`。Cellar/opt/bin及用户本地bin无正式Shiki安装；其他缓存/安装不动。 |
+| 专用Go审查缓存 | 两个仅含`shiki-pem-review-20261029`与`shiki-independent-release-signature-20261029`的执行缓存子目录删除，共4,711,188字节；本项目模块下载元信息4份info共634字节及空父目录删除。均无打开引用，未清空共享go-build/mod缓存。 |
+| Mac空任务临时目录 | `/private/tmp/claude-501/-Users-rem-Documents-Git-Shikigami`下两个tasks及其父目录共5个空目录用rmdir删除；没有删除用户Claude/Cursor工作历史。 |
+| VPS旧systemd配置 | 全盘初扫29,842目录/269,947文件，除动态proc/sys/dev外无遍历错误；发现`/run/systemd/system/shiki-tsnet-test-goeshw8f.service.d/candidate3.conf`。核对同专用run的ExecStart、unit inactive且目录仅此文件后，移除配置及空目录，共154字节。不重启设备或其他服务。 |
+
+Mac本轮合计377项、98,262,156文件字节；VPS2项、154字节。这些是上节清理之后扩大遍历范围发现的遗漏，不能追认上轮已无所有残留。本轮SSH临时控制连接/socket亦已结束删除，不计入历史残留数。VPS第二次同范围全盘扫描，项目名及已知测试run标识无命中、无遍历错误；进程、账号、加载/已安装服务、7个原有容器挂载及cron未发现项目测试引用，另有305份限定大小/类型的脚本配置内容扫描无命中。Mac失效测试socket、下载/执行/模块缓存及旧tap/锁的删除清单复查不存在，正式签名备份大小/权限/mtime保持，其他应用的Shiki语法高亮库和原有环境保留。
+
+覆盖限制：Mac废纸篓、部分TCC应用数据、root HOME及系统数据库/私有目录拒绝访问；系统侧267个遍历拒绝点，HOME也有受保护目录。`sudo -n`不可用，未索取密码或改变权限，未绕过系统隐私限制。因此只声明可访问范围内已确权残留清理完成，不声称整块Mac磁盘已逐文件排除残留。没有重启、注销、重跑产品测试或创建新的验收环境；此清理不改变39/42或既有CI失败结论。
+
+检查期间其他会话于22:03新建`/tmp/shikigami-completion-plan.md`，用户明确选择“保留当前工作文件，只清旧测试残留”，因此该文件保留。助手执行环境也重新建立当前项目tasks空目录；旧会话目录已删除，新工作运行目录不作为历史测试残留重复清除。这些并发新建事实与上述实际删除计数分别记录，不声称临时目录此后不会产生新文件。
