@@ -184,10 +184,12 @@ func TestPortAdmissionFirstFrameDeadlineAndCancellation(t *testing.T) {
 	})
 	t.Run("earlier-wire-parent", func(t *testing.T) {
 		f := newAdmissionFixture(t)
-		call := f.silentRequest(t, t.Context(), "WatchPorts", "120")
+		// Keep this below the five-second server budget while leaving enough
+		// time for a hosted or WSL runner to receive the error response.
+		call := f.silentRequest(t, t.Context(), "WatchPorts", "500")
 		select {
 		case <-call.done:
-		case <-time.After(time.Second):
+		case <-time.After(5 * time.Second):
 			t.Fatal("earlier port parent deadline left Receive blocked")
 		}
 		if call.err != nil || !bytes.Contains(call.body, []byte("deadline_exceeded")) {

@@ -326,6 +326,13 @@ class PlatformAcceptanceTests(unittest.TestCase):
                     run.assert_not_called()
             self.assertEqual(acceptance.stages["maintenance-admission"]["reason"], "source_changed")
 
+    def test_mark_records_only_known_preflight_stages(self):
+        acceptance, _identity, _source = self.ready_acceptance()
+        acceptance.mark("build-lint")
+        self.assertEqual(acceptance.stages["build-lint"], {"state": "passed"})
+        with self.assertRaisesRegex(ValueError, "unsupported preflight stage"):
+            acceptance.mark("product-tests")
+
     def test_maintenance_admission_rejects_recorded_cancellation_and_signal_exits(self):
         acceptance, identity, source = self.ready_acceptance()
         for outcome in ({"state": "cancelled"}, {"state": "failed", "cancelled": True},

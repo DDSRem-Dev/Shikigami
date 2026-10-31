@@ -24,6 +24,7 @@ REQUIRED_E2E = (
     "TestInstallerLocalReadinessAndExplicitTokenDelivery",
 )
 MAINTENANCE_PREREQUISITES = ("preflight", "build-lint", "tool-tests", "platform-tool-tests")
+PREFLIGHT_STAGES = ("build-lint", "tool-tests", "platform-tool-tests")
 IDENTITY_FIELDS = ("os", "arch", "machine", "go", "kernel", "wsl")
 
 
@@ -111,6 +112,17 @@ class Acceptance:
         write_json(self.public / "platform.json", identity)
         write_json(self.public / "source.json", source_identity(ROOT))
         self.stages["preflight"] = {"state": "passed"}
+        write_json(self.state, self.stages)
+
+    def mark(self, label):
+        """Record a separately executed preflight check for downstream admission."""
+        if label not in PREFLIGHT_STAGES:
+            raise ValueError("unsupported preflight stage")
+        if not (self.public / "source.json").is_file() or not (self.public / "platform.json").is_file():
+            raise RuntimeError("preflight must freeze source before recording a stage")
+        if self.stages.get("preflight", {}).get("state") != "passed":
+            raise RuntimeError("preflight did not pass")
+        self.stages[label] = {"state": "passed"}
         write_json(self.state, self.stages)
 
     def product(self):
@@ -248,9 +260,10 @@ class Acceptance:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("stage", choices=("preflight", "product", "terminal", "maintenance", "linux-pipeline", "finalize"))
+    parser.add_argument("stage", choices=("preflight", "mark", "product", "terminal", "maintenance", "linux-pipeline", "finalize"))
     parser.add_argument("--evidence", required=True)
     parser.add_argument("--package-filter", help="Comma-separated list of packages to test (for sharding)")
+    parser.add_argument("--label", choices=PREFLIGHT_STAGES, help="Preflight stage to record")
     arguments = parser.parse_args()
     def interrupted(_signum, _frame):
         raise KeyboardInterrupt
@@ -258,12 +271,17 @@ def main():
         signal.signal(sig, interrupted)
     acceptance = Acceptance(arguments.evidence, package_filter=arguments.package_filter)
     try:
-        if arguments.stage not in ("preflight", "finalize"):
+        if arguments.stage == "mark" and not arguments.label:
+            raise ValueError("--label is required for mark")
+        if arguments.stage not in ("preflight", "mark", "finalize"):
             if not (acceptance.public / "source.json").exists():
                 raise RuntimeError("preflight must freeze source before tests")
             native_identity(ROOT)
             acceptance.measured = json.loads((acceptance.public / "platform.json").read_text())["resources"]
             os.environ.update(go_environment(acceptance.measured))
+        if arguments.stage == "mark":
+            acceptance.mark(arguments.label)
+            return
         getattr(acceptance, arguments.stage.replace("-", "_"))()
     except (KeyboardInterrupt, SystemExit):
         acceptance.stages["runner-interruption"] = {"state": "cancelled"}

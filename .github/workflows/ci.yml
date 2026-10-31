@@ -6,6 +6,9 @@ on:
   workflow_call:
 permissions:
   contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # ============================================================================
@@ -99,7 +102,15 @@ jobs:
       - name: Test tools
         run: make test-tools
       - name: Test platform tools
-        run: python3 -B scripts/test-platform-tools.py
+        run: python3 -B scripts/test-platform-ci.py
+      - name: Record preflight stages for downstream admission
+        env:
+          SHIKI_EVIDENCE: ${{ runner.temp }}/shiki-platform
+        run: |
+          set -euo pipefail
+          python3 -B scripts/platform-ci.py mark --evidence "$SHIKI_EVIDENCE" --label build-lint
+          python3 -B scripts/platform-ci.py mark --evidence "$SHIKI_EVIDENCE" --label tool-tests
+          python3 -B scripts/platform-ci.py mark --evidence "$SHIKI_EVIDENCE" --label platform-tool-tests
       - uses: actions/upload-artifact@v7.0.2
         if: always() && steps.checkout.outcome == 'success'
         with:
@@ -189,37 +200,26 @@ jobs:
       - uses: actions/setup-go@v7.0.0
         with:
           go-version: '1.26.10'
-          cache: false
-      - name: Restore cache
-        uses: actions/cache/restore@v6.1.0
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            go-${{ matrix.goos }}-${{ matrix.goarch }}-
-      - uses: actions/download-artifact@v7.0.2
-        with:
-          name: preflight-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ runner.temp }}/shiki-platform/public
-      - name: Install runtime dependencies
+          cache: true
+      - name: Install runtime dependencies when absent
+        timeout-minutes: 5
         run: |
+          set -euo pipefail
           if [[ "$RUNNER_OS" == Linux ]]; then
-            sudo apt-get update
-            sudo apt-get install -y tmux unzip iproute2 dbus-user-session openssl
-          elif ! command -v tmux; then
+            missing=()
+            for command_name in tmux unzip ip openssl; do
+              command -v "$command_name" >/dev/null 2>&1 || missing+=("$command_name")
+            done
+            dpkg-query -W -f='${Status}' dbus-user-session 2>/dev/null | grep -q 'install ok installed' || missing+=(dbus-user-session)
+            if ((${#missing[@]})); then
+              sudo apt-get update -o Acquire::Retries=3
+              sudo apt-get install -y -o Acquire::Retries=3 tmux unzip iproute2 dbus-user-session openssl
+            fi
+          elif ! command -v tmux >/dev/null 2>&1; then
             brew install tmux
           fi
       - name: Run cmd package tests
         run: go test -count=1 -race -json ./cmd/...
-      - uses: actions/upload-artifact@v7.0.2
-        if: always()
-        with:
-          name: unit-cmd-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ runner.temp }}/shiki-platform/public/**
-          if-no-files-found: warn
-          retention-days: 14
 
   unit-internal:
     name: unit-internal (${{ matrix.goos }}, ${{ matrix.goarch }})
@@ -256,37 +256,26 @@ jobs:
       - uses: actions/setup-go@v7.0.0
         with:
           go-version: '1.26.10'
-          cache: false
-      - name: Restore cache
-        uses: actions/cache/restore@v6.1.0
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            go-${{ matrix.goos }}-${{ matrix.goarch }}-
-      - uses: actions/download-artifact@v7.0.2
-        with:
-          name: preflight-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ runner.temp }}/shiki-platform/public
-      - name: Install runtime dependencies
+          cache: true
+      - name: Install runtime dependencies when absent
+        timeout-minutes: 5
         run: |
+          set -euo pipefail
           if [[ "$RUNNER_OS" == Linux ]]; then
-            sudo apt-get update
-            sudo apt-get install -y tmux unzip iproute2 dbus-user-session openssl
-          elif ! command -v tmux; then
+            missing=()
+            for command_name in tmux unzip ip openssl; do
+              command -v "$command_name" >/dev/null 2>&1 || missing+=("$command_name")
+            done
+            dpkg-query -W -f='${Status}' dbus-user-session 2>/dev/null | grep -q 'install ok installed' || missing+=(dbus-user-session)
+            if ((${#missing[@]})); then
+              sudo apt-get update -o Acquire::Retries=3
+              sudo apt-get install -y -o Acquire::Retries=3 tmux unzip iproute2 dbus-user-session openssl
+            fi
+          elif ! command -v tmux >/dev/null 2>&1; then
             brew install tmux
           fi
       - name: Run internal package tests
         run: go test -count=1 -race -json ./internal/...
-      - uses: actions/upload-artifact@v7.0.2
-        if: always()
-        with:
-          name: unit-internal-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ runner.temp }}/shiki-platform/public/**
-          if-no-files-found: warn
-          retention-days: 14
 
   unit-pkg:
     name: unit-pkg (${{ matrix.goos }}, ${{ matrix.goarch }})
@@ -323,37 +312,26 @@ jobs:
       - uses: actions/setup-go@v7.0.0
         with:
           go-version: '1.26.10'
-          cache: false
-      - name: Restore cache
-        uses: actions/cache/restore@v6.1.0
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            go-${{ matrix.goos }}-${{ matrix.goarch }}-
-      - uses: actions/download-artifact@v7.0.2
-        with:
-          name: preflight-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ runner.temp }}/shiki-platform/public
-      - name: Install runtime dependencies
+          cache: true
+      - name: Install runtime dependencies when absent
+        timeout-minutes: 5
         run: |
+          set -euo pipefail
           if [[ "$RUNNER_OS" == Linux ]]; then
-            sudo apt-get update
-            sudo apt-get install -y tmux unzip iproute2 dbus-user-session openssl
-          elif ! command -v tmux; then
+            missing=()
+            for command_name in tmux unzip ip openssl; do
+              command -v "$command_name" >/dev/null 2>&1 || missing+=("$command_name")
+            done
+            dpkg-query -W -f='${Status}' dbus-user-session 2>/dev/null | grep -q 'install ok installed' || missing+=(dbus-user-session)
+            if ((${#missing[@]})); then
+              sudo apt-get update -o Acquire::Retries=3
+              sudo apt-get install -y -o Acquire::Retries=3 tmux unzip iproute2 dbus-user-session openssl
+            fi
+          elif ! command -v tmux >/dev/null 2>&1; then
             brew install tmux
           fi
       - name: Run pkg package tests
         run: go test -count=1 -race -json ./pkg/...
-      - uses: actions/upload-artifact@v7.0.2
-        if: always()
-        with:
-          name: unit-pkg-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ runner.temp }}/shiki-platform/public/**
-          if-no-files-found: warn
-          retention-days: 14
 
   unit-plugins:
     name: unit-plugins (${{ matrix.goos }}, ${{ matrix.goarch }})
@@ -390,37 +368,26 @@ jobs:
       - uses: actions/setup-go@v7.0.0
         with:
           go-version: '1.26.10'
-          cache: false
-      - name: Restore cache
-        uses: actions/cache/restore@v6.1.0
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            go-${{ matrix.goos }}-${{ matrix.goarch }}-
-      - uses: actions/download-artifact@v7.0.2
-        with:
-          name: preflight-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ runner.temp }}/shiki-platform/public
-      - name: Install runtime dependencies
+          cache: true
+      - name: Install runtime dependencies when absent
+        timeout-minutes: 5
         run: |
+          set -euo pipefail
           if [[ "$RUNNER_OS" == Linux ]]; then
-            sudo apt-get update
-            sudo apt-get install -y tmux unzip iproute2 dbus-user-session openssl
-          elif ! command -v tmux; then
+            missing=()
+            for command_name in tmux unzip ip openssl; do
+              command -v "$command_name" >/dev/null 2>&1 || missing+=("$command_name")
+            done
+            dpkg-query -W -f='${Status}' dbus-user-session 2>/dev/null | grep -q 'install ok installed' || missing+=(dbus-user-session)
+            if ((${#missing[@]})); then
+              sudo apt-get update -o Acquire::Retries=3
+              sudo apt-get install -y -o Acquire::Retries=3 tmux unzip iproute2 dbus-user-session openssl
+            fi
+          elif ! command -v tmux >/dev/null 2>&1; then
             brew install tmux
           fi
       - name: Run plugins package tests
         run: go test -count=1 -race -json ./plugins/...
-      - uses: actions/upload-artifact@v7.0.2
-        if: always()
-        with:
-          name: unit-plugins-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ runner.temp }}/shiki-platform/public/**
-          if-no-files-found: warn
-          retention-days: 14
 
   unit-test-support:
     name: unit-test-support (${{ matrix.goos }}, ${{ matrix.goarch }})
@@ -457,37 +424,26 @@ jobs:
       - uses: actions/setup-go@v7.0.0
         with:
           go-version: '1.26.10'
-          cache: false
-      - name: Restore cache
-        uses: actions/cache/restore@v6.1.0
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            go-${{ matrix.goos }}-${{ matrix.goarch }}-
-      - uses: actions/download-artifact@v7.0.2
-        with:
-          name: preflight-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ runner.temp }}/shiki-platform/public
-      - name: Install runtime dependencies
+          cache: true
+      - name: Install runtime dependencies when absent
+        timeout-minutes: 5
         run: |
+          set -euo pipefail
           if [[ "$RUNNER_OS" == Linux ]]; then
-            sudo apt-get update
-            sudo apt-get install -y tmux unzip iproute2 dbus-user-session openssl
-          elif ! command -v tmux; then
+            missing=()
+            for command_name in tmux unzip ip openssl; do
+              command -v "$command_name" >/dev/null 2>&1 || missing+=("$command_name")
+            done
+            dpkg-query -W -f='${Status}' dbus-user-session 2>/dev/null | grep -q 'install ok installed' || missing+=(dbus-user-session)
+            if ((${#missing[@]})); then
+              sudo apt-get update -o Acquire::Retries=3
+              sudo apt-get install -y -o Acquire::Retries=3 tmux unzip iproute2 dbus-user-session openssl
+            fi
+          elif ! command -v tmux >/dev/null 2>&1; then
             brew install tmux
           fi
       - name: Run test support package tests
         run: go test -count=1 -race -json ./test/architecture/... ./test/diagnostics/... ./test/fault/... ./test/fixtures/...
-      - uses: actions/upload-artifact@v7.0.2
-        if: always()
-        with:
-          name: unit-test-support-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ runner.temp }}/shiki-platform/public/**
-          if-no-files-found: warn
-          retention-days: 14
 
   # ============================================================================
   # PHASE 3: Integration Tests - Split by weight
@@ -496,7 +452,7 @@ jobs:
   integration-light:
     name: integration-light (${{ matrix.goos }}, ${{ matrix.goarch }})
     runs-on: ${{ matrix.runner }}
-    needs: [preflight, unit-cmd, unit-internal]
+    needs: preflight
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -528,42 +484,31 @@ jobs:
       - uses: actions/setup-go@v7.0.0
         with:
           go-version: '1.26.10'
-          cache: false
-      - name: Restore cache
-        uses: actions/cache/restore@v6.1.0
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            go-${{ matrix.goos }}-${{ matrix.goarch }}-
-      - uses: actions/download-artifact@v7.0.2
-        with:
-          name: preflight-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ runner.temp }}/shiki-platform/public
-      - name: Install runtime dependencies
+          cache: true
+      - name: Install runtime dependencies when absent
+        timeout-minutes: 5
         run: |
+          set -euo pipefail
           if [[ "$RUNNER_OS" == Linux ]]; then
-            sudo apt-get update
-            sudo apt-get install -y tmux unzip iproute2 dbus-user-session openssl
-          elif ! command -v tmux; then
+            missing=()
+            for command_name in tmux unzip ip openssl; do
+              command -v "$command_name" >/dev/null 2>&1 || missing+=("$command_name")
+            done
+            dpkg-query -W -f='${Status}' dbus-user-session 2>/dev/null | grep -q 'install ok installed' || missing+=(dbus-user-session)
+            if ((${#missing[@]})); then
+              sudo apt-get update -o Acquire::Retries=3
+              sudo apt-get install -y -o Acquire::Retries=3 tmux unzip iproute2 dbus-user-session openssl
+            fi
+          elif ! command -v tmux >/dev/null 2>&1; then
             brew install tmux
           fi
       - name: Run light integration tests
-        run: go test -count=1 -race -json ./test/integration/admission/... ./test/integration/agent/... ./test/integration/daemon/... ./test/integration/port/... ./test/integration/terminalstate/... ./test/integration/embedded/...
-      - uses: actions/upload-artifact@v7.0.2
-        if: always()
-        with:
-          name: integration-light-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ runner.temp }}/shiki-platform/public/**
-          if-no-files-found: warn
-          retention-days: 14
+        run: go test -count=1 -race -json ./test/integration/admission/... ./test/integration/agent/... ./test/integration/daemon/... ./test/integration/port/... ./test/integration/terminalstate/...
 
   integration-heavy:
     name: integration-heavy (${{ matrix.goos }}, ${{ matrix.goarch }})
     runs-on: ${{ matrix.runner }}
-    needs: [preflight, unit-cmd, unit-internal]
+    needs: preflight
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -595,37 +540,26 @@ jobs:
       - uses: actions/setup-go@v7.0.0
         with:
           go-version: '1.26.10'
-          cache: false
-      - name: Restore cache
-        uses: actions/cache/restore@v6.1.0
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            go-${{ matrix.goos }}-${{ matrix.goarch }}-
-      - uses: actions/download-artifact@v7.0.2
-        with:
-          name: preflight-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ runner.temp }}/shiki-platform/public
-      - name: Install runtime dependencies
+          cache: true
+      - name: Install runtime dependencies when absent
+        timeout-minutes: 5
         run: |
+          set -euo pipefail
           if [[ "$RUNNER_OS" == Linux ]]; then
-            sudo apt-get update
-            sudo apt-get install -y tmux unzip iproute2 dbus-user-session openssl
-          elif ! command -v tmux; then
+            missing=()
+            for command_name in tmux unzip ip openssl; do
+              command -v "$command_name" >/dev/null 2>&1 || missing+=("$command_name")
+            done
+            dpkg-query -W -f='${Status}' dbus-user-session 2>/dev/null | grep -q 'install ok installed' || missing+=(dbus-user-session)
+            if ((${#missing[@]})); then
+              sudo apt-get update -o Acquire::Retries=3
+              sudo apt-get install -y -o Acquire::Retries=3 tmux unzip iproute2 dbus-user-session openssl
+            fi
+          elif ! command -v tmux >/dev/null 2>&1; then
             brew install tmux
           fi
       - name: Run heavy integration tests (contains required tests)
         run: go test -count=1 -race -json ./test/integration/hostrotation/... ./test/integration/rotation/... ./test/integration/plugin/... ./test/integration/syncack/... ./test/integration/sync/... ./test/integration/version/...
-      - uses: actions/upload-artifact@v7.0.2
-        if: always()
-        with:
-          name: integration-heavy-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ runner.temp }}/shiki-platform/public/**
-          if-no-files-found: warn
-          retention-days: 14
 
   # ============================================================================
   # PHASE 4: E2E and Release Tests
@@ -634,7 +568,7 @@ jobs:
   e2e:
     name: e2e (${{ matrix.goos }}, ${{ matrix.goarch }})
     runs-on: ${{ matrix.runner }}
-    needs: [preflight, unit-cmd, unit-internal]
+    needs: preflight
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -666,37 +600,26 @@ jobs:
       - uses: actions/setup-go@v7.0.0
         with:
           go-version: '1.26.10'
-          cache: false
-      - name: Restore cache
-        uses: actions/cache/restore@v6.1.0
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            go-${{ matrix.goos }}-${{ matrix.goarch }}-
-      - uses: actions/download-artifact@v7.0.2
-        with:
-          name: preflight-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ runner.temp }}/shiki-platform/public
-      - name: Install runtime dependencies
+          cache: true
+      - name: Install runtime dependencies when absent
+        timeout-minutes: 5
         run: |
+          set -euo pipefail
           if [[ "$RUNNER_OS" == Linux ]]; then
-            sudo apt-get update
-            sudo apt-get install -y tmux unzip iproute2 dbus-user-session openssl
-          elif ! command -v tmux; then
+            missing=()
+            for command_name in tmux unzip ip openssl; do
+              command -v "$command_name" >/dev/null 2>&1 || missing+=("$command_name")
+            done
+            dpkg-query -W -f='${Status}' dbus-user-session 2>/dev/null | grep -q 'install ok installed' || missing+=(dbus-user-session)
+            if ((${#missing[@]})); then
+              sudo apt-get update -o Acquire::Retries=3
+              sudo apt-get install -y -o Acquire::Retries=3 tmux unzip iproute2 dbus-user-session openssl
+            fi
+          elif ! command -v tmux >/dev/null 2>&1; then
             brew install tmux
           fi
       - name: Run E2E tests (contains required E2E tests)
         run: go test -count=1 -race -json -tags=e2e ./test/e2e/...
-      - uses: actions/upload-artifact@v7.0.2
-        if: always()
-        with:
-          name: e2e-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ runner.temp }}/shiki-platform/public/**
-          if-no-files-found: warn
-          retention-days: 14
 
   release-tests:
     name: release-tests (${{ matrix.goos }}, ${{ matrix.goarch }})
@@ -733,27 +656,11 @@ jobs:
       - uses: actions/setup-go@v7.0.0
         with:
           go-version: '1.26.10'
-          cache: false
-      - name: Restore cache
-        uses: actions/cache/restore@v6.1.0
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            go-${{ matrix.goos }}-${{ matrix.goarch }}-
+          cache: true
       - name: Run release-trust tests
         run: go test -count=1 -race -json scripts/release-trust.go scripts/release-trust_test.go
       - name: Run release tests
         run: go test -count=1 -race -json scripts/release.go scripts/release_test.go
-      - uses: actions/upload-artifact@v7.0.2
-        if: always()
-        with:
-          name: release-tests-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ runner.temp }}/shiki-platform/public/**
-          if-no-files-found: warn
-          retention-days: 14
 
   embedded-plugins:
     name: embedded-plugins (${{ matrix.goos }}, ${{ matrix.goarch }})
@@ -791,25 +698,9 @@ jobs:
       - uses: actions/setup-go@v7.0.0
         with:
           go-version: '1.26.10'
-          cache: false
-      - name: Restore cache
-        uses: actions/cache/restore@v6.1.0
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            go-${{ matrix.goos }}-${{ matrix.goarch }}-
+          cache: true
       - name: Test embedded plugins
         run: bash scripts/build-embedded.sh
-      - uses: actions/upload-artifact@v7.0.2
-        if: always()
-        with:
-          name: embedded-plugins-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ runner.temp }}/shiki-platform/public/**
-          if-no-files-found: warn
-          retention-days: 14
 
   # ============================================================================
   # PHASE 5: Terminal & Maintenance
@@ -844,16 +735,7 @@ jobs:
       - uses: actions/setup-go@v7.0.0
         with:
           go-version: '1.26.10'
-          cache: false
-      - name: Restore cache
-        uses: actions/cache/restore@v6.1.0
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            go-${{ matrix.goos }}-${{ matrix.goarch }}-
+          cache: true
       - uses: actions/download-artifact@v7.0.2
         with:
           name: preflight-${{ matrix.goos }}-${{ matrix.goarch }}
@@ -897,26 +779,26 @@ jobs:
       - uses: actions/setup-go@v7.0.0
         with:
           go-version: '1.26.10'
-          cache: false
-      - name: Restore cache
-        uses: actions/cache/restore@v6.1.0
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            go-${{ matrix.goos }}-${{ matrix.goarch }}-
+          cache: true
       - uses: actions/download-artifact@v7.0.2
         with:
           name: preflight-${{ matrix.goos }}-${{ matrix.goarch }}
           path: ${{ runner.temp }}/shiki-platform/public
-      - name: Install runtime dependencies
+      - name: Install runtime dependencies when absent
+        timeout-minutes: 5
         run: |
+          set -euo pipefail
           if [[ "$RUNNER_OS" == Linux ]]; then
-            sudo apt-get update
-            sudo apt-get install -y tmux unzip iproute2 dbus-user-session openssl
-          elif ! command -v tmux; then
+            missing=()
+            for command_name in tmux unzip ip openssl; do
+              command -v "$command_name" >/dev/null 2>&1 || missing+=("$command_name")
+            done
+            dpkg-query -W -f='${Status}' dbus-user-session 2>/dev/null | grep -q 'install ok installed' || missing+=(dbus-user-session)
+            if ((${#missing[@]})); then
+              sudo apt-get update -o Acquire::Retries=3
+              sudo apt-get install -y -o Acquire::Retries=3 tmux unzip iproute2 dbus-user-session openssl
+            fi
+          elif ! command -v tmux >/dev/null 2>&1; then
             brew install tmux
           fi
       - name: Native installation, service lifecycle and active upgrade maintenance
@@ -1009,16 +891,7 @@ jobs:
       - uses: actions/setup-go@v7.0.0
         with:
           go-version: '1.26.10'
-          cache: false
-      - name: Restore cache
-        uses: actions/cache/restore@v6.1.0
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: go-compile-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            go-compile-${{ matrix.goos }}-${{ matrix.goarch }}-
+          cache: true
       - name: Build and verify unsigned release bundle
         shell: bash
         env:

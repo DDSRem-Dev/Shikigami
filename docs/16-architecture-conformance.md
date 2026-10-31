@@ -6,6 +6,9 @@
 
 **本轮CI状态（2026-10-31）：** 最终源码8fdfe25的[CI41197195478](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41197195478)尚未全绿：Linux arm64在原生安装/服务生命周期/升级维护阶段运行60秒后失败，内部具体步骤因安全artifact读取TLS超时尚未核实；不能套用上一轮13bcd0a的useradd超时结论。其他仍在运行的任务不计通过，最终支持门槛继续保留。本机相关race与实际Mac/VPS安装矩阵各自范围的通过不等同整轮远端CI成功。
 
+
+**本批 CI 修复与耗时收敛（2026-11-01，尚未发布）：** GitHub Actions run [41221813396](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41221813396) 已确认原生 preflight 的失败根因是 workflow 调用了不存在的 `scripts/test-platform-tools.py`；现改用仓库实际入口 `scripts/test-platform-ci.py`。集成与 E2E 任务改为在 preflight 后直接并行，移除不消费的中间 artifact 和 compile 阶段无写入来源的冗余缓存恢复，运行时依赖仅在缺失时安装并启用 apt 重试；新增同分支并发取消，避免旧提交占用 runner。WSL2 仍保留完整产品/系统维护验收，历史实测约 22–27 分钟，是独立的长任务，不削弱覆盖范围。另将 WSL 上偶发的 120ms Connect 超时夹具放宽为 500ms（仍早于服务端 5s 预算），修复 `internal/server` 的跨平台时序脆弱性。扫描后删除未被 workflow、Makefile、文档或测试引用的 `scripts/compare-memory-windows.py`、`scripts/test-install-space.py` 和 `scripts/test-schema-upgrade.sh`。按架构基线复核目录依赖、RPC/授权、状态原子性、进程生命周期、文件/终端语义及 CLI 合约，未发现生产边界偏差。当前本地 `actionlint`、平台工具 29 项、脚本工具 83 项及目标包 race 测试通过；远端新提交尚未运行，故不把本批修改宣称为 GitHub 全绿或完成外部平台门槛。
+
 **最近已核验CI（本批修复前）：** 文档提交3b2d360的[CI41131301002](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41131301002)已completed/success、13/13通过，实际32分43秒。代码提交045b463的[CI41125907702](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41125907702)也已13/13通过，五平台各730文件源码摘要、必需阶段及清理已独立核验；其整轮46分51秒→36分09秒的性能比较仍按冷暖缓存/并行/排队边界记录于[26](26-native-platform-acceptance.md#ci-045-final-20261031)。下述既有CI不代表本批新修改已通过远端CI；本批相关本地race已通过，未重跑12小时。
 
 以下是按各批源码范围保留的历史记录，当前状态以本摘要和原条目的最新部分进展为准。历史批次中要求真实Claude账号的待办仅表示当时计划；当前范围以[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)为准，不再要求用户提供Claude登录。
