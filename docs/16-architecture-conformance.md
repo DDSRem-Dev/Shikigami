@@ -1473,3 +1473,5 @@ docs02明确macOS纯userspace承载与代理边界，08/15/16同步37/42；完�
 同轮Linux arm64 E2E在daemon重启后观测到一次本地agent尚未重连的`service unavailable`，远端协商已成功；架构复核将重试限制在该查询的10秒恢复窗口且只接受明确瞬态错误，持久错误继续失败，不放宽产品生命周期或取消/重连契约。`go test -race -tags=e2e -run '^$' ./test/e2e`本地编译通过，待远端复验。
 
 `41239995440`确认race缓存与恢复竞态修复后主产品矩阵通过；terminal/maintenance仅因CI引用不存在的download-artifact v7.0.2在动作解析阶段失败。该引用已统一为release中已使用的v8.0.2；不改变artifact内容、平台证据、终端/维护测试或产品架构，下一轮验证动作下载和最终清理。
+
+`41242641679`暴露缓存键把workflow编排变化误当作Go源码，Intel preflight因重复冷race构建在20分钟边界被取消；生产代码、测试断言和其他平台均无新增失败。缓存审查已将`.github/workflows`从source hash排除，并过滤Actions版本而保留Go工具版本依赖；16项cache测试、actionlint、83项脚本测试和diff通过，下一轮验证跨job复用及terminal/maintenance。

@@ -57,14 +57,17 @@ def input_hashes(repository):
                       re.search(rb"(?m)^\s*//go:embed\s", data))
                      for name, data in contents.items())
     source = {name: value for name, value in hashes.items()
-              if root_embed or not (name.startswith("docs/") or name in ROOT_DOCUMENTS)}
+              if not name.startswith(".github/workflows/") and
+              (root_embed or not (name.startswith("docs/") or name in ROOT_DOCUMENTS))}
     dependencies = {name: value for name, value in hashes.items()
                     if Path(name).name in ("go.mod", "go.sum", "go.work", "go.work.sum") or
                     name == "scripts/tool-versions.env"}
     # Versioned tool invocations are dependencies too; unrelated workflow
     # changes should not cause a fresh multi-gigabyte module archive.
-    tools = sorted(set(re.findall(rb"[A-Za-z0-9./_-]+@v[0-9][A-Za-z0-9.+_-]*",
-                                  contents.get(".github/workflows/ci.yml", b""))))
+    tools = sorted(set(token for token in re.findall(
+        rb"[A-Za-z0-9./_-]+@v[0-9][A-Za-z0-9.+_-]*",
+        contents.get(".github/workflows/ci.yml", b""))
+        if not token.startswith(b"actions/")))
     dependencies["versioned-ci-tools"] = hashlib.sha256(b"\n".join(tools)).hexdigest()
     if "go.mod" not in dependencies or "go.sum" not in dependencies:
         raise ValueError("root module inputs unavailable")
