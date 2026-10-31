@@ -1,6 +1,6 @@
 # 自动化安装与运维契约
 
-**本文保留安装流程契约。仓库已实现本地固定版本 bundle 校验、事务安装/回滚、服务渲染、异步登录引导与本地就绪诊断；真实 systemd 容器与原生 macOS LaunchAgent 已有下述限定环境生命周期证据；当前公开预发布 v0.0.1-alpha.2 已由 tag 自动构建、签名、发布并更新 Homebrew Formula，实际分发与平台证据见[22](22-homebrew-distribution.md)。五平台本地完整产品/服务验收已通过；真实外部身份跨安装器升级、主机重启登录与Claude完整就绪仍需单独验收。**
+**本文保留安装流程契约。仓库已实现本地固定版本 bundle 校验、事务安装/回滚、服务渲染、异步登录引导与本地就绪诊断；真实 systemd 容器与原生 macOS LaunchAgent 已有下述限定环境生命周期证据；当前公开预发布 v0.0.1-alpha.2 已由 tag 自动构建、签名、发布并更新 Homebrew Formula，实际分发与平台证据见[22](22-homebrew-distribution.md)。五平台本地完整产品/服务验收已通过；真实外部身份跨安装器升级、服务恢复替代验收与Claude完整就绪仍需单独验收；按用户约束不重启实际Mac/VPS，方案见[替代验收](#no-host-reboot-acceptance-20261031)。**
 
 `scripts/install.sh`、`install-client.sh`、`uninstall.sh` 与短时运维 helper `shiki-install` 已存在；已完成专用公钥的四目标签名及验签。[当前公开 Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.2) 来自提交 `fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2`、成功自动发布运行 `40912019720`，公开资产的下载验证结果见[发行证据](./15-implementation-status.md#evidence-public-alpha2-release-20261030)。安装只接受本地 bundle、固定版本及调用者从独立可信渠道取得的 checksum pin。可信源码工具 `scripts/release-trust.go fetch` 提供显式HTTPS归档/签名地址、独立可信公钥和固定版本/平台的下载验签入口，先认证签名再下载归档，成功后生成私有副本/pin/receipt；解包与安装仍是显式后续步骤，工具不指定正式来源或建立公钥信任。GitHub下载地址会重定向，现有 `fetch` 拒绝重定向；应使用 `gh release download v0.0.1-alpha.2 --repo DDSRem-Dev/Shikigami` 取回资产，再用可信源码 verifier 和独立可信公钥离线验签。命令与限制见发布认证，本批验收进度见16。下列完整就绪和运维要求不因预发布成功而降低。
 
@@ -26,7 +26,7 @@
 | Connect 传输 | 本地 NodeControl 使用 UDS/h2c；tsnet 上实际全双工；可选 TLS 协商 h2、证书拒绝及流式终态正确，见 14 | 禁止以 TCP 端口可达或普通 HTTP 200 显示安装成功 |
 | 服务进程保活 | systemd crash/restart 保留 tmux，同时插件/PTY attach 可回收；普通用户和真实 HOME/PATH 可用 | 保活承诺不得进入安装成功提示 |
 
-本地 NodeControl、固定 SDK 的测试控制面登录/身份保持、真实 tsnet/UDS/TLS 传输和普通用户宿主崩溃恢复已有运行证据，详见 15/16。真实 systemd PID1 容器的服务保活和普通用户 user-agent、原生 macOS 当前 GUI 登录域的 LaunchAgent 生命周期已有下述证据；官方Mac/原生VPS登录、key首用/复用拒绝、进程重启身份保持和P2P/DERP已验证，见[23](23-tsnet-external-acceptance.md)；独立未使用key撤销、最终agent节点撤销恢复及审批待批/移除/批准已有后续证据；独立未使用key自然到期拒绝现已通过，见[终态记录](23-tsnet-external-acceptance.md#unused-auth-key-expiry-final-20261031)；官方URL有效期、审批拒绝结果及原因未知回退的完整对照、主机重启登录和Claude完整外部就绪仍待验。原型必须记录 SDK/OS 版本、步骤和输出，不记录 auth key 或登录 URL；只有相应门槛通过后才可宣称该安装流程已验收。
+本地 NodeControl、固定 SDK 的测试控制面登录/身份保持、真实 tsnet/UDS/TLS 传输和普通用户宿主崩溃恢复已有运行证据，详见 15/16。真实 systemd PID1 容器的服务保活和普通用户 user-agent、原生 macOS 当前 GUI 登录域的 LaunchAgent 生命周期已有下述证据；官方Mac/原生VPS登录、key首用/复用拒绝、进程重启身份保持和P2P/DERP已验证，见[23](23-tsnet-external-acceptance.md)；独立未使用key撤销、最终agent节点撤销恢复及审批待批/移除/批准已有后续证据；独立未使用key自然到期拒绝现已通过，见[终态记录](23-tsnet-external-acceptance.md#unused-auth-key-expiry-final-20261031)；官方URL有效期、审批拒绝结果及原因未知回退的完整对照、服务恢复替代验收和Claude完整外部就绪仍待验；实际设备重启/重新登录保留为未实测范围，见[替代验收](#no-host-reboot-acceptance-20261031)。原型必须记录 SDK/OS 版本、步骤和输出，不记录 auth key 或登录 URL；只有相应门槛通过后才可宣称该安装流程已验收。
 
 运行预构建产物不要求用户安装 Go/protoc；源码构建要求 Go ≥ 1.26.5，并锁定 Connect-Go 运行库与生成器 v2.0.2。安装器检查发行清单中的核心/插件应用协议能力；不能把 Connect 库版本当作 Shiki 协议 major。
 
@@ -192,3 +192,22 @@ systemd 的 `WorkingDirectory` 使用规范 `~`（按 `User=` 或用户 manager 
 ### 受保护的 Actions 签名
 
 按用户要求，首个及后续版本均以推送固定版本tag触发[release.yml](../.github/workflows/release.yml)：校验tag精确来源/master祖先、同源完整CI、四目标无密钥构建，tag限定的`release-signing`环境自动签名并验签，再由独立发布job完整上传草稿资产并公开Release。环境不再要求人工审批；推送tag是发布授权，受保护版本tag不能更新或删除。公钥、指纹、密钥备份、重试/冲突和轮换/撤销边界见[发布准备](./18-release-readiness.md#github-actions-自动构建签名与发布)。稳定版及alpha/beta/rc分别处理；安装前独立信任与校验要求保持不变。
+
+
+<a id="no-host-reboot-acceptance-20261031"></a>
+## 用户主机不重启的替代验收（2026-10-31）
+
+用户明确其Mac和VPS均不能重启，要求采用其他方式验证。本轮据此调整验收执行计划：真实主机重启不再列为等待用户执行的任务；不注销当前登录会话，不重启宿主PID1或整个用户服务管理域。安装、持久化、权限、自动恢复与数据保持的产品要求仍在，通过以下组合证据验证相应功能。实际设备的内核/硬件重启、重新登录及相关启动差异单独标为未实测，不冒充已通过。
+
+| 验证目标 | 替代方式 | 结束条件与证据范围 |
+|---|---|---|
+| 自动启动策略与实际安装绑定 | 只读核对安装生成unit/plist、运行用户、HOME/PATH、配置/状态路径、RunAtLoad或持久启用/Linger | 匹配选中产物与实际服务；无法确认仍unknown；配置观察本身不代表实际启动 |
+| 服务由管理器拉起 | 仅对确权的专用测试服务重载/重新注册，关闭CLI按需自动启动 | 在任何CLI/probe前服务已出现；新PID/instance及产物正确；当前用户会话和其他服务保持 |
+| 同身份与业务恢复 | 专用服务重载前后保留同一tsnet状态、daemon ID与既有凭据 | 无重复注册/隐式Token重签；映射、基线、冲突、暂停、转发保持，新终端回显/双向文件/新TCP通过，旧流不重放 |
+| Linux持久启动与运行态重建 | 复用独立持久卷下两次真实systemd PID1启动证据，重建隔离容器/run、/tmp | PID1/InvocationID代际变、服务先于CLI自动出现、持久状态及业务恢复；宿主内核未重启范围保持 |
+| 实际安装器升级/回滚 | 固定来源的bundle在专用环境执行A→B→A，结合上述管理器流程 | 原外部身份/凭据、数据与业务保持，版本/来源/旧host和worker回收、取消/失败结果及清理均有证据 |
+| 特定内核启动缺口（按需） | 仅在已有可用隔离VM中用独立测试状态正常关机/重新启动 | 该VM的kernel boot ID实际变化；仅声明对应VM范围。无新缺口时不另建VM或重复现有容器验收 |
+
+已有持久卷二次PID1启动、CLI auto_start关闭且服务先于CLI/probe出现、身份/资源/业务恢复证据见[二次启动](15-implementation-status.md#evidence-service-boot-validation)；原生当前GUI域LaunchAgent bootstrap、崩溃恢复、升级回滚与清理见[LaunchAgent](15-implementation-status.md#evidence-launchd-validation)，公开包维护及五平台证据见24/26。先复用这些已完成范围，新增重点是保留官方tsnet身份穿过真实安装器和专用服务管理流程；原手动进程替换不能当该组合已完成。若标准服务名称与用户既有安装冲突，改在清洁原生CI或隔离环境完成相应环节，记录其外部身份覆盖边界，不覆盖用户服务。
+
+这是用户明确环境约束下的替代执行方案，不是新验收通过记录。替代组合实际通过且其他条件齐备后，按其覆盖关闭对应功能门槛；真实设备重启继续作为未实测支持边界，不再无限等待用户提供该操作。真实Claude登录、其余认证和生产资源归因不由此免除；本次不改原42条文字、不增加勾选，也不更改生产状态枚举、协议或自动启动行为。
