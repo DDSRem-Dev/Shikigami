@@ -237,6 +237,11 @@ class Acceptance:
         write_json(self.public / "result.json", {"state": "passed" if passed else "failed", "source_unchanged": source_ok,
                     "incomplete_stages": pending, "scope": "native local product and installation/service acceptance",
                     "external_accounts": "not tested", "physical_restart_login": "not tested"})
+        # Output evidence path for artifact upload
+        github_output = os.environ.get("GITHUB_OUTPUT")
+        if github_output:
+            with open(github_output, "a") as f:
+                f.write(f"evidence={self.public}\n")
         if not passed:
             raise RuntimeError("native acceptance incomplete; see public/result.json")
 
