@@ -69,3 +69,26 @@ Linux arm64普通用户、network=none的独立容器也已通过同一矩阵：
 | 行为证据与支持声明 | 保留夹具失败及各冻结输入；本批通过项只减少对应子门槛，本批当时32/42和剩余外部/平台/长期条件保持（最新总数见08）。 |
 
 同批慢流取消修复另见15/16的专项记录，不属于上述历史公开发行包；其最终双平台结果不得由公开包验收替代。临时目录不是永久证据存储；原始证据丢失时不能仅凭摘要扩大支持范围。
+
+
+<a id="external-installer-20261031"></a>
+## 官方身份下的实际安装器进展（2026-10-31，尚未收尾）
+
+A为重新验签的公开v0.0.1-alpha.2，B为冻结提交b30c58563651271b044796f5a8a52065ec155f57的本地v0.0.1-alpha.2-local.install.1候选，B未签名、未发布。732个源码输入在构建前后保持；不能将B结果称为新正式发行验收。证据根为`/private/tmp/shiki-installer-tsnet-20261031-deho3ofr/evidence/`，准备包来源另保留在`/private/tmp/shiki-alpha2-installer-a-a3af0oz0/`和`/private/tmp/shiki-installer-b-1jq9a7eo/`的manifest/收据。
+
+| 范围 | 已完成与剩余条件 |
+|---|---|
+| 原生Linux amd64 VPS安装/升级 | 真实systemd下A安装→B升级→回滚A通过，PID/InvocationID变化，未执行主机重启；同tsnet身份/IP、daemon ID和凭据revision保持，无新Token签发。 |
+| VPS业务及服务恢复 | 新终端、双向文件、共同基线自动同步、新TCP通过；原pane、原baseline、暂停mapping及未解冲突保持。第二轮升级/回滚旧TCP EOF且无重放。stop→daemon-reload→start后先观察管理器再调用CLI，9.645秒内旧TCP结束及服务转换完成；不代表主机重启。 |
+| VPS卸载与恢复 | 真正执行uninstall，标准unit/链接移除，配置/state/tsnet保留；恢复原配置与原测试daemon后业务通过。全UID/PPid扫描核验当时仅当前daemon及两个匹配worker，没有前代或孤儿worker。 |
+| Mac原生LaunchAgent | A首装及单独B首装均未在原30秒预算内完成节点就绪，A共86次观察（85份节点未初始化结果、1次探测超时），B共85份节点未初始化结果。两轮均止于首装，不将未执行的重复安装、升级、回滚或服务恢复记通过。 |
+| Mac定向诊断 | 单独诊断plist关闭KeepAlive、增加私有stderr并获取Go栈；Server.Start已返回，watch/poll均运行。authRoutine→Direct.TryLogin→loadServerPubKeys→http.Transport.getConn等待，另有tsdial.SystemDial→netFD.connect→WaitWrite。证据指向控制面公钥请求的TCP拨号等待，未确定目标地址或具体网络原因；curl直连/既有代理均能得到302，不能宣布代理是唯一根因。诊断变体不算安装通过。 |
+| Claude | 官方CLI未登录报告和安装器application_pending/退出3、CLAUDE_LOGIN_REQUIRED映射有证据。真实登录/推理按[11当前范围](11-automated-installation.md#claude-acceptance-scope-20261031)排除，未获取凭据或推理。 |
+
+保留失败边界：VPS最初将系统命令目录放在普通用户HOME，安装器正确拒绝，恢复后使用新的root所有目录；首次迁移超过客户端重试窗口，曾显式connect，不能证明该次自动恢复。初始node_uninitialized/REMOTE_LISTENER_PENDING是合法中间态，先前夹具仅接受application_pending的失败保留。首次回滚held TCP的5秒读超时保留；独立第二轮按已有升级测试使用转换完成后的15秒读期限，不声称整个升级在15秒内恢复。第二轮回滚曾过早使用旧ready观察，等待目标版本与live session后业务成功，不抹去首次失败。
+
+主要收据：`vps-transition-B2.json`、`vps-transition-rollback2.json`、`vps-manager-reload-transition.json`、`vps-all-worker-generation-audit.json`、`vps-uninstall-retention-and-restore.json`、`vps-restored-business.json`；Mac为`mac-install-summary.json`、`mac-bcontrol-summary.json`、`mac-sdkdiag-go-stack-summary.json`、`mac-sdkdiag-independent-recovery-check.json`。
+
+清理已完成的范围：VPS本轮11个安装/官方Claude临时目标、113项约1.54GB已清理；Mac三轮runtime及标准job/plist均不存在，原始栈/sample已删除，仅保留函数名/等待态摘要。Mac最终恢复专用agent PID93282，原配置hash、身份、终端/文件/TCP、暂停/冲突和旧基线核验通过。两端未重启、未注销，未改全局launchctl代理环境。专用Tailscale身份继续保留；业务测试文件、两个任务mapping/project及本机A/B预备包仍待精确收尾，不能宣称环境已全部清干净。
+
+本轮结果减少VPS子门槛，但Mac失败仍阻塞两项完整安装条目，37/42保持。下一步需定位SDK实际拨号与受管进程网络环境的差异，再基于证据修复并完成Mac矩阵；不能靠延长等待、重复登录或重复无假设测试取得勾选。

@@ -1,6 +1,6 @@
 # 开发路线图
 
-**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** 两项默认12小时轮换及恢复尾部、独立未使用Auth Key自然到期均已完成；五平台验收已通过。本批修复转发查询与停止交错导致的孤儿缓存、安装器在有效审批/身份到期登录期间重复开始及提前退出问题，相关race和独立七类复核通过。官方登录URL的7天期限仅有锁定SDK源码依据，尚无自然到期现场证据；同身份真实安装器验收继续推进；按用户明确要求，真实Claude登录/推理已移出交付验收，未实测范围见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)。Mac/VPS均不重启，按[11替代矩阵](11-automated-installation.md#no-host-reboot-acceptance-20261031)验证服务恢复。认证、安装/升级、生产资源归因及最终支持声明仍待，不提前增加勾选。
+**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** 两项默认12小时轮换及恢复尾部、独立未使用Auth Key自然到期均已完成；五平台既有验收已通过。转发缓存所有权与安装器有效登录attempt修复已有相关race证据。本轮原生VPS已完成保留官方tsnet身份的实际安装、候选升级/回滚、systemd专用服务恢复与卸载保留数据；Mac公开A和候选B的LaunchAgent首装均未在原30秒内达到节点就绪，阻塞安装及升级两项关闭。诊断定位SDK获取控制面公钥时等待TCP连接，尚未确定具体网络原因；两端已恢复原配置与专用测试进程，临时服务/runtime已清理，但业务夹具及预备包仍待收尾，详见[24本轮结果](24-public-package-compatibility.md#external-installer-20261031)。官方登录URL自然到期、生产资源归因及最终支持声明仍待。真实Claude登录/推理按用户要求移出交付验收，见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)；实际Mac/VPS不重启、不注销，沿用[11替代矩阵](11-automated-installation.md#no-host-reboot-acceptance-20261031)。本轮尚未完整收尾，不提前增加勾选。
 
 **最近已核验CI（本批修复前）：** 文档提交3b2d360的[CI41131301002](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41131301002)已completed/success、13/13通过，实际32分43秒。代码提交045b463的[CI41125907702](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41125907702)也已13/13通过，五平台各730文件源码摘要、必需阶段及清理已独立核验；其整轮46分51秒→36分09秒的性能比较仍按冷暖缓存/并行/排队边界记录于[26](26-native-platform-acceptance.md#ci-045-final-20261031)。下述既有CI不代表本批新修改已通过远端CI；本批相关本地race已通过，未重跑12小时。
 
@@ -358,12 +358,14 @@
   - 2026-10-30：Mac/VPS独立普通用户与最终候选的完整10阶段矩阵157.31秒通过，操作系统资源回收独立核验；结合24公开包四层版本、既有06恢复/ACK专项及最终CI41047781448，关闭本项。两类8MiB真实SIGKILL、条件竞争、后台冲突/TUI与撤A保B范围详见[25](25-multihost-acceptance.md)；不外推完整tsnet认证、Claude、主机重启、其他平台或长稳。
   - 新增真实两个独立 agent/身份/映射连接同一 TLS daemon 的 macOS/Linux E2E：同revision接管仅一方成功、只读拒绝、停止A不影响B流/后台同步、离线编辑冲突保留、过期解决拒绝和最终收敛均通过；Mac/VPS双设备体验随后由25补齐，其他完整平台范围另列。
 - [ ] 按 11 实现安装器、Linux systemd 服务、macOS LaunchAgent/Linux 用户服务。
+  - 2026-10-31本轮：原生VPS保留官方tsnet身份，真实systemd安装、stop→daemon-reload→start及卸载保留数据通过，管理器启动先于业务CLI；未重启宿主。Mac公开A与候选B的原生LaunchAgent均未在原30秒内节点就绪，栈定位SDK控制面公钥请求的TCP拨号等待，具体原因未定；本项仍未完成。恢复与清理范围见[24本轮结果](24-public-package-compatibility.md#external-installer-20261031)。
   - 11要求的启动策略展示已补齐：shiki config startup只读区分CLI按需与受管登录/开机策略，未知不猜测启用；双平台受影响race/vet及真实systemd启用/禁用运行中/错配置/恢复绑定四态通过。仅配置观察，不替代实际登录/重启，见[启动策略验收](15-implementation-status.md#evidence-startup-policy-validation)。
   - 2026-10-29实际锁定tailscale.com v1.98.10源码构建的系统tailscaled在21边界保持原进程/unit/config/socket/state，Shiki双角色安装/升级/回滚/卸载/重装通过；另一个UID1001内嵌tsnet启用未登录返回node_needs_login/退出3，独立252B state与访问系统socket/state实际EACCES通过。正常poweroff及精确容器清理独立复核。系统state是2字节空JSON，不能证明已有认证身份保持；不是官方二进制或已认证双节点共存。见[共存报告](15-implementation-status.md#evidence-tailscale-coexist-validation)。
   - 2026-10-29第三轮持久卷二次PID1自动启动验收通过：同容器正常poweroff后重新start，daemon与user-agent无需CLI拉起；身份/Token/映射/revision/基线/冲突/paused/forward保留，既有路径自动双向、新路径首次显式方向、fresh TCP及配置快照创建新会话通过。双host/四worker当前产物与UID/代际、两次正常退出与精确CID/home卷清理独立核验；前两次夹具失败保留。仅容器PID1重启，不代表物理VPS或原生登录；见[二次启动报告](15-implementation-status.md#evidence-service-boot-validation)。
   - 安装器、服务渲染、NodeControl/bootstrap、内嵌产物及隔离smoke已实现；macOS27 arm64原生LaunchAgent与Linux arm64容器真实systemd/systemd --user均通过安装、实际应用就绪、停启、崩溃自动恢复、升级/回滚和卸载保留数据。保留未勾选：11的完整安装要求还涉及外部登录/真实账号、可信发行来源、原生VPS和重启/登录持久化。
   - 本批按11补齐停止旧服务前的磁盘预检、停止后新清单复核和备份父目录fsync；双平台整包race、真实16MiB tmpfs及fsync跟踪通过。529文件快照原生上传升级/回滚90.41秒、真实systemd 13次边界补验通过，见[安装空间验收](15-implementation-status.md#evidence-install-space-validation)；不把历史下载/取消结果标成新源码验证。
 - [ ] 重复安装/升级/回滚、自定义 config、非交互登录、依赖检查和卸载保留数据。
+  - 2026-10-31本轮：VPS公开alpha.2→冻结b30c585候选→回滚alpha.2保留同tsnet身份、daemon/凭据、pane、基线、暂停及冲突；新终端/双向文件/TCP和旧TCP结束不重放通过。Mac首装未就绪，尚未进入该身份下的升级/回滚，不能由VPS结果代替；首次迁移显式connect及原失败观察保留，详见[24](24-public-package-compatibility.md#external-installer-20261031)。
   - 2026-10-30公开alpha.1/alpha.2双平台真实服务升级/回滚、重复安装和各92命令兼容矩阵已通过；同批慢流取消三类缺口修复及分源双平台检查通过，见[24](24-public-package-compatibility.md)与[取消回收专项](15-implementation-status.md#evidence-frontend-cancellation-20261030)。外部身份、物理主机/平台和当前候选长稳仍独立待验。
   - 2026-10-29确认的Stage落盘遗漏、中断回滚早期失败启动未提交版本及遗留服务临时文件阻塞已修复；真实syscall前后对照、9个EIO新进程恢复、13条父/子同测红绿及同源双平台相关包通过。服务管理器/物理持久化/正式发行仍保留原门槛，见[合并验收](15-implementation-status.md#evidence-recovery-conformance-validation)。
   - 2026-10-29原生macOS27 arm64/真实UID501 HOME与GUI domain完成开发A529/B630的1→2→旧A拒写→停写仅sync恢复→A→B，并完成既有基线双向同步及30次RPC撤权检查。第四轮包含最终B host/worker身份/哈希与全记录代际清理，daemon退出0、无fallback、job/plist/staging/自有session/runtime无残留，独立复核通过；前三轮失败/缺证据范围保留。不代表daemon schema迁移、任意B新写后恢复旧备份、重启登录或历史正式发行。见[原生schema报告](15-implementation-status.md#evidence-schema-macos-validation)。

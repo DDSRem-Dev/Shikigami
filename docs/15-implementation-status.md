@@ -1,6 +1,6 @@
 # 实施与验收记录
 
-**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** 两项默认12小时轮换及恢复尾部、独立未使用Auth Key自然到期均已完成；五平台验收已通过。本批修复转发查询与停止交错导致的孤儿缓存、安装器在有效审批/身份到期登录期间重复开始及提前退出问题，相关race和独立七类复核通过。官方登录URL的7天期限仅有锁定SDK源码依据，尚无自然到期现场证据；同身份真实安装器验收继续推进；按用户明确要求，真实Claude登录/推理已移出交付验收，未实测范围见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)。Mac/VPS均不重启，按[11替代矩阵](11-automated-installation.md#no-host-reboot-acceptance-20261031)验证服务恢复。认证、安装/升级、生产资源归因及最终支持声明仍待，不提前增加勾选。
+**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** 两项默认12小时轮换及恢复尾部、独立未使用Auth Key自然到期均已完成；五平台既有验收已通过。转发缓存所有权与安装器有效登录attempt修复已有相关race证据。本轮原生VPS已完成保留官方tsnet身份的实际安装、候选升级/回滚、systemd专用服务恢复与卸载保留数据；Mac公开A和候选B的LaunchAgent首装均未在原30秒内达到节点就绪，阻塞安装及升级两项关闭。诊断定位SDK获取控制面公钥时等待TCP连接，尚未确定具体网络原因；两端已恢复原配置与专用测试进程，临时服务/runtime已清理，但业务夹具及预备包仍待收尾，详见[24本轮结果](24-public-package-compatibility.md#external-installer-20261031)。官方登录URL自然到期、生产资源归因及最终支持声明仍待。真实Claude登录/推理按用户要求移出交付验收，见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)；实际Mac/VPS不重启、不注销，沿用[11替代矩阵](11-automated-installation.md#no-host-reboot-acceptance-20261031)。本轮尚未完整收尾，不提前增加勾选。
 
 **最近已核验CI（本批修复前）：** 文档提交3b2d360的[CI41131301002](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41131301002)已completed/success、13/13通过，实际32分43秒。代码提交045b463的[CI41125907702](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41125907702)也已13/13通过，五平台各730文件源码摘要、必需阶段及清理已独立核验；其整轮46分51秒→36分09秒的性能比较仍按冷暖缓存/并行/排队边界记录于[26](26-native-platform-acceptance.md#ci-045-final-20261031)。下述既有CI不代表本批新修改已通过远端CI；本批相关本地race已通过，未重跑12小时。
 
@@ -1110,3 +1110,10 @@ Mac应用elapsed的计时起点晚于worker ready，原值保持；逐角色12�
 用户明确无法提供真实Claude登录，要求移除这一验收环节。当前Phase 0–5不再等待真实Claude账号登录、授权后调用或推理闭环；保留未实测支持范围，唯一基准见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)。这不是验收通过记录，原42条文字/顺序及37勾保持。同身份真实安装器升级回滚、服务恢复、Tailscale认证及生产资源归因继续推进。
 
 本轮官方Claude Code 2.1.309在专用VPS用户下返回auth status退出1、loggedIn=false，登录流程已取消且未取得凭据，未执行真实推理；该负向观察不代表安装器组合或真实账号通过。之后验证安装完成与应用pending分离，并继续用明确shell fixture验证会话/状态/升级恢复。产品readiness、认证权限和协议不变，不将unknown或未登录改称ready。当前待办、README、安装/发布/平台说明与历史范围标注已同步，不再请求用户提供该账号。
+
+
+## 外部安装子项补记与未完成范围（2026-10-31）
+
+本轮VPS官方身份下的实际安装、升级/回滚、专用systemd恢复、卸载保留数据及恢复原环境已取得证据；Mac A/B首装均未在原30秒内达到节点就绪，未执行后续升级/回滚。最新诊断已否定“Server.Start未返回”的猜测，定位SDK控制面公钥请求的TCP拨号等待，具体网络原因仍待定位。来源、失败观察、恢复和清理边界见[24本轮记录](24-public-package-compatibility.md#external-installer-20261031)。
+
+此前仅报告Claude范围调整完成，遗漏同步上述子项且未明确整个批次尚未结束；本次补齐08/15/16及24。37/42不变来自Mac真实失败及认证/资源剩余条件，不是继续等待Claude登录。临时服务/runtime及VPS官方Claude临时安装已清理，业务夹具与预备包仍待收尾，专用身份保留。工作树中两份CI诊断脚本的改动另待验证/提交，不算本次文档提交完成的功能。

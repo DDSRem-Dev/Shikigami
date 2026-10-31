@@ -1,6 +1,6 @@
 # 架构与文档一致性检查
 
-**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** 两项默认12小时轮换及恢复尾部、独立未使用Auth Key自然到期均已完成；五平台验收已通过。本批修复转发查询与停止交错导致的孤儿缓存、安装器在有效审批/身份到期登录期间重复开始及提前退出问题，相关race和独立七类复核通过。官方登录URL的7天期限仅有锁定SDK源码依据，尚无自然到期现场证据；同身份真实安装器验收继续推进；按用户明确要求，真实Claude登录/推理已移出交付验收，未实测范围见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)。Mac/VPS均不重启，按[11替代矩阵](11-automated-installation.md#no-host-reboot-acceptance-20261031)验证服务恢复。认证、安装/升级、生产资源归因及最终支持声明仍待，不提前增加勾选。
+**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** 两项默认12小时轮换及恢复尾部、独立未使用Auth Key自然到期均已完成；五平台既有验收已通过。转发缓存所有权与安装器有效登录attempt修复已有相关race证据。本轮原生VPS已完成保留官方tsnet身份的实际安装、候选升级/回滚、systemd专用服务恢复与卸载保留数据；Mac公开A和候选B的LaunchAgent首装均未在原30秒内达到节点就绪，阻塞安装及升级两项关闭。诊断定位SDK获取控制面公钥时等待TCP连接，尚未确定具体网络原因；两端已恢复原配置与专用测试进程，临时服务/runtime已清理，但业务夹具及预备包仍待收尾，详见[24本轮结果](24-public-package-compatibility.md#external-installer-20261031)。官方登录URL自然到期、生产资源归因及最终支持声明仍待。真实Claude登录/推理按用户要求移出交付验收，见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)；实际Mac/VPS不重启、不注销，沿用[11替代矩阵](11-automated-installation.md#no-host-reboot-acceptance-20261031)。本轮尚未完整收尾，不提前增加勾选。
 
 **最近已核验CI（本批修复前）：** 文档提交3b2d360的[CI41131301002](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41131301002)已completed/success、13/13通过，实际32分43秒。代码提交045b463的[CI41125907702](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41125907702)也已13/13通过，五平台各730文件源码摘要、必需阶段及清理已独立核验；其整轮46分51秒→36分09秒的性能比较仍按冷暖缓存/并行/排队边界记录于[26](26-native-platform-acceptance.md#ci-045-final-20261031)。下述既有CI不代表本批新修改已通过远端CI；本批相关本地race已通过，未重跑12小时。
 
@@ -1406,3 +1406,10 @@ CI复现的obsolete-selection测试仅修正已有maintenance cooldown竞态允�
 七类对照：目录及host/plugin/SDK依赖、RPC准入/权限/能力、持久状态/schema/revision/去重、进程启停/取消/恢复、文件/终端/TCP语义与限制均未修改。CLI/安装运行时继续实际诊断Claude登录，未登录或unknown仍为degraded/application_pending，服务已安装不等于应用ready。行为证据保留官方CLI未登录观察、明确shell fixture以及各自来源；当前Claude账号待办移除，历史批次标注为历史范围，Tailscale认证与其他门槛未免除。仅修改文档，无产品测试重跑或额外环境操作。
 
 本批文档核验：697个相对链接目标、477个锚点引用均有效；原42条文字/顺序/状态与HEAD一致、37项勾选保持，08/15/16当前摘要字节一致，git diff --check通过。仅13份docs修改，未修改代码或运行额外产品测试。
+
+
+## 外部安装结果与关闭条件复核（2026-10-31）
+
+以[24本轮结果](24-public-package-compatibility.md#external-installer-20261031)补齐部分进展，08/15/16同步37/42；未把VPS成功、Mac诊断成功或Claude范围移除转换成完整安装验收通过。
+
+七类对照：目录/SDK/host/plugin依赖本次无生产变更；RPC/准入/版本按实际A/B来源记录、无授权放宽；持久状态以同身份/凭据/基线/暂停/冲突核验、不修改ledger伪造清理；生命周期区分真实systemd成功与LaunchAgent首装失败，诊断变体不当作原生安装成功；文件/终端/TCP保留原失败及有界观察，不把15秒读期限误写成总恢复时限；CLI/安装区分服务安装和application_pending，B仍为未发布候选；行为证据只采用现有收据，未知网络根因及未执行步骤保持未验。专用测试状态仍有依赖，清理只报告已确证范围，不删除原身份或声明本批全部完成。本次仅补文档，不重复长测或宣称最新远端CI通过。
