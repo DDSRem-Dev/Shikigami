@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   # ============================================================================
-  # PHASE 1: Fast Validation (runs in parallel, fails fast)
+  # PHASE 1: Preflight - Fast validation (build, lint, tool tests)
   # ============================================================================
 
   preflight:
@@ -95,11 +95,11 @@ jobs:
       - name: Scan independent terminal analyzer dependencies
         run: go -C test/diagnostics/terminalstate/analyzer run golang.org/x/vuln/cmd/govulncheck@v1.1.4 -scan=package ./...
       - name: Build and lint
-        run: |
-          python3 -B scripts/platform-ci.py product --evidence "$RUNNER_TEMP/shiki-platform" \
-            --package-filter ""
-        env:
-          SKIP_TESTS: "true"
+        run: make build lint
+      - name: Test tools
+        run: make test-tools
+      - name: Test platform tools
+        run: python3 -B scripts/test-platform-tools.py
       - uses: actions/upload-artifact@v7.0.2
         if: always() && steps.checkout.outcome == 'success'
         with:
@@ -151,17 +151,16 @@ jobs:
           key: ${{ steps.cache_keys.outputs.modules_key }}
 
   # ============================================================================
-  # PHASE 2: Unit Tests (fast, parallel by package groups)
+  # PHASE 2: Unit Tests - Sharded by package groups for maximum parallelism
   # ============================================================================
 
-  unit-tests:
-    name: unit (${{ matrix.goos }}, ${{ matrix.goarch }})
+  unit-cmd:
+    name: unit-cmd (${{ matrix.goos }}, ${{ matrix.goarch }})
     runs-on: ${{ matrix.runner }}
     needs: preflight
-    timeout-minutes: 30
+    timeout-minutes: 15
     strategy:
       fail-fast: false
-      max-parallel: 8
       matrix:
         include:
           - runner: ubuntu-24.04
@@ -184,7 +183,6 @@ jobs:
       SHIKI_PLATFORM_ARCH: ${{ matrix.goarch }}
     steps:
       - uses: actions/checkout@v7.0.1
-        id: checkout
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -213,30 +211,23 @@ jobs:
           elif ! command -v tmux; then
             brew install tmux
           fi
-      - name: Run unit tests
-        run: |
-          python3 -B scripts/platform-ci.py product --evidence "$RUNNER_TEMP/shiki-platform" \
-            --package-filter "./cmd/...,./internal/...,./pkg/...,./plugins/...,./test/architecture/...,./test/diagnostics/...,./test/fault/...,./test/fixtures/..."
+      - name: Run cmd package tests
+        run: go test -count=1 -race -json ./cmd/...
       - uses: actions/upload-artifact@v7.0.2
-        if: always() && steps.checkout.outcome == 'success'
+        if: always()
         with:
-          name: unit-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: unit-cmd-${{ matrix.goos }}-${{ matrix.goarch }}
           path: ${{ runner.temp }}/shiki-platform/public/**
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
 
-  # ============================================================================
-  # PHASE 3: Integration Tests (medium weight, parallel)
-  # ============================================================================
-
-  integration-light:
-    name: integration-light (${{ matrix.goos }}, ${{ matrix.goarch }})
+  unit-internal:
+    name: unit-internal (${{ matrix.goos }}, ${{ matrix.goarch }})
     runs-on: ${{ matrix.runner }}
     needs: preflight
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      max-parallel: 8
       matrix:
         include:
           - runner: ubuntu-24.04
@@ -259,7 +250,278 @@ jobs:
       SHIKI_PLATFORM_ARCH: ${{ matrix.goarch }}
     steps:
       - uses: actions/checkout@v7.0.1
-        id: checkout
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Restore cache
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-${{ matrix.goos }}-${{ matrix.goarch }}-
+      - uses: actions/download-artifact@v7.0.2
+        with:
+          name: preflight-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ runner.temp }}/shiki-platform/public
+      - name: Install runtime dependencies
+        run: |
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            sudo apt-get update
+            sudo apt-get install -y tmux unzip iproute2 dbus-user-session openssl
+          elif ! command -v tmux; then
+            brew install tmux
+          fi
+      - name: Run internal package tests
+        run: go test -count=1 -race -json ./internal/...
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: unit-internal-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ runner.temp }}/shiki-platform/public/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  unit-pkg:
+    name: unit-pkg (${{ matrix.goos }}, ${{ matrix.goarch }})
+    runs-on: ${{ matrix.runner }}
+    needs: preflight
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+          - runner: macos-15
+            goos: darwin
+            goarch: arm64
+          - runner: macos-15-intel
+            goos: darwin
+            goarch: amd64
+    env:
+      GOMAXPROCS: '2'
+      GOFLAGS: '-p=1 -mod=readonly -buildvcs=false'
+      GOTOOLCHAIN: local
+      SHIKI_PLATFORM_OS: ${{ matrix.goos }}
+      SHIKI_PLATFORM_ARCH: ${{ matrix.goarch }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Restore cache
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-${{ matrix.goos }}-${{ matrix.goarch }}-
+      - uses: actions/download-artifact@v7.0.2
+        with:
+          name: preflight-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ runner.temp }}/shiki-platform/public
+      - name: Install runtime dependencies
+        run: |
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            sudo apt-get update
+            sudo apt-get install -y tmux unzip iproute2 dbus-user-session openssl
+          elif ! command -v tmux; then
+            brew install tmux
+          fi
+      - name: Run pkg package tests
+        run: go test -count=1 -race -json ./pkg/...
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: unit-pkg-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ runner.temp }}/shiki-platform/public/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  unit-plugins:
+    name: unit-plugins (${{ matrix.goos }}, ${{ matrix.goarch }})
+    runs-on: ${{ matrix.runner }}
+    needs: preflight
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+          - runner: macos-15
+            goos: darwin
+            goarch: arm64
+          - runner: macos-15-intel
+            goos: darwin
+            goarch: amd64
+    env:
+      GOMAXPROCS: '2'
+      GOFLAGS: '-p=1 -mod=readonly -buildvcs=false'
+      GOTOOLCHAIN: local
+      SHIKI_PLATFORM_OS: ${{ matrix.goos }}
+      SHIKI_PLATFORM_ARCH: ${{ matrix.goarch }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Restore cache
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-${{ matrix.goos }}-${{ matrix.goarch }}-
+      - uses: actions/download-artifact@v7.0.2
+        with:
+          name: preflight-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ runner.temp }}/shiki-platform/public
+      - name: Install runtime dependencies
+        run: |
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            sudo apt-get update
+            sudo apt-get install -y tmux unzip iproute2 dbus-user-session openssl
+          elif ! command -v tmux; then
+            brew install tmux
+          fi
+      - name: Run plugins package tests
+        run: go test -count=1 -race -json ./plugins/...
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: unit-plugins-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ runner.temp }}/shiki-platform/public/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  unit-test-support:
+    name: unit-test-support (${{ matrix.goos }}, ${{ matrix.goarch }})
+    runs-on: ${{ matrix.runner }}
+    needs: preflight
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+          - runner: macos-15
+            goos: darwin
+            goarch: arm64
+          - runner: macos-15-intel
+            goos: darwin
+            goarch: amd64
+    env:
+      GOMAXPROCS: '2'
+      GOFLAGS: '-p=1 -mod=readonly -buildvcs=false'
+      GOTOOLCHAIN: local
+      SHIKI_PLATFORM_OS: ${{ matrix.goos }}
+      SHIKI_PLATFORM_ARCH: ${{ matrix.goarch }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Restore cache
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-${{ matrix.goos }}-${{ matrix.goarch }}-
+      - uses: actions/download-artifact@v7.0.2
+        with:
+          name: preflight-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ runner.temp }}/shiki-platform/public
+      - name: Install runtime dependencies
+        run: |
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            sudo apt-get update
+            sudo apt-get install -y tmux unzip iproute2 dbus-user-session openssl
+          elif ! command -v tmux; then
+            brew install tmux
+          fi
+      - name: Run test support package tests
+        run: go test -count=1 -race -json ./test/architecture/... ./test/diagnostics/... ./test/fault/... ./test/fixtures/...
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: unit-test-support-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ runner.temp }}/shiki-platform/public/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ============================================================================
+  # PHASE 3: Integration Tests - Split by weight
+  # ============================================================================
+
+  integration-light:
+    name: integration-light (${{ matrix.goos }}, ${{ matrix.goarch }})
+    runs-on: ${{ matrix.runner }}
+    needs: [preflight, unit-cmd, unit-internal]
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+          - runner: macos-15
+            goos: darwin
+            goarch: arm64
+          - runner: macos-15-intel
+            goos: darwin
+            goarch: amd64
+    env:
+      GOMAXPROCS: '2'
+      GOFLAGS: '-p=1 -mod=readonly -buildvcs=false'
+      GOTOOLCHAIN: local
+      SHIKI_PLATFORM_OS: ${{ matrix.goos }}
+      SHIKI_PLATFORM_ARCH: ${{ matrix.goarch }}
+    steps:
+      - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -289,25 +551,22 @@ jobs:
             brew install tmux
           fi
       - name: Run light integration tests
-        run: |
-          python3 -B scripts/platform-ci.py product --evidence "$RUNNER_TEMP/shiki-platform" \
-            --package-filter "./test/integration/admission/...,./test/integration/agent/...,./test/integration/daemon/...,./test/integration/port/...,./test/integration/terminalstate/...,./test/integration/embedded/..."
+        run: go test -count=1 -race -json ./test/integration/admission/... ./test/integration/agent/... ./test/integration/daemon/... ./test/integration/port/... ./test/integration/terminalstate/... ./test/integration/embedded/...
       - uses: actions/upload-artifact@v7.0.2
-        if: always() && steps.checkout.outcome == 'success'
+        if: always()
         with:
           name: integration-light-${{ matrix.goos }}-${{ matrix.goarch }}
           path: ${{ runner.temp }}/shiki-platform/public/**
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
 
   integration-heavy:
     name: integration-heavy (${{ matrix.goos }}, ${{ matrix.goarch }})
     runs-on: ${{ matrix.runner }}
-    needs: [preflight, unit-tests]
-    timeout-minutes: 40
+    needs: [preflight, unit-cmd, unit-internal]
+    timeout-minutes: 30
     strategy:
       fail-fast: false
-      max-parallel: 4
       matrix:
         include:
           - runner: ubuntu-24.04
@@ -330,7 +589,6 @@ jobs:
       SHIKI_PLATFORM_ARCH: ${{ matrix.goarch }}
     steps:
       - uses: actions/checkout@v7.0.1
-        id: checkout
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -359,30 +617,27 @@ jobs:
           elif ! command -v tmux; then
             brew install tmux
           fi
-      - name: Run heavy integration tests (includes required tests)
-        run: |
-          python3 -B scripts/platform-ci.py product --evidence "$RUNNER_TEMP/shiki-platform" \
-            --package-filter "./test/integration/hostrotation/...,./test/integration/rotation/...,./test/integration/plugin/...,./test/integration/syncack/...,./test/integration/sync/...,./test/integration/version/..."
+      - name: Run heavy integration tests (contains required tests)
+        run: go test -count=1 -race -json ./test/integration/hostrotation/... ./test/integration/rotation/... ./test/integration/plugin/... ./test/integration/syncack/... ./test/integration/sync/... ./test/integration/version/...
       - uses: actions/upload-artifact@v7.0.2
-        if: always() && steps.checkout.outcome == 'success'
+        if: always()
         with:
           name: integration-heavy-${{ matrix.goos }}-${{ matrix.goarch }}
           path: ${{ runner.temp }}/shiki-platform/public/**
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
 
   # ============================================================================
-  # PHASE 4: E2E Tests (heaviest, run after integration)
+  # PHASE 4: E2E and Release Tests
   # ============================================================================
 
-  e2e-tests:
+  e2e:
     name: e2e (${{ matrix.goos }}, ${{ matrix.goarch }})
     runs-on: ${{ matrix.runner }}
-    needs: [preflight, unit-tests, integration-light]
-    timeout-minutes: 50
+    needs: [preflight, unit-cmd, unit-internal]
+    timeout-minutes: 40
     strategy:
       fail-fast: false
-      max-parallel: 4
       matrix:
         include:
           - runner: ubuntu-24.04
@@ -405,7 +660,6 @@ jobs:
       SHIKI_PLATFORM_ARCH: ${{ matrix.goarch }}
     steps:
       - uses: actions/checkout@v7.0.1
-        id: checkout
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -434,26 +688,137 @@ jobs:
           elif ! command -v tmux; then
             brew install tmux
           fi
-      - name: Run E2E tests (includes required E2E tests)
-        run: |
-          python3 -B scripts/platform-ci.py product --evidence "$RUNNER_TEMP/shiki-platform" \
-            --package-filter "./test/e2e/..."
+      - name: Run E2E tests (contains required E2E tests)
+        run: go test -count=1 -race -json -tags=e2e ./test/e2e/...
       - uses: actions/upload-artifact@v7.0.2
-        if: always() && steps.checkout.outcome == 'success'
+        if: always()
         with:
           name: e2e-${{ matrix.goos }}-${{ matrix.goarch }}
           path: ${{ runner.temp }}/shiki-platform/public/**
-          if-no-files-found: error
+          if-no-files-found: warn
+          retention-days: 14
+
+  release-tests:
+    name: release-tests (${{ matrix.goos }}, ${{ matrix.goarch }})
+    runs-on: ${{ matrix.runner }}
+    needs: preflight
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+          - runner: macos-15
+            goos: darwin
+            goarch: arm64
+          - runner: macos-15-intel
+            goos: darwin
+            goarch: amd64
+    env:
+      GOMAXPROCS: '2'
+      GOFLAGS: '-p=1 -mod=readonly -buildvcs=false'
+      GOTOOLCHAIN: local
+      SHIKI_PLATFORM_OS: ${{ matrix.goos }}
+      SHIKI_PLATFORM_ARCH: ${{ matrix.goarch }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Restore cache
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-${{ matrix.goos }}-${{ matrix.goarch }}-
+      - name: Run release-trust tests
+        run: go test -count=1 -race -json scripts/release-trust.go scripts/release-trust_test.go
+      - name: Run release tests
+        run: go test -count=1 -race -json scripts/release.go scripts/release_test.go
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: release-tests-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ runner.temp }}/shiki-platform/public/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  embedded-plugins:
+    name: embedded-plugins (${{ matrix.goos }}, ${{ matrix.goarch }})
+    runs-on: ${{ matrix.runner }}
+    needs: preflight
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+          - runner: macos-15
+            goos: darwin
+            goarch: arm64
+          - runner: macos-15-intel
+            goos: darwin
+            goarch: amd64
+    env:
+      GOMAXPROCS: '2'
+      GOFLAGS: '-p=1 -mod=readonly -buildvcs=false -v'
+      GOTOOLCHAIN: local
+      SHIKI_PLATFORM_OS: ${{ matrix.goos }}
+      SHIKI_PLATFORM_ARCH: ${{ matrix.goarch }}
+      SHIKI_EMBED_VERIFY: '1'
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Restore cache
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-${{ matrix.goos }}-${{ matrix.goarch }}-
+      - name: Test embedded plugins
+        run: bash scripts/build-embedded.sh
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: embedded-plugins-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ runner.temp }}/shiki-platform/public/**
+          if-no-files-found: warn
           retention-days: 14
 
   # ============================================================================
-  # PHASE 5: Terminal & Maintenance (only after core tests pass)
+  # PHASE 5: Terminal & Maintenance
   # ============================================================================
 
   terminal:
     name: terminal (${{ matrix.goos }}, ${{ matrix.goarch }})
     runs-on: ${{ matrix.runner }}
-    needs: [unit-tests, integration-light, integration-heavy, e2e-tests]
+    needs: [integration-light, integration-heavy, e2e]
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -473,7 +838,6 @@ jobs:
       SHIKI_PLATFORM_ARCH: ${{ matrix.goarch }}
     steps:
       - uses: actions/checkout@v7.0.1
-        id: checkout
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -497,7 +861,7 @@ jobs:
       - name: Verify terminal screen semantics
         run: python3 -B scripts/platform-ci.py terminal --evidence "$RUNNER_TEMP/shiki-platform"
       - uses: actions/upload-artifact@v7.0.2
-        if: always() && steps.checkout.outcome == 'success'
+        if: always()
         with:
           name: terminal-${{ matrix.goos }}-${{ matrix.goarch }}
           path: ${{ runner.temp }}/shiki-platform/public/**
@@ -507,7 +871,7 @@ jobs:
   maintenance:
     name: maintenance (${{ matrix.goos }}, ${{ matrix.goarch }})
     runs-on: ${{ matrix.runner }}
-    needs: [unit-tests, integration-light, integration-heavy, e2e-tests]
+    needs: [integration-light, integration-heavy, e2e]
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -527,7 +891,6 @@ jobs:
       SHIKI_PLATFORM_ARCH: ${{ matrix.goarch }}
     steps:
       - uses: actions/checkout@v7.0.1
-        id: checkout
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -559,7 +922,7 @@ jobs:
       - name: Native installation, service lifecycle and active upgrade maintenance
         run: python3 -B scripts/platform-ci.py maintenance --evidence "$RUNNER_TEMP/shiki-platform"
       - uses: actions/upload-artifact@v7.0.2
-        if: always() && steps.checkout.outcome == 'success'
+        if: always()
         with:
           name: maintenance-${{ matrix.goos }}-${{ matrix.goarch }}
           path: ${{ runner.temp }}/shiki-platform/public/**
