@@ -58,6 +58,7 @@ def input_hashes(repository):
                      for name, data in contents.items())
     source = {name: value for name, value in hashes.items()
               if not name.startswith(".github/workflows/") and
+              name != "scripts/ci_go_cache.py" and
               (root_embed or not (name.startswith("docs/") or name in ROOT_DOCUMENTS))}
     dependencies = {name: value for name, value in hashes.items()
                     if Path(name).name in ("go.mod", "go.sum", "go.work", "go.work.sum") or

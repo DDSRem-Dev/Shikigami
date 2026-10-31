@@ -1022,7 +1022,7 @@ m6专用agent正常重启后，同一节点/IP已online，既有server却永久R
 
 `41239995440`中race预热、Intel E2E/heavy、Linux arm64 E2E和embedded已通过；terminal/maintenance四项失败均为不可解析的`actions/download-artifact@v7.0.2`版本，未执行产品测试。CI现改用release workflow同样使用的`v8.0.2`，待下一轮验证artifact下载及最终维护阶段。
 
-`41242641679`显示workflow配置变化会使Go cache source key无必要地失效，Intel preflight在20分钟内无法完成再次冷race构建，其他平台通过。`scripts/ci_go_cache.py`现排除`.github/workflows`对构建来源的影响，同时保留非Actions Go工具版本变化；16项cache测试、83项脚本测试、actionlint和diff均通过，待远端复验。
+`41242641679`显示workflow配置变化会使Go cache source key无必要地失效，Intel preflight在20分钟内无法完成再次冷race构建，其他平台通过。`scripts/ci_go_cache.py`现排除`.github/workflows`及自身helper对构建来源的影响，同时保留非Actions Go工具版本变化；16项cache测试、83项脚本测试、actionlint和diff均通过，待远端复验。
 
 
 ## 原生CI安装路径修复与证据同步（2026-10-31）

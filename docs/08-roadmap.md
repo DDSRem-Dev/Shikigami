@@ -469,4 +469,4 @@
 
 `41239995440`验证race预热和10秒恢复重试后，主矩阵、Intel E2E/heavy、Linux arm64 E2E及embedded均通过；terminal/maintenance四个job在启动阶段因`actions/download-artifact@v7.0.2`不存在而失败。已统一到release workflow已验证的`v8.0.2`，下一轮只需确认artifact下载后的terminal/maintenance与最终workflow结论。
 
-`41242641679`因CI workflow变更使cache source key重新冷启动，Intel preflight在20分钟预算内完成非race build/lint后仍未完成race预热，导致下游跳过；其余平台无失败。已让缓存来源hash忽略workflow编排文件、仅保留实际Go工具版本变化，并通过16项缓存专项、83项脚本、actionlint和diff检查；下一轮应复用现有native/race缓存并验证完整矩阵。
+`41242641679`因CI workflow变更使cache source key重新冷启动，Intel preflight在20分钟预算内完成非race build/lint后仍未完成race预热，导致下游跳过；其余平台无失败。已让缓存来源hash忽略workflow编排文件和CI helper脚本、仅保留实际Go工具版本变化，并通过16项缓存专项、83项脚本、actionlint和diff检查；下一轮应复用现有native/race缓存并验证完整矩阵。

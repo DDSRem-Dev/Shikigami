@@ -1474,4 +1474,4 @@ docs02明确macOS纯userspace承载与代理边界，08/15/16同步37/42；完�
 
 `41239995440`确认race缓存与恢复竞态修复后主产品矩阵通过；terminal/maintenance仅因CI引用不存在的download-artifact v7.0.2在动作解析阶段失败。该引用已统一为release中已使用的v8.0.2；不改变artifact内容、平台证据、终端/维护测试或产品架构，下一轮验证动作下载和最终清理。
 
-`41242641679`暴露缓存键把workflow编排变化误当作Go源码，Intel preflight因重复冷race构建在20分钟边界被取消；生产代码、测试断言和其他平台均无新增失败。缓存审查已将`.github/workflows`从source hash排除，并过滤Actions版本而保留Go工具版本依赖；16项cache测试、actionlint、83项脚本测试和diff通过，下一轮验证跨job复用及terminal/maintenance。
+`41242641679`暴露缓存键把workflow编排变化误当作Go源码，Intel preflight因重复冷race构建在20分钟边界被取消；生产代码、测试断言和其他平台均无新增失败。缓存审查已将`.github/workflows`和CI helper从source hash排除，并过滤Actions版本而保留Go工具版本依赖；16项cache测试、actionlint、83项脚本测试和diff通过，下一轮验证跨job复用及terminal/maintenance。
