@@ -66,6 +66,40 @@ def require_unused(lookup, name):
     raise RuntimeError("refusing to reuse a native acceptance account or group")
 
 
+def create_acceptance_user(username, group, home):
+    """Create the disposable account with bounded retries for passwd locks."""
+    command = ["useradd", "--gid", str(group.gr_gid), "--no-create-home",
+               "--home-dir", home, "--shell", "/bin/bash", username]
+    last_timeout = None
+    for attempt in range(3):
+        try:
+            response = run(command, check=False, timeout=20)
+        except subprocess.TimeoutExpired as error:
+            last_timeout = error
+            try:
+                account = pwd.getpwnam(username)
+            except KeyError:
+                if attempt < 2:
+                    time.sleep(0.25 * (attempt + 1))
+                    continue
+                raise
+            if account.pw_gid == group.gr_gid and account.pw_dir == str(home):
+                return subprocess.CompletedProcess(command, 0)
+            raise RuntimeError("native acceptance account identity differs after timeout")
+        if response.returncode == 0:
+            return response
+        try:
+            account = pwd.getpwnam(username)
+        except KeyError:
+            return response
+        if account.pw_gid == group.gr_gid and account.pw_dir == str(home):
+            return subprocess.CompletedProcess(command, 0)
+        return response
+    if last_timeout is not None:
+        raise last_timeout
+    raise RuntimeError("native acceptance account creation exhausted retries")
+
+
 def system_directory_ancestors(path):
     """Inspect every ancestor without trusting symlinks or changing permissions."""
     if not path.is_absolute() or path != Path(os.path.normpath(path)):
@@ -311,10 +345,19 @@ def main():
             account_step(result, "create-group", lambda: run(["groupadd", username], check=False))
             group = grp.getgrnam(username)
             created = True
-            account_step(result, "create-user", lambda: run(["useradd", "--gid", str(group.gr_gid), "--create-home", "--home-dir", root / "home", "--shell", "/bin/bash", username], check=False))
+            # Pre-create the dedicated home and let useradd only update the
+            # account database. On hosted runners, useradd's --create-home
+            # path can block while copying the system skeleton or consulting a
+            # slow account backend; that leaves the acceptance run stuck before
+            # any product work begins. The home is still owned and protected
+            # immediately after the account is committed below.
+            home = root / "home"
+            home.mkdir(mode=0o700)
+            account_step(result, "create-user", lambda: create_acceptance_user(username, group, home))
             account = pwd.getpwnam(username)
         finally:
             signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+        os.chown(root / "home", account.pw_uid, account.pw_gid)
         os.chmod(root / "home", 0o700)
         tmux = Path(f"/tmp/tmux-{account.pw_uid}")
         if tmux.exists() or tmux.is_symlink():

@@ -1024,6 +1024,8 @@ m6专用agent正常重启后，同一节点/IP已online，既有server却永久R
 
 `41242641679`显示workflow配置变化会使Go cache source key无必要地失效，Intel preflight在20分钟内无法完成再次冷race构建，其他平台通过。`scripts/ci_go_cache.py`现排除`.github/workflows`及自身helper对构建来源的影响，同时保留非Actions Go工具版本变化；16项cache测试、83项脚本测试、actionlint和diff均通过，待远端复验。
 
+`41247430410`的主矩阵、artifact链路、WSL2和大部分terminal/maintenance任务已通过；旧Linux amd64 systemd在隔离账号`useradd --create-home`阶段60秒超时，旧macOS arm64 terminal语义专项约30秒失败。修复已保持隔离账号、真实systemd和完整终端断言：systemd预创建私有home并使用`--no-create-home`，账号创建遇到短暂passwd锁时最多三次20秒重试，仅在精确UID/GID/home身份已提交时接受超时后的完成；终端脚本每次使用新建0700 `TMUX_TMPDIR`。本地平台工具29项、脚本83项、actionlint、终端专项3次及`git diff --check`通过；旧run重跑的Linux maintenance已通过，待本提交远端CI作为最终证据。
+
 
 ## 原生CI安装路径修复与证据同步（2026-10-31）
 

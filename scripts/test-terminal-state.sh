@@ -6,6 +6,12 @@ main() {
     exit 1
   fi
   if [[ $# != 0 ]]; then echo 'Usage: test-terminal-state.sh' >&2; exit 1; fi
+  # Keep the terminal fixture's tmux socket private to this acceptance run.
+  # Hosted macOS runners can retain a user tmux socket from an interrupted
+  # process; sharing it makes the first pane attach nondeterministic.
+  shiki_tmux_tmpdir="$SHIKI_RUN_EVIDENCE_DIR/tmux-tmp"
+  mkdir -m 700 "$shiki_tmux_tmpdir"
+  export TMUX_TMPDIR="$shiki_tmux_tmpdir"
   shiki_terminal_analyzer="$SHIKI_RUN_EVIDENCE_DIR/terminal-analyzer"
   shiki_terminal_test="$SHIKI_RUN_EVIDENCE_DIR/terminal-state.test"
   go -C test/diagnostics/terminalstate/analyzer build -mod=readonly -trimpath -o "$shiki_terminal_analyzer" .

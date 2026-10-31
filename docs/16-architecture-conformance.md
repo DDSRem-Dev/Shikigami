@@ -1475,3 +1475,5 @@ docs02明确macOS纯userspace承载与代理边界，08/15/16同步37/42；完�
 `41239995440`确认race缓存与恢复竞态修复后主产品矩阵通过；terminal/maintenance仅因CI引用不存在的download-artifact v7.0.2在动作解析阶段失败。该引用已统一为release中已使用的v8.0.2；不改变artifact内容、平台证据、终端/维护测试或产品架构，下一轮验证动作下载和最终清理。
 
 `41242641679`暴露缓存键把workflow编排变化误当作Go源码，Intel preflight因重复冷race构建在20分钟边界被取消；生产代码、测试断言和其他平台均无新增失败。缓存审查已将`.github/workflows`和CI helper从source hash排除，并过滤Actions版本而保留Go工具版本依赖；16项cache测试、actionlint、83项脚本测试和diff通过，下一轮验证跨job复用及terminal/maintenance。
+
+`41247430410`暴露两项托管runner收尾不稳定：Linux amd64 systemd旧路径在`useradd --create-home`达到60秒预算，macOS arm64 terminal语义阶段约30秒失败；其余主矩阵、artifact、WSL2及多数收尾阶段通过。七类架构复核确认修复只涉及验收夹具的账号建立与终端socket隔离，不改变插件/SDK-host边界、RPC准入授权、持久状态与revision/去重、进程生命周期、文件/终端/TCP语义或CLI/安装契约。systemd现在预创建私有home并对短暂passwd锁进行身份校验后的有界重试；终端每次运行隔离0700 `TMUX_TMPDIR`。本地29项平台工具、83项脚本、actionlint、终端重复运行和diff均通过；旧run重跑Linux maintenance通过，最终远端新提交验证仍待。

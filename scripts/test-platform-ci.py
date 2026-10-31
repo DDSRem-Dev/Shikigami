@@ -549,6 +549,16 @@ class PlatformAcceptanceTests(unittest.TestCase):
         self.assertEqual(public["account_setup"], [{"phase": "create-user", "outcome": "timeout", "seconds": 60.0}])
         self.assertNotIn(secret, json.dumps(public))
 
+    def test_acceptance_user_creation_avoids_skeleton_copy_and_bounds_retries(self):
+        group = SimpleNamespace(gr_gid=4242)
+        response = SimpleNamespace(returncode=0, stdout="", stderr="")
+        with patch.object(systemd, "run", return_value=response) as command:
+            systemd.create_acceptance_user("shikici123", group, self.root / "home")
+        args, kwargs = command.call_args
+        self.assertIn("--no-create-home", args[0])
+        self.assertNotIn("--create-home", args[0])
+        self.assertEqual(kwargs["timeout"], 20)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
