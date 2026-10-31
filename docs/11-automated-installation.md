@@ -1,6 +1,6 @@
 # 自动化安装与运维契约
 
-**本文保留安装流程契约。仓库已实现本地固定版本 bundle 校验、事务安装/回滚、服务渲染、异步登录引导与本地就绪诊断；真实 systemd 容器与原生 macOS LaunchAgent 已有下述限定环境生命周期证据；当前公开预发布 v0.0.1-alpha.2 已由 tag 自动构建、签名、发布并更新 Homebrew Formula，实际分发与平台证据见[22](22-homebrew-distribution.md)。五平台本地完整产品/服务验收已通过；真实外部身份跨安装器升级、服务恢复替代验收仍需单独验收；真实Claude登录/推理不纳入当前交付验收且未实测，见[验收范围](#claude-acceptance-scope-20261031)；按用户约束不重启实际Mac/VPS，方案见[替代验收](#no-host-reboot-acceptance-20261031)。**
+**本文保留安装流程契约。仓库已实现本地固定版本 bundle 校验、事务安装/回滚、服务渲染、异步登录引导与本地就绪诊断；真实 systemd 容器与原生 macOS LaunchAgent 已有下述限定环境生命周期证据；当前公开预发布 v0.0.1-alpha.2 已由 tag 自动构建、签名、发布并更新 Homebrew Formula，实际分发与平台证据见[22](22-homebrew-distribution.md)。五平台本地完整产品/服务验收已通过；真实外部身份跨安装器升级、服务恢复替代验收及卸载保持已通过，见[24终态](24-public-package-compatibility.md#installer-final-20261031)；两项安装门槛已关闭，路线图39/42；真实Claude登录/推理不纳入当前交付验收且未实测，见[验收范围](#claude-acceptance-scope-20261031)；按用户约束不重启实际Mac/VPS，方案见[替代验收](#no-host-reboot-acceptance-20261031)。**
 
 `scripts/install.sh`、`install-client.sh`、`uninstall.sh` 与短时运维 helper `shiki-install` 已存在；已完成专用公钥的四目标签名及验签。[当前公开 Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.2) 来自提交 `fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2`、成功自动发布运行 `40912019720`，公开资产的下载验证结果见[发行证据](./15-implementation-status.md#evidence-public-alpha2-release-20261030)。安装只接受本地 bundle、固定版本及调用者从独立可信渠道取得的 checksum pin。可信源码工具 `scripts/release-trust.go fetch` 提供显式HTTPS归档/签名地址、独立可信公钥和固定版本/平台的下载验签入口，先认证签名再下载归档，成功后生成私有副本/pin/receipt；解包与安装仍是显式后续步骤，工具不指定正式来源或建立公钥信任。GitHub下载地址会重定向，现有 `fetch` 拒绝重定向；应使用 `gh release download v0.0.1-alpha.2 --repo DDSRem-Dev/Shikigami` 取回资产，再用可信源码 verifier 和独立可信公钥离线验签。命令与限制见发布认证，本批验收进度见16。下列完整就绪和运维要求不因预发布成功而降低。
 
@@ -225,4 +225,4 @@ systemd 的 `WorkingDirectory` 使用规范 `~`（按 `User=` 或用户 manager 
 
 已有持久卷二次PID1启动、CLI auto_start关闭且服务先于CLI/probe出现、身份/资源/业务恢复证据见[二次启动](15-implementation-status.md#evidence-service-boot-validation)；原生当前GUI域LaunchAgent bootstrap、崩溃恢复、升级回滚与清理见[LaunchAgent](15-implementation-status.md#evidence-launchd-validation)，公开包维护及五平台证据见24/26。先复用这些已完成范围，新增重点是保留官方tsnet身份穿过真实安装器和专用服务管理流程；原手动进程替换不能当该组合已完成。若标准服务名称与用户既有安装冲突，改在清洁原生CI或隔离环境完成相应环节，记录其外部身份覆盖边界，不覆盖用户服务。
 
-这是用户明确环境约束下的替代执行方案，不是新验收通过记录。替代组合实际通过且其他条件齐备后，按其覆盖关闭对应功能门槛；真实设备重启继续作为未实测支持边界，不再无限等待用户提供该操作。其余Tailscale认证和生产资源归因不由此免除；真实Claude登录/推理按用户后续明确要求移出交付验收，见[验收范围](#claude-acceptance-scope-20261031)；本次不改原42条文字、不增加勾选，也不更改生产状态枚举、协议或自动启动行为。
+上述替代组合现已实际完成，证据及失败边界见[24终态](24-public-package-compatibility.md#installer-final-20261031)，据此关闭安装器/服务与升级回滚/卸载两项；Mac和VPS均未重启或注销。以下为制定方案时的判定原则：替代组合实际通过且其他条件齐备后，按其覆盖关闭对应功能门槛；真实设备重启继续作为未实测支持边界，不再无限等待用户提供该操作。其余Tailscale认证和生产资源归因不由此免除；真实Claude登录/推理按用户后续明确要求移出交付验收，见[验收范围](#claude-acceptance-scope-20261031)；制定方案本身不增加勾选；本轮仅在实际组合通过后勾选原两条，不改42条文字，也不更改生产状态枚举、协议或自动启动行为。

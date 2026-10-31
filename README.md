@@ -2,7 +2,7 @@
 
 通过本地 CLI/TUI 和常驻 agent，使用远端 VPS 上的 tmux / Claude Code。核心链路采用 Connect/protobuf over HTTP/2；文件同步和 TCP 转发由双端插件执行。
 
-**已提供公开 alpha，完整 Phase 0–5 尚未交付。** CLI、agent、daemon、真实 tmux 终端、双端同步/转发插件、监控、配置快照和 TUI 已有实现与本地验收。安装升级/回滚和内嵌产物已有隔离测试；原生macOS LaunchAgent和Linux容器真实systemd已通过限定生命周期验收，官方tsnet首次登录、进程身份保持及真实P2P/DERP业务流已有验收；完整认证生命周期、主机重启/登录恢复、完整平台与当前版本长期资源稳定仍待完成。证据见 [实施记录](docs/15-implementation-status.md) 和 [架构一致性检查](docs/16-architecture-conformance.md)，完整范围以 [路线图](docs/08-roadmap.md) 为准。
+**已提供公开 alpha，完整 Phase 0–5 尚未交付。** CLI、agent、daemon、真实 tmux 终端、双端同步/转发插件、监控、配置快照和 TUI 已有实现与本地验收。安装升级/回滚和内嵌产物已有隔离测试；原生macOS LaunchAgent和Linux容器真实systemd已通过限定生命周期验收，官方tsnet首次登录、进程身份保持及真实P2P/DERP业务流已有验收；同源五平台产品/服务及官方身份下安装、升级/回滚、服务恢复替代验收已通过，路线图39/42；完整认证生命周期、生产资源归因及最终支持声明仍待完成。实际主机重启/重新登录未实测，真实Claude登录/推理不纳入交付验收；当前master修复尚未随公开alpha.2发布。证据见 [实施记录](docs/15-implementation-status.md) 和 [架构一致性检查](docs/16-architecture-conformance.md)，完整范围以 [路线图](docs/08-roadmap.md) 为准。
 
 ## 安装
 

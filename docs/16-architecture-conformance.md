@@ -1,6 +1,8 @@
 # 架构与文档一致性检查
 
-**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** VPS同官方身份实际安装/升级/回滚、systemd恢复及卸载保持已通过。Mac已撤销被现场业务反证的全socket解绑方案，改为保留SDK默认UDP/接口策略并读取现有静态HTTP(S)系统代理；整包node/architecture race及代理优先/绕过/TLS回归通过，待冻结源码执行完整Mac安装矩阵。12小时、Auth Key到期、既有原生平台证据保留；完整认证、生产资源归因及最终支持仍待。真实Claude登录/推理按[11范围](11-automated-installation.md#claude-acceptance-scope-20261031)排除，Mac/VPS不重启、不注销。两项完成后按用户要求清理全部专用测试节点、身份和临时文件；当前依赖尚在，不提前勾选或宣称已清理，详见[24](24-public-package-compatibility.md#external-installer-20261031)。
+**当前进度（2026-10-31）：39/42，剩余3个复合门槛。** 已关闭Phase 4安装器/服务及升级回滚/卸载两项：Mac冻结8fdfe25的实际安装、重复、A→B→A、SIGKILL自动恢复、管理器重注册及卸载保持全通过，结合VPS官方身份systemd矩阵和既有历史公开包/平台证据，Phase 4为6/6。原身份/凭据、持久状态及新终端/双向同步/TCP保持，旧流不重放且旧worker回收；详见[24终态](24-public-package-compatibility.md#installer-final-20261031)。两端专用测试进程、VPS测试账户/home及两个Tailscale节点已移除；Mac已清理233个专用临时根及测试home、旧tmux会话，正式签名备份保持。完整Tailscale认证、生产资源归因及最终支持声明仍未关闭。实际主机重启/重新登录未执行；真实Claude登录/推理按用户要求排除且未实测。当前修复在master，尚未发布新版本；历史失败和CI账号创建超时保留。
+
+**本轮CI状态（2026-10-31）：** 最终源码8fdfe25的[CI41197195478](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41197195478)尚未全绿：Linux arm64在原生安装/服务生命周期/升级维护阶段运行60秒后失败，内部具体步骤因安全artifact读取TLS超时尚未核实；不能套用上一轮13bcd0a的useradd超时结论。其他仍在运行的任务不计通过，最终支持门槛继续保留。本机相关race与实际Mac/VPS安装矩阵各自范围的通过不等同整轮远端CI成功。
 
 **最近已核验CI（本批修复前）：** 文档提交3b2d360的[CI41131301002](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41131301002)已completed/success、13/13通过，实际32分43秒。代码提交045b463的[CI41125907702](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41125907702)也已13/13通过，五平台各730文件源码摘要、必需阶段及清理已独立核验；其整轮46分51秒→36分09秒的性能比较仍按冷暖缓存/并行/排队边界记录于[26](26-native-platform-acceptance.md#ci-045-final-20261031)。下述既有CI不代表本批新修改已通过远端CI；本批相关本地race已通过，未重跑12小时。
 
@@ -1417,6 +1419,8 @@ CI复现的obsolete-selection测试仅修正已有maintenance cooldown竞态允�
 
 ## Mac嵌入SDK路由与准入测试复核（2026-10-31）
 
+**历史已撤销方案：** 下述全socket解绑已被真实业务反证，当前实现以[最终系统代理适配](24-public-package-compatibility.md#macos-system-proxy-20261031)为准。
+
 七类审查：①平台网络适配仅位于internal/node，插件实现/SDK及host依赖方向不变；②RPC、Token、peer身份/代际、能力、gVisor-only拨号与无系统回退保持，整包node race覆盖；③无配置schema/持久状态/revision/去重改动，测试Token只改变准备时序；④SDK进程级网络策略先于Start，单Node退出不恢复，固定SDK采用fake TUN/router且无系统网络变更；⑤外层socket遵循OS路由，终端/文件/TCP预算和语义不变，不以代理绕过业务授权；⑥生成服务/plist和安装器参数未修改，旧公开包不改写，Mac完整实际矩阵仍待；⑦独立对照及真实socket回归与node/architecture race通过，准入overlay同测红绿及33项race通过，安全工具28项通过，不将受控复现冒充历史CI确切根因。
 
 docs02明确macOS纯userspace承载与代理边界，08/15/16同步37/42；完整认证与生产资源门槛独立保留。按用户要求最终将清理所有项目专用测试身份/节点和临时文件，但依赖结束前不删除运行材料。独立review核对SDK无kernel TUN、业务无系统TCP回退及两项最小关闭矩阵；源码适配仅影响Darwin，无需引入隐式代理配置或修改系统tailscaled。
@@ -1430,3 +1434,14 @@ docs02明确macOS纯userspace承载与代理边界，08/15/16同步37/42；完�
 ## 系统代理适配实现的七类复核（2026-10-31）
 
 目录/依赖：平台策略和受限解析位于internal/node，host/plugin/SDK边界及go.mod未改。RPC/授权：仅SDK HTTP(S)代理解析改变，业务transport仍禁用代理且直接用户态peer拨号，未增加fallback或能力。状态：进程启动一次不可变快照，多Node共用；无配置schema/持久状态/revision改动。生命周期：有界scutil、越限取消/回收、固定初始化错误及状态锁关闭；Node退出不重置SDK全局解析器。I/O：保持SDK默认UDP，实际CONNECT仍校验目标TLS，代理失败不冒充强制出口隔离；生产终端/文件/TCP预算不变。CLI/安装：不改生成服务或参数、不把代理URL写入plist/配置，不索取凭据；系统变更需进程重启。证据：实际socket/CONNECT/命令边界、node/architecture race及新增scheme专项通过，独立审查发现的env凭据泄露和scheme优先问题均已修复；旧方案失败与尚未执行的Mac矩阵明确区分。08/15/16保持37/42，关闭仍须实际组合证据。
+
+
+## 安装两项关闭的最终七类复核（2026-10-31）
+
+目录/依赖继续保持plugins业务、host与SDK分层；本轮仅Darwin SDK代理适配，无go.mod变更。RPC/授权用真实官方tsnet与原Token、daemon/peer身份核验，不把本地ready当外部ready。持久状态逐项保留mapping/forward spec、旧基线、暂停/冲突、配置与凭据，无手改ledger；辅助函数等待durable baseline不改变产品冲突规则。生命周期实际安装器A→B→A、SIGKILL与管理器重注册均有先于CLI的新代际，旧worker/流回收和uninstall数据保持已独立核验。文件/终端/TCP六组业务及四次EOF无重放通过，原预算不变。CLI/安装来源为同源本地完整包，历史发行兼容另复用真实公开包证据，不伪称新发布。行为证据含旧失败、夹具修正和本轮完整pass，未运行的硬件重启/Claude正向不算通过；独立审查无必须补验缺口，08/15/16同步39/42，仅原两条勾选变化。
+
+最终全环境清理按用户新授权停止测试并删除专用节点/身份/账户，发生在产品卸载保持验证之后；不会把此前“卸载保留数据”改成删除行为。签名备份与原有系统环境受保护；本机原始临时证据按要求销毁后仅引用已记录脱敏结论，不再将缺失原文件标成可复验。最终清理计数与残留复查见24。
+
+收尾独立复核确认原42条文字/顺序不变，仅指定Phase4两项由未勾改勾；08/15/16当前摘要一致，相关导航/安装/验收/资源/认证文档同步。旧全socket解绑已明确标作撤销方案，当前系统代理不改UDP或业务授权；完整基线保持与新共同文件baseline持久化分开记录。清理按内容、归属及无活动引用确认后执行，额外52份非标准命名历史实验也已删除；不以名称通配清除无归属的Test/go-build或共享缓存。仓库仅文档变化，未在清理后重新构建或运行测试产生新runtime。
+
+最终文档检查：724个相对链接/锚点无断链，42项中39勾选且仅两项变化，三份当前进度及CI摘要逐字一致，git diff --check通过。本轮末次GitHub状态查询返回EOF，保留已确认的arm64维护失败和其余任务当时状态，不宣称远端CI已全绿。

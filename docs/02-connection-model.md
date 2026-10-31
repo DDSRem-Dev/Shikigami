@@ -121,6 +121,6 @@ macOS 的内嵌 tsnet 使用纯 userspace netstack，不创建内核 TUN 或系�
 
 对应scheme的显式HTTP_PROXY/HTTPS_PROXY（含SDK兼容的小写变量）优先；NO_PROXY的明确绕过不能再落入系统代理。缺少显式配置时才采用系统同scheme静态代理，并遵循系统ExceptionsList、简单主机名排除及loopback绕过。读取只能使用绝对路径scutil，须有执行时间和输出大小边界，仅在进程启动时取一次不可变快照，系统代理设置变化后需重启Shiki生效；错误不得泄露原始代理或认证URL。进程级SDK解析器在首个节点启动前注册，后续Node共用且关闭时不恢复。显式代理URL也仅接受无userinfo凭据的HTTP(S)类型，无效值以固定错误拒绝且不回显。PAC、自动发现、SOCKS和从钥匙串取得代理凭据不在本适配支持范围；静态HTTP(S)与SOCKS同时启用时只采用前者。
 
-本适配不是“所有流量必须经代理”的安全策略：SDK某些DERP路径会忽略代理解析失败后尝试其原有直连，UDP也保留原行为，不得宣称代理失败能阻止所有出口。业务数据面的授权边界独立保持：Node.Dial须校验peer身份并直接进入userspace TCP，禁止系统TCP回退，业务HTTP transport禁用环境代理。当前修复与现场验收状态见[24](24-public-package-compatibility.md#external-installer-20261031)。
+本适配不是“所有流量必须经代理”的安全策略：SDK某些DERP路径会忽略代理解析失败后尝试其原有直连，UDP也保留原行为，不得宣称代理失败能阻止所有出口。业务数据面的授权边界独立保持：Node.Dial须校验peer身份并直接进入userspace TCP，禁止系统TCP回退，业务HTTP transport禁用环境代理。当前修复与现场验收状态见[24终态](24-public-package-compatibility.md#installer-final-20261031)。
 
 Connect 协议不自动提供 WebSocket 传输；Connect-Web/gRPC-Web 也不让浏览器获得终端所需的全双工能力。底层 WebSocket socket 不是自动解帧后的字节流。后续若做 WSS 隧道，需要两端明确的 HTTP/2 字节封装适配、鉴权、帧大小限制、关闭语义和代理测试。没有适配实现前不声明与 9527 同端口复用，也不把此功能纳入首版验收。

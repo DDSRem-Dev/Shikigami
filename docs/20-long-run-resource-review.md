@@ -5,6 +5,8 @@
 
 完整资源记录没有提供足以确认新生产内存泄漏的证据，也不能证明无泄漏。长期资源与当前alpha整版本验收继续保持待验，不增加路线图勾选。
 
+**原始材料清理（2026-10-31）：** 按用户明确要求，已核验的本机原始日志、profile、冻结源码及测试目录已删除，未归档进docs；下述样本/摘要和失败边界作为历史脱敏结论保留，不再声称原始文件可重读。后续生产归因须据已记录结论提出可证伪假设，必要时限定范围重新取证，不能以旧勾选证明当前版本无泄漏。全环境清理见[24](24-public-package-compatibility.md#test-environment-cleanup-20261031)。
+
 ## 数据和复算方法
 
 - 原证据：`/tmp/shiki-default-rotation-linux-current-20261029/`，日志SHA-256为`c9ece4e46c47689595a8a0f0b8f557cfcd07bbf960660ec7e5f83cb9bfe8a850`；697源manifest SHA-256为`660dc6e93b3ce1300d084f02665a4e9dcf88178d7e6fd044a2ce05d366e7cca2`。

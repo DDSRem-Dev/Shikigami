@@ -1,5 +1,7 @@
 # 公开发行包升级、回滚与兼容验收
 
+**当前终态（2026-10-31）：** 两项安装门槛已关闭，39/42；最终Mac代理修复采用8fdfe25同源本地A/B包，官方身份下完整安装/服务恢复与卸载保持通过，见[完整终态](#installer-final-20261031)。下文公开包及失败方案按各自历史来源保留；测试环境和原始临时证据已按用户要求[清理](#test-environment-cleanup-20261031)，实际主机重启和Claude正向使用未实测。
+
 本批使用已经公开的 `v0.0.1-alpha.1`（`f0b5f83dce599c8e0d715bda5e7806a0ef6aaa72`）与 `v0.0.1-alpha.2`（`fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2`）原始归档。两版均先以可信仓库 `configs/release-signing.pub` 独立认证，再从认证副本安全解包，核对完整 SHA256SUMS。没有重新构建、修改版本字符串或修改插件 manifest 来模拟历史版本。
 
 测试夹具来自当前工作树，正式产品仍为各发行版本；夹具的 race 构建不表示公开产品本身启用了 race。两版状态 schema 相同，本批是实际包升级和双向重开兼容，不是 schema 迁移。历史开发 schema 的迁移/拒写/有限恢复证据继续单独保留。
@@ -97,6 +99,8 @@ A为重新验签的公开v0.0.1-alpha.2，B为冻结提交b30c58563651271b044796
 <a id="macos-route-fix-20261031"></a>
 ### macOS 网络根因与修复（2026-10-31，安装复验待执行）
 
+**历史已撤销方案：** 下述全socket解绑已被真实业务反证，当前实现以[最终系统代理适配](24-public-package-compatibility.md#macos-system-proxy-20261031)为准。
+
 独立CGO_ENABLED=0、无代理环境、每项5秒的拨号对照确认：控制域名被本机既有VPN解析为198.18范围虚拟地址，普通OS拨号TLS及公开/key请求成功；SDK默认绑定物理接口超时。SDK按目的路由选接口也因隧道网关解析`no valid address found`回落默认接口并超时；只启用该开关不是修复。诊断进程禁用netns后两域均HTTP200，约0.98/0.89秒。证据为同根`mac-network-dial-differential.json`、`mac-network-dial-detail.json`、`mac-network-userspace-differential.json`，未创建节点或请求登录。
 
 修复限定Darwin SDK适配：节点启动前`netns.SetEnabled(false)`，匹配固定SDK `cmd/tailscaled/tailscaled.go`的userspace-networking策略；其他平台no-op。Shiki使用fake TUN/router、不安装内核路由，OS现有隧道是外层承载，不会回入同一Shiki节点。没有改变系统Tailscale/代理/路由；业务仍按peer身份和授权直入gVisor，不允许系统TCP回退。单独SetDisableBindConnToInterface会被netmap能力覆盖，故未采用；进程级策略不随单个Node退出恢复。HTTP(S)环境代理仍按SDK实现，ALL_PROXY隐式SOCKS包装不在支持范围，见[02](02-connection-model.md#代理与后续-websocket)。
@@ -120,3 +124,32 @@ A为重新验签的公开v0.0.1-alpha.2，B为冻结提交b30c58563651271b044796
 替代实现保留SDK默认UDP/接口及其原有ALL_PROXY机制，只在Darwin首个Node启动前以进程级sync.Once注册SDK HTTP(S)代理解析器。绝对路径scutil只读一次系统快照，执行2秒、共享输出64KiB、溢出取消及等待边界；系统设置变化须重启Shiki。显式同scheme环境代理优先，无效/含userinfo/非HTTP(S)URL固定错误拒绝；NO_PROXY明确绕过不落入系统代理，独立*条目不读取系统配置。缺失scheme才采用对应静态系统配置及例外，已由env覆盖的scheme不被系统fallback错误阻塞。全局配置与嵌套scoped配置隔离，PAC/自动发现/SOCKS-only和代理凭据不新增支持；SDK DERP可忽略解析错误后尝试原直连的边界明确保留。
 
 注册失败和无可用代理配置时不输出原始值，Node.Open失败释放状态锁；多Node共用不可变快照且关闭不重置。没有修改plist、系统代理、Tailscale或路由，也没有修改业务用户态TCP/授权。真实CONNECT测试验证目标TLS与hostname错误仍拒绝，loopback与各种绕过/优先、命令取消/输出上限有回归；Darwin真实socket测试确认SDK默认接口策略保留。整包node/architecture race51.199/1.373秒通过，最后新增scheme/PAC/readerror/无关坏字段/NO_PROXY=*回归另行race1.548秒通过。接下来以明确local.proxy.1/.2同源本地bundle实际安装，不能将上述测试替代现场矩阵。
+
+
+<a id="installer-final-20261031"></a>
+## 安装两项的完整终态（2026-10-31）
+
+Mac最终使用冻结提交`8fdfe25f1e78bf996b974c3c24e9c45b9e26c0fd`的738个源码输入，正常构建`v0.0.1-alpha.2-local.proxy.1/.2`两套Darwin arm64完整bundle，各14成员，独立复验源码、payload及归档摘要一致。A的SHA256SUMS pin为`adca58cfd623e2ae0a401c9814b924918e99c333f19d6fafb610356bfae361d5`，B为`85a13cd3f5b26f32b6ea6115956ac7fbd057ad441dc7d2bd7b176740473a400f`。两包未签名、未发布，同源不同版本只证明真实安装事务/版本切换及官方身份恢复；历史发行实现兼容性由本文件既有公开alpha.1/alpha.2双平台真实包证据独立承担。
+
+| 边界 | 实际结果 |
+|---|---|
+| A首装与重复 | 标准原生plist仅HOME/PATH，没有注入代理环境；官方节点及终端、双向同步、新TCP通过。重复安装返回unchanged并保持同PID。 |
+| B升级与回滚A | A75952→B76548→A77153，目标版本正确，身份、daemon ID、凭据及所有mapping/forward spec一致；原旧baseline保留，共同测试文件的新baseline按实际内容持久化；原pane、暂停及未解冲突保持，每版完整新业务通过。 |
+| SIGKILL自动恢复 | LaunchAgent自动拉起77720，管理器新实例先于外部CLI/probe被观察；旧host/worker退出，完整业务保持。 |
+| 管理器重新注册 | 仅专用job bootout/bootstrap后新PID78274先于外部CLI/probe存在；auto_start=false，身份/状态/业务保持。 |
+| 旧流和代际 | 4次转换旧TCP均EOF、无重放，采用转换后15秒读期限且不接受超时；独立核对18个旧host/plugin出生身份均不存在。此期限不是整个升级恢复的总时限。 |
+| 实际卸载 | installer退出0，标准服务/plist与链接删除，配置/state/tsnet仍保留；后续恢复原配置hash及原测试agent78925，完成第6组终端/双向durable同步/新TCP。 |
+| 本轮运行清理 | 原HOME0775保持，无系统代理/路由/全局launchctl环境变更；专用runtime40项378,788,843字节已回收。最后另按用户要求删除整个测试环境，见下节。 |
+
+主要终态收据原为`mac-proxy2-summary.json`（passed=true，failure/recovery_failure均null）、`mac-proxy2-independent-final-check.json`及卸载保持、四次transition和六组business记录。独立审查重新核对上述来源和状态/业务/代际，结论无必须补验缺口。VPS同官方身份实际systemd安装/升级回滚/服务重载/卸载及官方Claude未登录映射继续复用前述已通过结果，Linux产品不由Mac代理专项代表。
+
+首次proxy矩阵已通过A/重复/B，但回滚的额外预业务snapshot在远端仍auth_required时立即调用sessions，0.0126秒Unavailable，尚未进入原45秒服务器/30秒会话就绪等待。独立复核后只调整夹具观察顺序：前置仅本地node/identity/legacybaseline，远程snapshot移到既有等待和业务之后；源码、bundle、30秒本地probe和旧TCP15秒预算不变，没有显式connect。原failed结果及此前route/诊断失败都保留在历史结论中，不追认为通过。
+
+据此关闭08的“安装器与服务”“重复安装/升级/回滚…卸载保留数据”两项，37→39/42、Phase4为6/6。实际Mac/VPS未重启或注销；真实Claude登录/推理按用户范围排除；修复仍在master、未随公开alpha.2交付。完整认证、资源归因与最终支持声明三项仍未完成。
+
+<a id="test-environment-cleanup-20261031"></a>
+## 用户授权的全测试环境清理（2026-10-31）
+
+产品uninstall保留数据的断言先已通过；以下是用户随后明确授权的专用测试数据销毁，不改变产品卸载语义。两端测试进程均正常停止；VPS专用UID995/GID993账户、组、home及tmux socket移除，home143项239,934,006字节，6个用户进程与root runuser wrappers确认不存在，标准服务未遗留。Chrome移除两个专用节点后刷新显示Add your first device；有效Auth Key和API access token均为0。控制台3条失效key历史仍保留，未删除账户或更改其他策略。
+
+Mac最终删除233个已确权专用临时根（含测试home、scripts/tests/__pycache__、旧tmux socket、5份历史文档辅助脚本及补充确权的52份早期内存实验/辅助对象），共17,926个目录/文件项、5,438,336,449文件字节；符号链接只移除本身，不遍历目标。另发现旧测试tmux server及3个shell pane，按源码测试名和cwd确权后逐会话停止，4个进程均不存在。标准LaunchAgent/job/plist、专用agent/daemon/plugin、测试home及清单路径均无残留，SSH控制连接已关闭；VPS只读复查确认无专用账户、服务、进程或目标目录。Docker八个原有容器无测试路径挂载，全部保持；虚拟化进程的历史文件共享句柄不作为活动测试，也不为清缓存重启Docker。正式签名备份的全部文件大小、权限及mtime与清理前逐项一致。正式发布签名密钥备份、仓库源码/开发工具和不属于Shiki的缓存、其他项目临时文件保留。所有此前临时路径只是当时证据来源；按用户要求移除原始临时证据后，以本文件和15/16的脱敏结论为记录，不再声称这些本机原始文件仍可重读。
