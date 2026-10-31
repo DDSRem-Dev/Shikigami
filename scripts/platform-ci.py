@@ -148,8 +148,24 @@ class Acceptance:
     def terminal(self):
         evidence = self.private / "terminal"
         evidence.mkdir(mode=0o700)
-        self.run("terminal-semantics", ["bash", "scripts/test-terminal-state.sh"],
-                 env={**os.environ, "SHIKI_RUN_EVIDENCE_DIR": str(evidence)}, required_text=("TestFrontendSemanticRedraw",))
+        try:
+            self.run("terminal-semantics", ["bash", "scripts/test-terminal-state.sh"],
+                     env={**os.environ, "SHIKI_RUN_EVIDENCE_DIR": str(evidence)}, required_text=("TestFrontendSemanticRedraw",))
+        except BaseException:
+            # The terminal runner keeps raw output private. Export only the
+            # fixed checkpoint filenames that were written before a failure so
+            # hosted failures can be localized without leaking screen content,
+            # paths, tokens or command output.
+            checkpoints = sorted(
+                path.name for path in evidence.glob("*.json")
+                if path.is_file() and path.name.endswith(".json")
+            )[:64]
+            write_json(self.public / "terminal-failure.json", {
+                "state": "failed",
+                "checkpoint_files": checkpoints,
+                "checkpoint_count": len(checkpoints),
+            })
+            raise
 
     def maintenance(self):
         identity = self.maintenance_admission()

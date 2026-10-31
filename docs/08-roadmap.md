@@ -472,3 +472,5 @@
 `41242641679`因CI workflow变更使cache source key重新冷启动，Intel preflight在20分钟预算内完成非race build/lint后仍未完成race预热，导致下游跳过；其余平台无失败。已让缓存来源hash忽略workflow编排文件和CI helper脚本、仅保留实际Go工具版本变化，并通过16项缓存专项、83项脚本、actionlint和diff检查；下一轮应复用现有native/race缓存并验证完整矩阵。
 
 `41247430410`验证artifact下载、主矩阵、Intel E2E/heavy、WSL2及macOS/Linux大部分收尾任务；Linux amd64 systemd在旧实现的`useradd --create-home`阶段60秒超时，macOS arm64 terminal语义阶段在托管runner上约30秒失败。失败证据没有扩大到产品断言：前者已改为预创建隔离home、`--no-create-home`并对短暂passwd锁做三次有界重试；后者为每次终端专项使用独立0700 `TMUX_TMPDIR`，避免中断运行遗留socket污染。两项本地平台工具29项、脚本83项、actionlint、终端专项重复运行及diff检查通过；旧run重跑中Linux maintenance已成功，新的源码提交仍需完整远端CI确认。
+
+新提交`2d6980e`的完整矩阵确认Linux systemd、WSL2及其余已完成任务通过，但macOS arm64 terminal仍失败；仅隔离`TMUX_TMPDIR`不足以定位该托管环境差异。现增加只输出固定checkpoint文件名的脱敏失败摘要，不上传终端原始日志或屏幕内容，下一轮据此继续修复；当前不宣称CI全绿。

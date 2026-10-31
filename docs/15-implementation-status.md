@@ -1026,6 +1026,8 @@ m6专用agent正常重启后，同一节点/IP已online，既有server却永久R
 
 `41247430410`的主矩阵、artifact链路、WSL2和大部分terminal/maintenance任务已通过；旧Linux amd64 systemd在隔离账号`useradd --create-home`阶段60秒超时，旧macOS arm64 terminal语义专项约30秒失败。修复已保持隔离账号、真实systemd和完整终端断言：systemd预创建私有home并使用`--no-create-home`，账号创建遇到短暂passwd锁时最多三次20秒重试，仅在精确UID/GID/home身份已提交时接受超时后的完成；终端脚本每次使用新建0700 `TMUX_TMPDIR`。本地平台工具29项、脚本83项、actionlint、终端专项3次及`git diff --check`通过；旧run重跑的Linux maintenance已通过，待本提交远端CI作为最终证据。
 
+新提交`2d6980e`的远端运行确认Linux systemd和WSL2成功，但macOS arm64 terminal仍以`terminal-semantics`失败；原始测试输出继续留在私有日志。`platform-ci.py`现仅将已写入的固定checkpoint文件名和数量导出到公开失败摘要，以便定位失败阶段而不泄露屏幕数据、路径或凭据；平台工具30项及本地终端重复验证通过，新的远端修复运行仍待。
+
 
 ## 原生CI安装路径修复与证据同步（2026-10-31）
 
