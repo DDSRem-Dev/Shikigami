@@ -92,3 +92,13 @@ A为重新验签的公开v0.0.1-alpha.2，B为冻结提交b30c58563651271b044796
 清理已完成的范围：VPS本轮11个安装/官方Claude临时目标、113项约1.54GB已清理；Mac三轮runtime及标准job/plist均不存在，原始栈/sample已删除，仅保留函数名/等待态摘要。Mac最终恢复专用agent PID93282，原配置hash、身份、终端/文件/TCP、暂停/冲突和旧基线核验通过。两端未重启、未注销，未改全局launchctl代理环境。专用Tailscale身份继续保留；业务测试文件、两个任务mapping/project及本机A/B预备包仍待精确收尾，不能宣称环境已全部清干净。
 
 本轮结果减少VPS子门槛，但Mac失败仍阻塞两项完整安装条目，37/42保持。下一步需定位SDK实际拨号与受管进程网络环境的差异，再基于证据修复并完成Mac矩阵；不能靠延长等待、重复登录或重复无假设测试取得勾选。
+
+
+<a id="macos-route-fix-20261031"></a>
+### macOS 网络根因与修复（2026-10-31，安装复验待执行）
+
+独立CGO_ENABLED=0、无代理环境、每项5秒的拨号对照确认：控制域名被本机既有VPN解析为198.18范围虚拟地址，普通OS拨号TLS及公开/key请求成功；SDK默认绑定物理接口超时。SDK按目的路由选接口也因隧道网关解析`no valid address found`回落默认接口并超时；只启用该开关不是修复。诊断进程禁用netns后两域均HTTP200，约0.98/0.89秒。证据为同根`mac-network-dial-differential.json`、`mac-network-dial-detail.json`、`mac-network-userspace-differential.json`，未创建节点或请求登录。
+
+修复限定Darwin SDK适配：节点启动前`netns.SetEnabled(false)`，匹配固定SDK `cmd/tailscaled/tailscaled.go`的userspace-networking策略；其他平台no-op。Shiki使用fake TUN/router、不安装内核路由，OS现有隧道是外层承载，不会回入同一Shiki节点。没有改变系统Tailscale/代理/路由；业务仍按peer身份和授权直入gVisor，不允许系统TCP回退。单独SetDisableBindConnToInterface会被netmap能力覆盖，故未采用；进程级策略不随单个Node退出恢复。HTTP(S)环境代理仍按SDK实现，ALL_PROXY隐式SOCKS包装不在支持范围，见[02](02-connection-model.md#代理与后续-websocket)。
+
+真实socket回归验证SDK不再替换普通拨号器Control，并模拟netmap接口开关变化，策略保持；node整包race48.272秒、架构race1.378秒通过。完整现场矩阵仍须独立执行。将从修复后同一冻结源码正常构建两个明确本地版本；它们证明安装器版本切换及外部身份恢复，历史实现兼容性仍沿用本文件公开alpha.1/alpha.2的独立真实包证据。不得篡改或追认旧公开alpha.2在当前fake-IP网络下的失败；本修复尚未发布。

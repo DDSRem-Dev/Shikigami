@@ -22,12 +22,13 @@ import (
 )
 
 type admissionFixture struct {
-	service *Service
-	auth    *auth.Manager
-	remote  *httptest.Server
-	arrived chan string
-	mu      sync.Mutex
-	peers   map[string]bool
+	service   *Service
+	auth      *auth.Manager
+	remote    *httptest.Server
+	heldToken string
+	arrived   chan string
+	mu        sync.Mutex
+	peers     map[string]bool
 }
 
 func newAdmissionFixture(t *testing.T) *admissionFixture {
@@ -37,7 +38,14 @@ func newAdmissionFixture(t *testing.T) *admissionFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = manager.Close() })
-	f := &admissionFixture{auth: manager, arrived: make(chan string, 256), peers: map[string]bool{}}
+	// Mint the held-request credential before any first-frame clock starts.
+	// Repeated durable token writes during saturation can expire early holders
+	// on slow disks. client still mints independent credentials for probes.
+	heldToken, _, err := manager.Create("tester", []string{"*"}, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &admissionFixture{auth: manager, heldToken: heldToken, arrived: make(chan string, 256), peers: map[string]bool{}}
 	f.service = &Service{Auth: manager}
 	handler := f.service.Handler()
 	f.remote = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -95,11 +103,7 @@ func (f *admissionFixture) silentRequest(t *testing.T, parent context.Context, m
 		cancel()
 		t.Fatal(err)
 	}
-	token, _, err := f.auth.Create("tester", []string{"*"}, time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
-	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Authorization", "Bearer "+f.heldToken)
 	request.Header.Set("Connect-Protocol-Version", "1")
 	request.Header.Set("Content-Type", "application/connect+proto")
 	if method == "ListFiles" || method == "StatFile" || method == "DeleteFile" || method == "ListPorts" || method == "CheckPort" {

@@ -1,6 +1,6 @@
 # 开发路线图
 
-**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** 两项默认12小时轮换及恢复尾部、独立未使用Auth Key自然到期均已完成；五平台既有验收已通过。转发缓存所有权与安装器有效登录attempt修复已有相关race证据。本轮原生VPS已完成保留官方tsnet身份的实际安装、候选升级/回滚、systemd专用服务恢复与卸载保留数据；Mac公开A和候选B的LaunchAgent首装均未在原30秒内达到节点就绪，阻塞安装及升级两项关闭。诊断定位SDK获取控制面公钥时等待TCP连接，尚未确定具体网络原因；两端已恢复原配置与专用测试进程，临时服务/runtime已清理，但业务夹具及预备包仍待收尾，详见[24本轮结果](24-public-package-compatibility.md#external-installer-20261031)。官方登录URL自然到期、生产资源归因及最终支持声明仍待。真实Claude登录/推理按用户要求移出交付验收，见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)；实际Mac/VPS不重启、不注销，沿用[11替代矩阵](11-automated-installation.md#no-host-reboot-acceptance-20261031)。本轮尚未完整收尾，不提前增加勾选。
+**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** VPS保留官方tsnet身份的实际安装、升级/回滚、专用systemd恢复及卸载保持已通过。Mac旧公开A和候选B的首装失败已定位：SDK强制物理接口无法访问系统VPN的fake-IP路由；macOS纯userspace适配已修复，node及架构race通过，同身份完整安装矩阵正在准备，尚不勾选。准入测试已移除计时窗口内的重复持久Token写入，受控同测红绿及文件/端口race通过，生产预算不变。默认12小时及未使用Auth Key到期测试已结束；完整认证、生产资源归因及最终支持仍待。真实Claude登录/推理按[11范围](11-automated-installation.md#claude-acceptance-scope-20261031)排除，Mac/VPS不重启、不注销。按用户最新要求，安装两项完成后清理全部专用测试节点、身份、文件及临时证据；当前依赖未结束，尚未执行最终清理，详情见[24](24-public-package-compatibility.md#external-installer-20261031)。
 
 **最近已核验CI（本批修复前）：** 文档提交3b2d360的[CI41131301002](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41131301002)已completed/success、13/13通过，实际32分43秒。代码提交045b463的[CI41125907702](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41125907702)也已13/13通过，五平台各730文件源码摘要、必需阶段及清理已独立核验；其整轮46分51秒→36分09秒的性能比较仍按冷暖缓存/并行/排队边界记录于[26](26-native-platform-acceptance.md#ci-045-final-20261031)。下述既有CI不代表本批新修改已通过远端CI；本批相关本地race已通过，未重跑12小时。
 

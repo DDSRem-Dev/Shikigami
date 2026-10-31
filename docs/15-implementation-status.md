@@ -1,6 +1,6 @@
 # 实施与验收记录
 
-**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** 两项默认12小时轮换及恢复尾部、独立未使用Auth Key自然到期均已完成；五平台既有验收已通过。转发缓存所有权与安装器有效登录attempt修复已有相关race证据。本轮原生VPS已完成保留官方tsnet身份的实际安装、候选升级/回滚、systemd专用服务恢复与卸载保留数据；Mac公开A和候选B的LaunchAgent首装均未在原30秒内达到节点就绪，阻塞安装及升级两项关闭。诊断定位SDK获取控制面公钥时等待TCP连接，尚未确定具体网络原因；两端已恢复原配置与专用测试进程，临时服务/runtime已清理，但业务夹具及预备包仍待收尾，详见[24本轮结果](24-public-package-compatibility.md#external-installer-20261031)。官方登录URL自然到期、生产资源归因及最终支持声明仍待。真实Claude登录/推理按用户要求移出交付验收，见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)；实际Mac/VPS不重启、不注销，沿用[11替代矩阵](11-automated-installation.md#no-host-reboot-acceptance-20261031)。本轮尚未完整收尾，不提前增加勾选。
+**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** VPS保留官方tsnet身份的实际安装、升级/回滚、专用systemd恢复及卸载保持已通过。Mac旧公开A和候选B的首装失败已定位：SDK强制物理接口无法访问系统VPN的fake-IP路由；macOS纯userspace适配已修复，node及架构race通过，同身份完整安装矩阵正在准备，尚不勾选。准入测试已移除计时窗口内的重复持久Token写入，受控同测红绿及文件/端口race通过，生产预算不变。默认12小时及未使用Auth Key到期测试已结束；完整认证、生产资源归因及最终支持仍待。真实Claude登录/推理按[11范围](11-automated-installation.md#claude-acceptance-scope-20261031)排除，Mac/VPS不重启、不注销。按用户最新要求，安装两项完成后清理全部专用测试节点、身份、文件及临时证据；当前依赖未结束，尚未执行最终清理，详情见[24](24-public-package-compatibility.md#external-installer-20261031)。
 
 **最近已核验CI（本批修复前）：** 文档提交3b2d360的[CI41131301002](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41131301002)已completed/success、13/13通过，实际32分43秒。代码提交045b463的[CI41125907702](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41125907702)也已13/13通过，五平台各730文件源码摘要、必需阶段及清理已独立核验；其整轮46分51秒→36分09秒的性能比较仍按冷暖缓存/并行/排队边界记录于[26](26-native-platform-acceptance.md#ci-045-final-20261031)。下述既有CI不代表本批新修改已通过远端CI；本批相关本地race已通过，未重跑12小时。
 
@@ -1117,3 +1117,12 @@ Mac应用elapsed的计时起点晚于worker ready，原值保持；逐角色12�
 本轮VPS官方身份下的实际安装、升级/回滚、专用systemd恢复、卸载保留数据及恢复原环境已取得证据；Mac A/B首装均未在原30秒内达到节点就绪，未执行后续升级/回滚。最新诊断已否定“Server.Start未返回”的猜测，定位SDK控制面公钥请求的TCP拨号等待，具体网络原因仍待定位。来源、失败观察、恢复和清理边界见[24本轮记录](24-public-package-compatibility.md#external-installer-20261031)。
 
 此前仅报告Claude范围调整完成，遗漏同步上述子项且未明确整个批次尚未结束；本次补齐08/15/16及24。37/42不变来自Mac真实失败及认证/资源剩余条件，不是继续等待Claude登录。临时服务/runtime及VPS官方Claude临时安装已清理，业务夹具与预备包仍待收尾，专用身份保留。工作树中两份CI诊断脚本的改动另待验证/提交，不算本次文档提交完成的功能。
+
+
+## Mac用户态网络修复与验收计时修复（2026-10-31）
+
+Mac受管节点首装失败已通过独立SDK/普通OS拨号对照定位并修复，详细机制与范围见[24网络根因](24-public-package-compatibility.md#macos-route-fix-20261031)。Darwin适配采用上游纯userspace网络策略；node/architecture整包race48.272/1.378秒通过，节点准入/撤权/用户态业务传输未放宽。真实Mac安装矩阵随后从冻结源运行，仍保持37/42，不将独立/key成功当作整项验收。
+
+另修复CI准入夹具：held请求的Token提前一次性持久生成，独立probe仍使用单独Token/连接，避免32次串行持久写与首帧5秒预算重叠。通过仅测试overlay给Manager.Create注入每次170ms延迟，原WatchFiles8.26秒失败→修复后0.45秒通过；文件/端口准入race33项、0失败/跳过，24.757秒。生产auth源码、5秒首帧、各类并发上限和父截止均未改。实际b30c585 CI41190701695为12/13成功，Intel该子用例7.43秒失败；公开脱敏artifact无原错误正文，受控复现不能宣称已证明其唯一根因。此前Linux useradd超时与旧node setup失败另保留。
+
+安全诊断新增8类固定node错误前缀分类，仅输出源码位置和固定kind，原始后缀/URL/key不输出，28项工具测试通过。受控实验源范围、hash与结果原在Darwin TMPDIR的`shiki-admission-setup-20261031-feis7ftc/experiment.json`；依用户最终清理要求届时移除原始临时证据，以本记录保留脱敏结论。

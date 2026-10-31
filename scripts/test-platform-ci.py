@@ -139,6 +139,41 @@ class PlatformAcceptanceTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             test_events(self.log, ["TestRequired"])
 
+    def test_node_failure_classification_keeps_only_fixed_kinds(self):
+        failures = (
+            ("node state timeout:", "node_state_timeout"),
+            ("test control did not recognize SDK login URL", "node_test_control_login"),
+            ("peer connect failed:", "node_peer_connect"),
+            ("missing control-plane peer", "node_peer_missing"),
+            ("peer removal was not delivered", "node_peer_removal_delivery"),
+            ("peer route removal did not reach the SDK engine", "node_peer_removal_route"),
+            ("removed peer still accepted a userspace connection", "node_removed_peer_connected"),
+            ("removed peer remained routable:", "node_removed_peer_routable"),
+        )
+        secret = "tskey-FAKE_SECRET https://login.invalid/private sdk-detail"
+        events = [
+            {"Action": "output", "Package": "example", "Test": "TestRequired",
+             "Output": f"    node_test.go:366: {prefix} {secret}\n"}
+            for prefix, _ in failures
+        ]
+        events.extend([
+            {"Action": "output", "Package": "example", "Test": "TestRequired",
+             "Output": f"    node_test.go:366: unknown node failure {secret}\n"},
+            {"Action": "fail", "Package": "example", "Test": "TestRequired"},
+            {"Action": "fail", "Package": "example"},
+        ])
+        self.log.write_text("\n".join(json.dumps(event) for event in events))
+        result = test_events(self.log, validate=False)
+        expected = [{"file": "node_test.go", "line": 366, "kind": kind}
+                    for _, kind in failures]
+        expected.append({"file": "node_test.go", "line": 366, "kind": "test_output"})
+        self.assertEqual(result["tests"], [{"package": "example", "test": "TestRequired",
+                         "outcome": "fail", "source_locations": expected}])
+        for forbidden in (secret, "tskey-", "https://", "sdk-detail", "unknown node failure"):
+            self.assertNotIn(forbidden, json.dumps(result))
+        with self.assertRaises(RuntimeError):
+            test_events(self.log, ["TestRequired"])
+
     def test_locations_are_bounded_and_dynamic_elapsed_is_not_published(self):
         output = "\n".join(f"core_test.go:{i}: arbitrary secret suffix" for i in range(1, 80))
         self.assertEqual(len(safe_test_locations(output, {"core_test.go": 100})), 20)

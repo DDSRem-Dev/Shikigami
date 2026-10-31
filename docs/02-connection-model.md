@@ -117,4 +117,8 @@ shiki-daemon token refresh <token-id> --expires 720h
 
 HTTP CONNECT 与 SOCKS5 是不同协议，配置必须明确类型；保留 TLS 端到端验证，并验证实际代理可达性。DERP 可覆盖一部分受限网络，但不能保证适用所有企业代理。
 
+macOS 的内嵌 tsnet 使用纯 userspace netstack，不创建内核 TUN 或系统路由。其控制面、DERP 和其他外层承载 socket 应遵循操作系统现有路由，允许已有 VPN/代理隧道承载；不得强制绑物理网卡而绕过解析所得虚拟地址的实际出口。固定 SDK 的平台适配须在节点启动前选择与其 `userspace-networking` 模式一致的进程级网络策略，不修改系统 Tailscale、全局代理或路由，也不随单个 Node 关闭恢复进程级开关。此策略仅针对当前无真实 TUN/Router 的 macOS 嵌入方式；未来引入内核接口或升级 SDK 必须重验。
+
+这不改变业务数据面的隔离：`Node.Dial` 仍须经过授权与 peer 身份检查并直接进入 userspace TCP，禁止回退系统 TCP；OS 的外层隧道不能代替 Shiki 自己的 tailnet/Token 授权。SDK 的 HTTP(S) 环境代理与应用业务 transport 分开，后者继续禁用环境代理。macOS 纯 userspace 策略不提供 `ALL_PROXY` 隐式 SOCKS 包装；未实现并实测的代理组合不得声明支持。当前修复与现场验收状态见[24](24-public-package-compatibility.md#external-installer-20261031)。
+
 Connect 协议不自动提供 WebSocket 传输；Connect-Web/gRPC-Web 也不让浏览器获得终端所需的全双工能力。底层 WebSocket socket 不是自动解帧后的字节流。后续若做 WSS 隧道，需要两端明确的 HTTP/2 字节封装适配、鉴权、帧大小限制、关闭语义和代理测试。没有适配实现前不声明与 9527 同端口复用，也不把此功能纳入首版验收。

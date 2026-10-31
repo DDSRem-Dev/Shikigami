@@ -98,6 +98,14 @@ def known_test_files():
 
 # Values and prefixes are fixed in source. Never publish any suffix of a match.
 FAILURE_KINDS = (
+    ("node state timeout:", "node_state_timeout"),
+    ("test control did not recognize SDK login URL", "node_test_control_login"),
+    ("peer connect failed:", "node_peer_connect"),
+    ("missing control-plane peer", "node_peer_missing"),
+    ("peer removal was not delivered", "node_peer_removal_delivery"),
+    ("peer route removal did not reach the SDK engine", "node_peer_removal_route"),
+    ("removed peer still accepted a userspace connection", "node_removed_peer_connected"),
+    ("removed peer remained routable:", "node_removed_peer_routable"),
     ("readiness timeout:", "condition_timeout"),
     ("terminal timed out waiting for ", "terminal_marker"),
     ("terminal output exceeded test bound", "terminal_bound"),

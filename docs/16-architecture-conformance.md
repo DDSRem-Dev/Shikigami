@@ -1,6 +1,6 @@
 # 架构与文档一致性检查
 
-**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** 两项默认12小时轮换及恢复尾部、独立未使用Auth Key自然到期均已完成；五平台既有验收已通过。转发缓存所有权与安装器有效登录attempt修复已有相关race证据。本轮原生VPS已完成保留官方tsnet身份的实际安装、候选升级/回滚、systemd专用服务恢复与卸载保留数据；Mac公开A和候选B的LaunchAgent首装均未在原30秒内达到节点就绪，阻塞安装及升级两项关闭。诊断定位SDK获取控制面公钥时等待TCP连接，尚未确定具体网络原因；两端已恢复原配置与专用测试进程，临时服务/runtime已清理，但业务夹具及预备包仍待收尾，详见[24本轮结果](24-public-package-compatibility.md#external-installer-20261031)。官方登录URL自然到期、生产资源归因及最终支持声明仍待。真实Claude登录/推理按用户要求移出交付验收，见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)；实际Mac/VPS不重启、不注销，沿用[11替代矩阵](11-automated-installation.md#no-host-reboot-acceptance-20261031)。本轮尚未完整收尾，不提前增加勾选。
+**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** VPS保留官方tsnet身份的实际安装、升级/回滚、专用systemd恢复及卸载保持已通过。Mac旧公开A和候选B的首装失败已定位：SDK强制物理接口无法访问系统VPN的fake-IP路由；macOS纯userspace适配已修复，node及架构race通过，同身份完整安装矩阵正在准备，尚不勾选。准入测试已移除计时窗口内的重复持久Token写入，受控同测红绿及文件/端口race通过，生产预算不变。默认12小时及未使用Auth Key到期测试已结束；完整认证、生产资源归因及最终支持仍待。真实Claude登录/推理按[11范围](11-automated-installation.md#claude-acceptance-scope-20261031)排除，Mac/VPS不重启、不注销。按用户最新要求，安装两项完成后清理全部专用测试节点、身份、文件及临时证据；当前依赖未结束，尚未执行最终清理，详情见[24](24-public-package-compatibility.md#external-installer-20261031)。
 
 **最近已核验CI（本批修复前）：** 文档提交3b2d360的[CI41131301002](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41131301002)已completed/success、13/13通过，实际32分43秒。代码提交045b463的[CI41125907702](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41125907702)也已13/13通过，五平台各730文件源码摘要、必需阶段及清理已独立核验；其整轮46分51秒→36分09秒的性能比较仍按冷暖缓存/并行/排队边界记录于[26](26-native-platform-acceptance.md#ci-045-final-20261031)。下述既有CI不代表本批新修改已通过远端CI；本批相关本地race已通过，未重跑12小时。
 
@@ -1413,3 +1413,10 @@ CI复现的obsolete-selection测试仅修正已有maintenance cooldown竞态允�
 以[24本轮结果](24-public-package-compatibility.md#external-installer-20261031)补齐部分进展，08/15/16同步37/42；未把VPS成功、Mac诊断成功或Claude范围移除转换成完整安装验收通过。
 
 七类对照：目录/SDK/host/plugin依赖本次无生产变更；RPC/准入/版本按实际A/B来源记录、无授权放宽；持久状态以同身份/凭据/基线/暂停/冲突核验、不修改ledger伪造清理；生命周期区分真实systemd成功与LaunchAgent首装失败，诊断变体不当作原生安装成功；文件/终端/TCP保留原失败及有界观察，不把15秒读期限误写成总恢复时限；CLI/安装区分服务安装和application_pending，B仍为未发布候选；行为证据只采用现有收据，未知网络根因及未执行步骤保持未验。专用测试状态仍有依赖，清理只报告已确证范围，不删除原身份或声明本批全部完成。本次仅补文档，不重复长测或宣称最新远端CI通过。
+
+
+## Mac嵌入SDK路由与准入测试复核（2026-10-31）
+
+七类审查：①平台网络适配仅位于internal/node，插件实现/SDK及host依赖方向不变；②RPC、Token、peer身份/代际、能力、gVisor-only拨号与无系统回退保持，整包node race覆盖；③无配置schema/持久状态/revision/去重改动，测试Token只改变准备时序；④SDK进程级网络策略先于Start，单Node退出不恢复，固定SDK采用fake TUN/router且无系统网络变更；⑤外层socket遵循OS路由，终端/文件/TCP预算和语义不变，不以代理绕过业务授权；⑥生成服务/plist和安装器参数未修改，旧公开包不改写，Mac完整实际矩阵仍待；⑦独立对照及真实socket回归与node/architecture race通过，准入overlay同测红绿及33项race通过，安全工具28项通过，不将受控复现冒充历史CI确切根因。
+
+docs02明确macOS纯userspace承载与代理边界，08/15/16同步37/42；完整认证与生产资源门槛独立保留。按用户要求最终将清理所有项目专用测试身份/节点和临时文件，但依赖结束前不删除运行材料。独立review核对SDK无kernel TUN、业务无系统TCP回退及两项最小关闭矩阵；源码适配仅影响Darwin，无需引入隐式代理配置或修改系统tailscaled。
