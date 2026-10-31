@@ -1018,6 +1018,8 @@ m6专用agent正常重启后，同一节点/IP已online，既有server却永久R
 
 `41235197414`证明Intel preflight及native cache保存成功，heavy integration通过；E2E的race子进程编译仍被系统终止。当前在preflight一次性预热E2E/集成所需race目标并将预算增至20分钟，保留全部原测试与失败分类，等待下一轮远端验证。
 
+该运行的Linux arm64 E2E另有一次daemon重启后的瞬时`service unavailable`，属于本地agent重连尚未完成的有界竞态；已在该单一恢复查询中增加10秒、仅匹配该错误的重试，其他错误仍立即失败。测试编译通过，修复待下一轮远端验证。
+
 
 ## 原生CI安装路径修复与证据同步（2026-10-31）
 

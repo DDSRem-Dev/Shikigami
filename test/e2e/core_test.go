@@ -302,7 +302,28 @@ func TestCLIThreeProcessTLSLifecycle(t *testing.T) {
 		t.Fatal("daemon restart replaced persistent identity")
 	}
 	after := new(pb.Session)
-	decode(t, cli("sessions", "info", created.Id), after)
+	// The remote daemon can accept negotiation before the local agent has
+	// re-established its service connection. Retry only this bounded recovery
+	// window so slower runners do not turn a transient restart race into a
+	// product failure; persistent CLI errors still fail immediately.
+	var recovered []byte
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		command := exec.CommandContext(ctx, cliBinary, "--config", clientConfig, "--json", "sessions", "info", created.Id)
+		command.Env = environment
+		var stderr bytes.Buffer
+		command.Stderr = &stderr
+		output, runErr := command.Output()
+		if runErr == nil {
+			recovered = output
+			break
+		}
+		if !strings.Contains(stderr.String(), "service unavailable") || time.Now().After(deadline) {
+			t.Fatalf("sessions info after daemon restart: %v\n%s", runErr, stderr.String())
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	decode(t, recovered, after)
 	if after.ClaudePid != before.ClaudePid || after.ClaudeStatus != "running" {
 		t.Fatal("daemon crash/restart ended the tmux pane")
 	}

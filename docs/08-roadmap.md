@@ -464,3 +464,5 @@
 运行`41233288832`已证明Linux preflight成功保存缓存，但macOS Intel首次冷构建在原10分钟preflight预算内被取消，导致依赖矩阵跳过；已将preflight预算调整为15分钟，让首次Intel构建有机会完成并保存缓存。该预算变更不删减任何阶段，仍待新远端运行验证。
 
 `41235197414`中Intel preflight与native cache保存成功，heavy integration通过；E2E仍因其`go build -race`子进程缓存未被非race预热而出现一次`signal: killed`。已在preflight增加cmd、sync、port等E2E/集成目标的race缓存预热，预算增至20分钟以覆盖首次生成；下一轮需验证Intel E2E和完整矩阵。
+
+同一运行的Linux arm64 E2E还记录一次daemon重启后本地agent尚未恢复的瞬时`service unavailable`；远端连接已重新协商成功，失败发生在有界恢复窗口边界。测试现在仅在该明确瞬态内重试最多10秒，其他CLI错误立即失败；这是测试稳定性修复，不改变产品重连、期限或业务断言，待新远端运行验证。

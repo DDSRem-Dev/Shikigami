@@ -1469,3 +1469,5 @@ docs02明确macOS纯userspace承载与代理边界，08/15/16同步37/42；完�
 `41233288832`进一步显示Linux缓存保存成功，但Intel preflight在10分钟job预算内冷构建超时并取消，造成下游必需矩阵跳过。将预算改为15分钟只是为首次缓存生成提供有界时间；缓存来源hash、私有路径、失败可继续策略和全部检查阶段保持不变，下一轮需验证Intel preflight完成后下游缓存命中及全矩阵结论。
 
 `41235197414`中Intel preflight和native缓存保存成功，heavy integration通过；E2E仍在race子进程编译阶段被终止。修复在preflight预热cmd/sync/port的race编译缓存，并将有界预算增至20分钟；不改变插件边界、协议/授权、生产生命周期或测试断言，下一轮验证E2E及完整依赖矩阵。
+
+同轮Linux arm64 E2E在daemon重启后观测到一次本地agent尚未重连的`service unavailable`，远端协商已成功；架构复核将重试限制在该查询的10秒恢复窗口且只接受明确瞬态错误，持久错误继续失败，不放宽产品生命周期或取消/重连契约。`go test -race -tags=e2e -run '^$' ./test/e2e`本地编译通过，待远端复验。
