@@ -1020,6 +1020,8 @@ m6专用agent正常重启后，同一节点/IP已online，既有server却永久R
 
 该运行的Linux arm64 E2E另有一次daemon重启后的瞬时`service unavailable`，属于本地agent重连尚未完成的有界竞态；已在该单一恢复查询中增加10秒、仅匹配该错误的重试，其他错误仍立即失败。测试编译通过，修复待下一轮远端验证。
 
+`41239995440`中race预热、Intel E2E/heavy、Linux arm64 E2E和embedded已通过；terminal/maintenance四项失败均为不可解析的`actions/download-artifact@v7.0.2`版本，未执行产品测试。CI现改用release workflow同样使用的`v8.0.2`，待下一轮验证artifact下载及最终维护阶段。
+
 
 ## 原生CI安装路径修复与证据同步（2026-10-31）
 

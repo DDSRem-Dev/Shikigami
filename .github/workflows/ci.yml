@@ -824,7 +824,7 @@ jobs:
         with:
           go-version: '1.26.10'
           cache: true
-      - uses: actions/download-artifact@v7.0.2
+      - uses: actions/download-artifact@v8.0.2
         with:
           name: preflight-${{ matrix.goos }}-${{ matrix.goarch }}
           path: ${{ runner.temp }}/shiki-platform/public
@@ -868,7 +868,7 @@ jobs:
         with:
           go-version: '1.26.10'
           cache: true
-      - uses: actions/download-artifact@v7.0.2
+      - uses: actions/download-artifact@v8.0.2
         with:
           name: preflight-${{ matrix.goos }}-${{ matrix.goarch }}
           path: ${{ runner.temp }}/shiki-platform/public

@@ -1471,3 +1471,5 @@ docs02明确macOS纯userspace承载与代理边界，08/15/16同步37/42；完�
 `41235197414`中Intel preflight和native缓存保存成功，heavy integration通过；E2E仍在race子进程编译阶段被终止。修复在preflight预热cmd/sync/port的race编译缓存，并将有界预算增至20分钟；不改变插件边界、协议/授权、生产生命周期或测试断言，下一轮验证E2E及完整依赖矩阵。
 
 同轮Linux arm64 E2E在daemon重启后观测到一次本地agent尚未重连的`service unavailable`，远端协商已成功；架构复核将重试限制在该查询的10秒恢复窗口且只接受明确瞬态错误，持久错误继续失败，不放宽产品生命周期或取消/重连契约。`go test -race -tags=e2e -run '^$' ./test/e2e`本地编译通过，待远端复验。
+
+`41239995440`确认race缓存与恢复竞态修复后主产品矩阵通过；terminal/maintenance仅因CI引用不存在的download-artifact v7.0.2在动作解析阶段失败。该引用已统一为release中已使用的v8.0.2；不改变artifact内容、平台证据、终端/维护测试或产品架构，下一轮验证动作下载和最终清理。
