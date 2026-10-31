@@ -462,3 +462,5 @@
 本次新运行`41230062520`验证了恢复步骤，但确认preflight因未向`ci_go_cache.py plan`传递成功状态而没有保存缓存；Intel heavy/E2E仍分别在生产子进程编译时被`signal: killed`并超时，其他矩阵及embedded通过。已补充显式`SHIKI_CACHE_BUILD_OUTCOME=success`与`SHIKI_CACHE_ACCEPTANCE_OUTCOME=success`，只有成功到达缓存计划步骤才会保存来源hash对应的native缓存；该补丁待下一次远端运行验证。
 
 运行`41233288832`已证明Linux preflight成功保存缓存，但macOS Intel首次冷构建在原10分钟preflight预算内被取消，导致依赖矩阵跳过；已将preflight预算调整为15分钟，让首次Intel构建有机会完成并保存缓存。该预算变更不删减任何阶段，仍待新远端运行验证。
+
+`41235197414`中Intel preflight与native cache保存成功，heavy integration通过；E2E仍因其`go build -race`子进程缓存未被非race预热而出现一次`signal: killed`。已在preflight增加cmd、sync、port等E2E/集成目标的race缓存预热，预算增至20分钟以覆盖首次生成；下一轮需验证Intel E2E和完整矩阵。

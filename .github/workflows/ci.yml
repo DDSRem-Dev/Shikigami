@@ -99,6 +99,9 @@ jobs:
         run: go -C test/diagnostics/terminalstate/analyzer run golang.org/x/vuln/cmd/govulncheck@v1.1.4 -scan=package ./...
       - name: Build and lint
         run: make build lint
+      - name: Warm race build cache for subprocess tests
+        timeout-minutes: 10
+        run: go build -race -buildvcs=false -mod=readonly ./cmd/shiki ./cmd/shiki-agent ./cmd/shiki-daemon ./plugins/sync ./plugins/port
       - name: Test tools
         run: make test-tools
       - name: Test platform tools

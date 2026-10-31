@@ -1016,6 +1016,8 @@ m6专用agent正常重启后，同一节点/IP已online，既有server却永久R
 
 运行`41233288832`确认Linux preflight已写入缓存，但macOS Intel preflight在10分钟预算内被取消，故下游矩阵全部跳过；当前将preflight预算增至15分钟以覆盖首次冷构建，所有构建、lint、工具测试和缓存保存步骤仍为必需项，等待下一轮远端结果。
 
+`41235197414`证明Intel preflight及native cache保存成功，heavy integration通过；E2E的race子进程编译仍被系统终止。当前在preflight一次性预热E2E/集成所需race目标并将预算增至20分钟，保留全部原测试与失败分类，等待下一轮远端验证。
+
 
 ## 原生CI安装路径修复与证据同步（2026-10-31）
 
