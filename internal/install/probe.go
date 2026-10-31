@@ -251,11 +251,31 @@ func ExistingConfiguration(plan Plan) (bool, error) {
 	return err == nil, err
 }
 
+// SDK startup, approval and identity expiry can remain visible while an
+// accepted login is pending. They must not restart that attempt or admit
+// business traffic. Intermediate states require a live attempt; authenticating
+// keeps its existing bounded wait. Explicit terminal failures stop polling.
+func installerLoginActive(status *apb.NodeStatus) bool {
+	pending := status.State == "uninitialized" && status.ReasonCode == "" ||
+		status.State == "needs_login" && status.ReasonCode == "NODE_AUTH_REQUIRED" ||
+		status.State == "offline" && status.ReasonCode == "NODE_CONTROL_UNAVAILABLE" ||
+		status.State == "denied" && status.ReasonCode == "NODE_APPROVAL_REQUIRED" ||
+		status.State == "expired" && status.ReasonCode == "NODE_KEY_EXPIRED"
+	return status.State == "authenticating" || pending && status.LoginId != "" && status.LoginExpiresAt > time.Now().Unix()
+}
+
+func installerLoginURL(status *apb.NodeStatus) string {
+	if installerLoginActive(status) && status.LoginId != "" && status.LoginExpiresAt > time.Now().Unix() {
+		return status.LoginUrl
+	}
+	return ""
+}
+
 func guideLogin(parent context.Context, api arpc.NodeControlClient, status *apb.NodeStatus, request UserOperation, canLogin bool) (*apb.NodeStatus, error) {
 	if status.State == "online" || (status.State == "offline" && status.ReasonCode == "NODE_DISABLED") {
 		return status, nil
 	}
-	active := status.State == "authenticating" || (status.LoginId != "" && status.LoginExpiresAt > time.Now().Unix() && status.State != "denied" && status.State != "expired")
+	active := installerLoginActive(status)
 	if !active && canLogin && (len(request.Key) != 0 || request.Interactive) {
 		login := &apb.BeginLoginRequest{RequestId: "install-" + rand.Text(), Method: &apb.BeginLoginRequest_Interactive{Interactive: true}}
 		if len(request.Key) != 0 {
@@ -286,8 +306,7 @@ func guideLogin(parent context.Context, api arpc.NodeControlClient, status *apb.
 	ctx, cancel := context.WithTimeout(parent, 15*time.Second)
 	defer cancel()
 	for {
-		validURL := status.LoginUrl != "" && status.LoginId != "" && status.LoginExpiresAt > time.Now().Unix()
-		if validURL || status.State == "online" || status.State == "denied" || status.State == "expired" || status.ReasonCode == "LOGIN_START_FAILED" || status.ReasonCode == "LOGIN_INTERRUPTED" || status.ReasonCode == "LOGIN_CANCELED" || status.ReasonCode == "LOGIN_EXPIRED" {
+		if installerLoginURL(status) != "" || !installerLoginActive(status) {
 			return status, nil
 		}
 		select {

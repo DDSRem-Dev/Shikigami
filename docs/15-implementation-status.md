@@ -1,8 +1,8 @@
 # 实施与验收记录
 
-**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** c4c5a56的Linux/macOS两项默认12小时轮换及30分钟恢复尾部已完成并独立通过，未使用Auth Key自然到期测试也已于15:56明确拒绝；这三项不再等待。五平台完整验收已通过。本批已回收完成测试的静态源码、二进制及私有状态，保留验收证据和仍有依赖的正式认证环境。用户明确Mac/VPS不重启，服务生命周期改用替代验收，不再等待真实主机重启操作。完整认证矩阵、服务恢复替代验收/外部身份升级、生产资源归因及最终支持声明仍待，详见[20](20-long-run-resource-review.md)与[23](23-tsnet-external-acceptance.md)。
+**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** 两项默认12小时轮换及恢复尾部、独立未使用Auth Key自然到期均已完成；五平台验收已通过。本批修复转发查询与停止交错导致的孤儿缓存、安装器在有效审批/身份到期登录期间重复开始及提前退出问题，相关race和独立七类复核通过。官方登录URL的7天期限仅有锁定SDK源码依据，尚无自然到期现场证据；Claude登录和同身份真实安装器验收继续推进。Mac/VPS均不重启，按[11替代矩阵](11-automated-installation.md#no-host-reboot-acceptance-20261031)验证服务恢复。认证、安装/升级、生产资源归因及最终支持声明仍待，不提前增加勾选。
 
-**当前CI：** 文档提交3b2d360的[CI41131301002](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41131301002)已completed/success、13/13通过，实际32分43秒。代码提交045b463的[CI41125907702](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41125907702)也已13/13通过，五平台各730文件源码摘要、必需阶段及清理已独立核验；其整轮46分51秒→36分09秒的性能比较仍按冷暖缓存/并行/排队边界记录于[26](26-native-platform-acceptance.md#ci-045-final-20261031)。本批仅核验已完成结果、精确清理和同步文档，无新产品修改或长测重跑。
+**最近已核验CI（本批修复前）：** 文档提交3b2d360的[CI41131301002](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41131301002)已completed/success、13/13通过，实际32分43秒。代码提交045b463的[CI41125907702](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41125907702)也已13/13通过，五平台各730文件源码摘要、必需阶段及清理已独立核验；其整轮46分51秒→36分09秒的性能比较仍按冷暖缓存/并行/排队边界记录于[26](26-native-platform-acceptance.md#ci-045-final-20261031)。下述既有CI不代表本批新修改已通过远端CI；本批相关本地race已通过，未重跑12小时。
 
 以下是按各批源码范围保留的历史记录，当前状态以本摘要和原条目的最新部分进展为准。
 
@@ -1093,3 +1093,13 @@ Mac应用elapsed的计时起点晚于worker ready，原值保持；逐角色12�
 用户明确Mac与VPS均不可能重启，要求采用其他验证方式。本批仅复核文档和既有证据、更新执行计划，没有重启/注销用户会话、操作服务/节点、清理Tailscale记录或启动新测试。按该明确约束，将真实主机重启从等待用户执行的任务移除，以专用服务管理器重新拉起、同身份/数据/业务恢复、已有独立持久卷二次PID1和原生LaunchAgent证据组成替代验收；按需隔离VM只覆盖其实际启动范围。
 
 现有二次PID1/LaunchAgent/TLS维护结果先复用，未完成的重点是保留官方tsnet身份贯穿真实安装器A→B→A和专用管理器恢复；来源、PID/instance、身份/凭据、资源状态、新业务及精确清理为结束条件，见[11替代矩阵](11-automated-installation.md#no-host-reboot-acceptance-20261031)。真实硬件重启/重新登录继续标为未实测支持边界；替代计划不提前记通过，其他认证、Claude和资源归因仍待。08/11/15/16/19及索引同步新约束，原42条与37/42不变。
+
+
+<a id="evidence-forward-installer-auth-fixes-20261031"></a>
+## 转发缓存所有权与安装器登录等待修复（2026-10-31）
+
+确定性回归先实际执行StopForward删除配置/缓存，再释放先前读取旧快照的ListForwards；旧实现重新创建孤儿缓存，修前失败。查询现仅返回worker观测，不再写生命周期缓存，apply/suspend/stop继续管理其所有权；没有新增锁、网络调用、schema或协议。转发专项race3.364秒；完整agent race38.105秒、真实port worker的integration/agent race9.293秒、architecture1.423秒通过，共197父/子测试、无失败或skip。证据`/tmp/shiki-forward-cache-lifetime-20261031-7prbtuxc/`含red、源码摘要、tests.jsonl、verification及ownership-review。
+
+安装器在有效NODE_APPROVAL_REQUIRED/NODE_KEY_EXPIRED中间态会重复BeginLogin并提前结束，Native还会丢弃相应私有登录URL。现在与CLI采用相同的有界中间态判断，保留原attempt，不扩大业务授权；明确失败终止，15秒整体/2秒单次观察及父截止不变，authenticating沿用既有有界等待。URL继续仅经私有helper管道到控制TTY，不进入公开JSON。中间态/终态/父截止和Native私有URL回归先红后绿；完整install、cmd/shiki-install、architecture race分别8.906/1.494/1.196秒通过。该本地序列不冒充官方URL自然过期或真实审批拒绝实测。
+
+本批只关闭上述具体缺陷，不关闭完整资源或认证条目。Chrome只读确认保留Mac/VPS两节点Connected；真实安装器同身份组合仍在准备，官方Claude Code2.1.309仅安装到VPS专用普通用户HOME，官方登录流程已应用户疑问暂停且退出，先验证未登录提示及其余安装器组合，尚不声称Claude就绪或真实调用通过。实际Mac/VPS未重启、未注销。

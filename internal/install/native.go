@@ -254,10 +254,7 @@ func (n *Native) Probe(ctx context.Context, plan Plan) (string, error) {
 		return "", errors.New("invalid ordinary-user readiness response")
 	}
 	n.Report = &report
-	n.LoginURL = ""
-	if report.Node.LoginId != "" && report.Node.LoginExpiresAt > time.Now().Unix() && (report.Node.State == "needs_login" || report.Node.State == "authenticating") {
-		n.LoginURL = report.Node.LoginUrl
-	}
+	n.LoginURL = installerLoginURL(report.Node)
 	if report.State != "local_application_ready" {
 		return report.State, nil
 	}

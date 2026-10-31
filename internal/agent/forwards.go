@@ -442,7 +442,9 @@ func (s *Service) ListForwards(ctx context.Context, _ *pb.Empty) (*ppb.ForwardLi
 				state.Connections = 0
 			}
 		}
-		r.forwardStates.Store(id, proto.Clone(state).(*ppb.ForwardState))
+		// This snapshot can predate StopForward or a recovery transition. Only
+		// lifecycle owners update the cache; a read must not resurrect a removed
+		// entry or replace a newer control result after a slow worker query.
 		out.Forwards = append(out.Forwards, state)
 	}
 	sort.Slice(out.Forwards, func(i, j int) bool { return out.Forwards[i].Spec.Id < out.Forwards[j].Spec.Id })

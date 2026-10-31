@@ -128,3 +128,10 @@ c4c5a56固定源的Linux/macOS两项正式运行均自然结束，具体退出�
 c4→当前3b2d360的执行输入为558→585，536相同、49差异（13生产文件、2根module、34测试/诊断）。11份default_rotation Go、runner和collector共13文件逐字不变，整个E2E/resources夹具无变化；plugins业务、internal/plugin和pkg/plugin生产代码未改。该长跑两端禁用tsnet，走direct TLS，不调用node.Open；新增node/agent认证分支不进入此场景，终端直接Remote.TerminalStream，也不调用新增frontend接管UI。真正共享路径差异为取消后Send保留context错误、tmux dead pane空PID解析；对应定向和五平台验证已有证据，没有新增必须等待12小时才触发的生命周期条件。详细逐文件/路径核对保留在`/var/folders/1n/q373cln10fqb0gl9z1ds5d8m0000gn/T/shiki-ci-cleanup-coverage-audit-20261031-xj053i6n/source-coverage.json`。
 
 这支持保留c4限定默认轮换通过，不将新依赖/当前整版本冒称已重跑长稳，也不给出仅因commit不同再跑同一12小时的依据。后续自主工作从完整样本和已有heap/object资料中明确对象、持有者、释放点和关闭后可观测结果；只有新的可证伪假设或真实反例才启动必要专项，不重复已修根因或用RSS走势猜测生产泄漏。
+
+
+## 转发查询迟到写入的实际保留根（2026-10-31）
+
+ListForwards取得旧配置快照后可与StopForward交错；停止已删除配置和forwardStates后，旧查询仍把ForwardState/ForwardSpec重新存入sync.Map。重复创建/停止可能积累没有desired记录的键，活动转发配额不能限制这些孤儿。确定性实际StopForward回归先红后绿；查询现不写生命周期缓存，相关完整agent及真实worker集成race通过，见[15](15-implementation-status.md#evidence-forward-installer-auth-fixes-20261031)。
+
+重新核对c4全部11,848样本/24代际及208小时统计，代际计数和RSS首末/极值匹配。旧`/tmp/shiki-closed-profile-analysis-20261029/`当前已不存在，历史18份profile分析本轮不能重新读取；保留其当时记录，不声称本轮再次验hash。新交错缺陷不是旧固定mapping/TLS场景+228对象/+24,240B的解释。生产剩余对象归因及未覆盖负载仍待；没有新假设时不追加相同12小时或盲目短测。

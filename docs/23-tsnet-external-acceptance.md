@@ -248,3 +248,12 @@ Chrome原Google标签持续空白，新标签继续同一OAuth流程后，官方
 任务自清key/进程/job后仍留二进制和私有状态，本批按UID/dev/inode/摘要/无引用精确回收10项目标：20文件、7目录、72,890,138字节。8份验收证据摘要不变，result/manifest/schedule/activation/preflight、单次attempt.started、原验证脚本与审计/清理收据继续保留在`~/.shiki-tsnet-test/run-goeshw8f/next-unused-expired/`；此前输入二进制/配置/plist路径现为已清理历史输入。audit摘要9aaac0e7c99740d0704313445f3956ad71b429487676bb3d59cfecf7dc7f3ca9，cleanup-receipt摘要076bf5c40061abd81ce44a7ce528232f98353124de960918816f193420109bc0。没有操作正式Mac/VPS身份或签名备份。
 
 本子项完成后不再等待自然到期，也不再要求用户提供同批key。完整认证项仍保留官方登录URL有效期（应用attempt到期不是替代）、审批拒绝实际可观测结果及最终契约核对。按11，SDK不能区分撤销与控制面失联时应报告原因未知；13已明确offline/NODE_CONTROL_UNAVAILABLE不能解释成凭据撤销。现有官方自身移除和两种控制面断网观察、原始错误不泄露与fail-closed行为可用于该回退核对，不把取得SDK不存在的细分信号设为永久门槛，也不借此省略尚无证据的场景。没有在本批扩展状态枚举或关闭整个Phase0条目。
+
+
+## 认证矩阵及官方URL期限来源复核（2026-10-31）
+
+固定Tailscale1.98.10的ipn/ipnlocal/local.go:4014明确注释“Server-side URLs expire after 7 days”，客户端仅复用不足6天23小时的URL。RegisterResponse/Status未提供公开URL到期字段；这是SDK源码说明，不是官方控制面本轮实际7天到期证据。Shiki的10分钟LoginExpiresAt是应用attempt截止，不能替代该门槛，也不再用短等重复证明它。来源与摘要已保存于`/private/tmp/shiki-alpha2-installer-a-a3af0oz0/sdk-url-validity-source.json`，不含认证URL。
+
+自身撤销与两个官方控制面断网观察支持11/13的原因未知回退：NODE_CONTROL_UNAVAILABLE不被解释成撤销，明确节点授权失效仍撤回业务。此前待审批页面仅提供Approve/Remove，移除后仍拒绝业务、重新申请/批准恢复的范围保留，不伪造独立Reject动作或SDK分类。当前Chrome只读回读两台保留测试节点均Connected，没有更改审批、删除节点或产生新的Tailscale身份。
+
+本批安装器中间态引导缺口已修，见[15](15-implementation-status.md#evidence-forward-installer-auth-fixes-20261031)；完整Phase0仍保留官方URL自然到期现场证据与最终矩阵，不把SDK源码或本地mock当实测。真实Claude与安装器组合正在独立推进。
