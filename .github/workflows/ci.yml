@@ -18,7 +18,7 @@ jobs:
   preflight:
     name: preflight (${{ matrix.goos }}, ${{ matrix.goarch }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 10
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:

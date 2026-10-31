@@ -1014,6 +1014,8 @@ m6专用agent正常重启后，同一节点/IP已online，既有server却永久R
 
 后续运行`41230062520`确认三个长任务均能执行缓存恢复，但preflight的`ci_go_cache.py plan`缺少成功状态变量，实际没有保存供下游复用的缓存；Intel heavy/E2E仍以`signal: killed`结束测试内编译并触发超时，其他任务与embedded通过。当前补丁为preflight缓存计划显式设置构建与验收成功状态，仍待下一轮远端验证；在此之前不宣称CI全绿。
 
+运行`41233288832`确认Linux preflight已写入缓存，但macOS Intel preflight在10分钟预算内被取消，故下游矩阵全部跳过；当前将preflight预算增至15分钟以覆盖首次冷构建，所有构建、lint、工具测试和缓存保存步骤仍为必需项，等待下一轮远端结果。
+
 
 ## 原生CI安装路径修复与证据同步（2026-10-31）
 
