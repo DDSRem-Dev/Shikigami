@@ -1,8 +1,8 @@
 # 实施与验收记录
 
-**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** c1e5ece与最终045b463两轮各自同源的macOS Intel/ARM、Linux双架构及真实WSL2完整产品/服务矩阵均已通过，平台兼容条目已勾选。三核受限并行已由实际3CPU/7GiB runner验证；官方节点key到期后的同身份重新认证与业务恢复已有证据。完整认证、主机生命周期/外部身份升级、长稳资源及最终支持声明仍待，详见[23](23-tsnet-external-acceptance.md)与[26](26-native-platform-acceptance.md)。
+**当前进度（2026-10-31）：37/42，剩余5个复合门槛。** c4c5a56的Linux/macOS两项默认12小时轮换及30分钟恢复尾部已完成并独立通过，未使用Auth Key自然到期测试也已于15:56明确拒绝；这三项不再等待。五平台完整验收已通过。本批已回收完成测试的静态源码、二进制及私有状态，保留验收证据和仍有依赖的正式认证环境。完整认证矩阵、主机生命周期/外部身份升级、生产资源归因及最终支持声明仍待，详见[20](20-long-run-resource-review.md)与[23](23-tsnet-external-acceptance.md)。
 
-**当前CI：** 代码提交045b463的[CI41125907702](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41125907702)已completed/success、13/13任务通过；主代理独立核对五平台各730文件源码摘要、全部必需阶段、清理及无未完成项。对比已成功c1e轮，整轮46分51秒→36分09秒，Mac ARM全包race1158.014→506.798秒；包含冷暖缓存、并行及排队差异，不将所有收益归为单一因素，Intel与WSL并未整体变快。原用例context与CI期限、必需覆盖和失败/skip记录保持，三份进度同步37/42；本轮诊断临时源码/二进制/状态已清理，证据收据保留，预约key、冻结长测和认证身份未改。详见[最终性能与平台证据](26-native-platform-acceptance.md#ci-045-final-20261031)。
+**当前CI：** 文档提交3b2d360的[CI41131301002](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41131301002)已completed/success、13/13通过，实际32分43秒。代码提交045b463的[CI41125907702](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41125907702)也已13/13通过，五平台各730文件源码摘要、必需阶段及清理已独立核验；其整轮46分51秒→36分09秒的性能比较仍按冷暖缓存/并行/排队边界记录于[26](26-native-platform-acceptance.md#ci-045-final-20261031)。本批仅核验已完成结果、精确清理和同步文档，无新产品修改或长测重跑。
 
 以下是按各批源码范围保留的历史记录，当前状态以本摘要和原条目的最新部分进展为准。
 
@@ -967,7 +967,7 @@ Linux最早自然到期为北京时间10/31 05:02:34.914992，初始最早终点
 
 原终端/stats保持；原held TCP结束且不重放；持久mapping/forward/revision及最后daemon ID/credential revision按原断言核验。轮换窗口暂停短周期文件业务，不声称覆盖任意在途提交。资源门禁仍是FD基线+4、测试harness goroutine+6、8秒内连续三次满足；不是生产goroutine或连续RSS硬上限，不构成无泄漏证明。测试禁用Tailscale，使用独立TLS/24h应用Token与证书、shell终端夹具；不覆盖真实Claude、官方tsnet认证或没有调用的慢前端RPC。官方未使用key到期任务及现有节点完全独立。
 
-当前正式结果为**运行中**，尚无自然轮换通过结论；旧495/697源记录保持原范围。根目录外的launcher JSON、正式evidence及run.log保存实际PID/命令/原始观察，PID只作为此启动记录，不可单独用作未来清理授权。
+启动时结果为**运行中**；两组现已完成并通过[终态核验](#evidence-current-default-rotation-final-20261031)，旧495/697源记录保持原范围。根目录外的launcher JSON、正式evidence及run.log保存实际PID/命令/原始观察，PID只作为此启动记录，不可单独用作未来清理授权。
 
 
 ## 四目标原生 Homebrew CI 准备（2026-10-30）
@@ -1064,3 +1064,25 @@ CI41119194452绑定c1e5eceb76e0e380949d0619c4babe731900311c，最终completed/su
 最后批次只改变三核CI资源选择与sync测试的远端异步退出观察，生产Go及依赖仍与c1e一致；实际Mac ARM 3CPU/7GiB、p2/GOMAX1完整通过，两原45秒用例2.10/2.31秒、sync权威移除0.08秒通过。整轮46分51秒→36分09秒，Mac ARM任务40分35秒→21分58秒，含冷暖缓存/并行/排队影响；Intel与WSL分别35分32秒→36分02秒、23分48秒→26分58秒，未描述为全平台等比例加速。全部旧失败、局部补验与先前源码范围保留，未增加生产或CI期限/重试，未减少必需阶段；sync远端收尾仍明确由立即断言改用已有5秒有界观察。
 
 最终收尾仅更新docs08/15/16/26；三份当前摘要及37/42一致，原42条文字/顺序保持，平台条目的关闭依据仍是已完成五平台验收。诊断源码/脚本、临时二进制和独占状态已按收据清理，必要安全证据与哈希保留，唯一CI监测进程在终态自然退出；原冻结长测、预约key到期、认证身份与签名备份不改。文档提交不改变已验证代码范围，也不追认新的长稳/外部身份结论。
+
+
+<a id="evidence-current-default-rotation-final-20261031"></a>
+## c4双平台默认轮换、自然key到期与精确清理终态（2026-10-31）
+
+三项等待均已实际完成。本批没有启动、重跑或停止原运行；先读取原始终态，再独立比对固定来源、事件、恢复尾部与所属资源，最后清理已无引用的静态残留。
+
+| 场景 | 北京时间完成 | 实际结果 |
+|---|---|---|
+| c4 Linux arm64默认轮换 | 05:32:41 | 应用12h30m1.556524841s、4371轮、740检查点；四角色各自然替换一次，恢复尾部1802.030959秒、30检查点；应用/collector均0 |
+| c4 macOS arm64默认轮换 | 05:35:13 | 应用12h29m59.808079333s、4192轮、741检查点；四角色各自然替换一次，恢复尾部1802.044518秒、30检查点；应用/collector均0 |
+| 独立未使用Auth Key自然到期 | 15:56:08 | 在15:55:52保守门槛之后，只调用一次登录，2.449517秒明确denied/INVALID_AUTH_KEY；key删除，agent正常退出0，专用job卸载 |
+
+Mac应用elapsed的计时起点晚于worker ready，原值保持；逐角色12小时下界、原2分钟恢复预算、end_not_before及恢复后至少30分钟均独立成立，不将其四舍五入伪造成精确12h30m。Linux替换观测距各自最早到期约1.27–1.36秒、Mac1.36–2.00秒；仅Mac server-port采样到不可用，不声称同时退役。原持有TCP终止且无重放，原mapping/forward/revision和业务恢复断言通过。
+
+两组690文件manifest一致，558份Go/proto/module执行输入（含测试）与固定c4c5a56fe6fe104f9cb94df5a6bb3b918412c1f5逐git对象匹配，后置source未变。主代理直接复算原始事件、四角色新PID/birth及同hash/UID/parent、30个恢复检查点和尾部。Linux精确容器已不存在；Mac12个已登记进程及runner/collector/caffeinate共15个PID缺席，运行快照与fixture已自动删除。独立证据位于`/tmp/shiki-c4-final-audit-20261031-bvok_yst/`，audit.json、root-final-verification.json、完整资源统计和source差异分别保留；原两证据根仍保留结果、日志、source清单与events。
+
+新增精确清理：native input副本和两process-guard删除693文件、14,100,508字节；预约到期目录中两二进制、配置/plist、私有agent/tsnet状态、空runtime及scheduler日志共10项目标删除20文件、7目录、72,890,138字节。合计回收86,990,646逻辑字节；删除前重验UID/dev/inode、摘要、无符号链接/开放引用和登记进程缺席，原35份长测与8份到期证据摘要保持。root-cleanup-verification.json独立确认目标缺席；到期清理收据在其保留证据根cleanup-receipt.json。正式Mac/VPS认证身份和签名备份仍有用途，本批不动。
+
+此前CI清理37个收据目标均复核缺席、监控PID不存在；指定六证据根仍保留153文件、8,111,975字节，主要为JSON、日志、profile、哈希及核验工具。因此“临时程序/运行状态已清理”成立，“所有数据均删除”不成立。核验收据位于`/var/folders/1n/q373cln10fqb0gl9z1ds5d8m0000gn/T/shiki-ci-cleanup-coverage-audit-20261031-xj053i6n/`，不扩大删除至用户原有环境。
+
+完整c4资源与当前触发路径覆盖见[20](20-long-run-resource-review.md#current-c4-final-20261031)，自然到期的来源/一次调用/官方库存边界见[23](23-tsnet-external-acceptance.md#unused-auth-key-expiry-final-20261031)。三项等待已关闭，但原42项是复合门槛；生产存活heap/object归因、URL/拒绝矩阵、真实Claude和主机重启登录仍不足，37/42保持。下一步可自主收敛认证未知回退与剩余矩阵、分析已有资源和所有权证据；没有新假设不追加长测。

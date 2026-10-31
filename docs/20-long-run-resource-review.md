@@ -1,5 +1,6 @@
 # 原Linux默认12小时完整资源记录与公开alpha覆盖审查
 
+**当前补证（2026-10-31）：** c4双平台默认轮换、30分钟恢复尾部和清理均已通过；完整11,848资源样本及c4到当前触发路径差异已复核，见[本轮终态](#current-c4-final-20261031)。无需继续等待或仅因提交变化重跑同一12小时；生产存活heap/object归因仍未完成。以下697源报告保留原范围。
 本报告只读分析2026-10-29完成的原697文件冻结源，不新增运行、不改变产品或验收阈值。自然凭据轮换的最终结果已通过[独立终态核验](15-implementation-status.md#evidence-default-linux-final-20261029)：实际工作12h30m3.603s、4368轮，四角色各更换一次，恢复尾部1803.013s，应用/collector退出0且所属资源清理通过。
 
 完整资源记录没有提供足以确认新生产内存泄漏的证据，也不能证明无泄漏。长期资源与当前alpha整版本验收继续保持待验，不增加路线图勾选。
@@ -104,3 +105,26 @@ Homebrew alpha.2自动分发和隔离测试密钥演练已独立完成，结果�
 本批转向可证伪的新假设：慢读HTTP2订阅被取消后，其订阅队列和整个请求是否释放。客户端cancel/Close与WatchLogs通过，ReleaseFrontend则真实复现阻塞Send保留订阅；进一步复现业务handler退出后Connect最终envelope仍受流控阻塞。修复与专项证据见15/16；这是新的取消契约反例，不用来解释旧固定mapping/TLS工作负载的+228对象，也不把有界释放回归叫作当前候选12小时或无泄漏证明。
 
 后续已固定c4c5a56，对旧697未覆盖的新Stop自然退休/排空启动一次双平台默认轮换观察；先预检、再各一次正式运行，原11份default_rotation Go及脚本/阈值不改。启动证据见15当前长稳启动记录。该运行补当前候选的时间与恢复覆盖，不能生成旧数据缺失的heap根，也不把未调用的新RPC自动纳入其验收。
+
+
+<a id="current-c4-final-20261031"></a>
+## c4双平台终态、完整资源与当前路径覆盖（2026-10-31）
+
+c4c5a56固定源的Linux/macOS两项正式运行均自然结束，具体退出、四角色替换、30分钟恢复尾部、来源及清理见[15终态记录](15-implementation-status.md#evidence-current-default-rotation-final-20261031)。两边应用/collector均退出0，690文件source清单未变；558份Go/proto/module输入含测试，全部匹配c4 git对象。主代理独立复算原始事件，保留Mac应用elapsed12h29m59.808079333s的真实计时范围，逐worker12小时与恢复尾部门槛均通过。
+
+共保留Linux5920行、Mac5928行资源样本，24份角色/代际统计和208份小时统计；原始峰值和全部小时均保留，不剔除早期窗口。完整JSON、摘要及独立收据位于`/tmp/shiki-c4-final-audit-20261031-bvok_yst/`。以下只摘录长驻宿主和harness的首末值/峰值（MiB），完整worker代际见all-resource-generations.json；顺序采样的RSS不可相加当作物理总内存。
+
+| 平台/角色 | RSS首值→末值 | 全程峰值 |
+|---|---:|---:|
+| Linux / agent | 56.62 → 49.28 | 61.16 |
+| Linux / daemon | 68.71 → 51.05 | 68.79 |
+| Linux / 测试harness | 26.66 → 27.88 | 136.30 |
+| macOS / agent | 58.11 → 58.42 | 61.75 |
+| macOS / daemon | 70.23 → 67.84 | 74.06 |
+| macOS / 测试harness | 193.77 → 87.77 | 194.34 |
+
+原FD基线+4、harness goroutine+6门禁通过；它们不等于生产goroutine或连续RSS上限，也没有生产live heap/object快照可作根因归属。因此此处关闭“等待默认轮换/尾部/清理”，不能只凭首末RSS或时长关闭整个Phase5长期资源项。
+
+c4→当前3b2d360的执行输入为558→585，536相同、49差异（13生产文件、2根module、34测试/诊断）。11份default_rotation Go、runner和collector共13文件逐字不变，整个E2E/resources夹具无变化；plugins业务、internal/plugin和pkg/plugin生产代码未改。该长跑两端禁用tsnet，走direct TLS，不调用node.Open；新增node/agent认证分支不进入此场景，终端直接Remote.TerminalStream，也不调用新增frontend接管UI。真正共享路径差异为取消后Send保留context错误、tmux dead pane空PID解析；对应定向和五平台验证已有证据，没有新增必须等待12小时才触发的生命周期条件。详细逐文件/路径核对保留在`/var/folders/1n/q373cln10fqb0gl9z1ds5d8m0000gn/T/shiki-ci-cleanup-coverage-audit-20261031-xj053i6n/source-coverage.json`。
+
+这支持保留c4限定默认轮换通过，不将新依赖/当前整版本冒称已重跑长稳，也不给出仅因commit不同再跑同一12小时的依据。后续自主工作从完整样本和已有heap/object资料中明确对象、持有者、释放点和关闭后可观测结果；只有新的可证伪假设或真实反例才启动必要专项，不重复已修根因或用RSS走势猜测生产泄漏。

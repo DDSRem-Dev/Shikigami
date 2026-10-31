@@ -1,6 +1,6 @@
 # 自动化安装与运维契约
 
-**本文保留安装流程契约。仓库已实现本地固定版本 bundle 校验、事务安装/回滚、服务渲染、异步登录引导与本地就绪诊断；真实 systemd 容器与原生 macOS LaunchAgent 已有下述限定环境生命周期证据；当前公开预发布 v0.0.1-alpha.2 已由 tag 自动构建、签名、发布并更新 Homebrew Formula，实际分发与平台证据见[22](22-homebrew-distribution.md)。原生 VPS/重启登录持久化、外部连接与完整平台仍需单独验收。**
+**本文保留安装流程契约。仓库已实现本地固定版本 bundle 校验、事务安装/回滚、服务渲染、异步登录引导与本地就绪诊断；真实 systemd 容器与原生 macOS LaunchAgent 已有下述限定环境生命周期证据；当前公开预发布 v0.0.1-alpha.2 已由 tag 自动构建、签名、发布并更新 Homebrew Formula，实际分发与平台证据见[22](22-homebrew-distribution.md)。五平台本地完整产品/服务验收已通过；真实外部身份跨安装器升级、主机重启登录与Claude完整就绪仍需单独验收。**
 
 `scripts/install.sh`、`install-client.sh`、`uninstall.sh` 与短时运维 helper `shiki-install` 已存在；已完成专用公钥的四目标签名及验签。[当前公开 Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.2) 来自提交 `fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2`、成功自动发布运行 `40912019720`，公开资产的下载验证结果见[发行证据](./15-implementation-status.md#evidence-public-alpha2-release-20261030)。安装只接受本地 bundle、固定版本及调用者从独立可信渠道取得的 checksum pin。可信源码工具 `scripts/release-trust.go fetch` 提供显式HTTPS归档/签名地址、独立可信公钥和固定版本/平台的下载验签入口，先认证签名再下载归档，成功后生成私有副本/pin/receipt；解包与安装仍是显式后续步骤，工具不指定正式来源或建立公钥信任。GitHub下载地址会重定向，现有 `fetch` 拒绝重定向；应使用 `gh release download v0.0.1-alpha.2 --repo DDSRem-Dev/Shikigami` 取回资产，再用可信源码 verifier 和独立可信公钥离线验签。命令与限制见发布认证，本批验收进度见16。下列完整就绪和运维要求不因预发布成功而降低。
 
@@ -26,7 +26,7 @@
 | Connect 传输 | 本地 NodeControl 使用 UDS/h2c；tsnet 上实际全双工；可选 TLS 协商 h2、证书拒绝及流式终态正确，见 14 | 禁止以 TCP 端口可达或普通 HTTP 200 显示安装成功 |
 | 服务进程保活 | systemd crash/restart 保留 tmux，同时插件/PTY attach 可回收；普通用户和真实 HOME/PATH 可用 | 保活承诺不得进入安装成功提示 |
 
-本地 NodeControl、固定 SDK 的测试控制面登录/身份保持、真实 tsnet/UDS/TLS 传输和普通用户宿主崩溃恢复已有运行证据，详见 15/16。真实 systemd PID1 容器的服务保活和普通用户 user-agent、原生 macOS 当前 GUI 登录域的 LaunchAgent 生命周期已有下述证据；官方Mac/原生VPS登录、key首用/复用拒绝、进程重启身份保持和P2P/DERP已验证，见[23](23-tsnet-external-acceptance.md)；独立未使用key撤销、最终agent节点撤销恢复及审批待批/移除/批准已有后续证据；key自然到期、明确自身撤销/管理员拒绝分类、主机重启登录及Claude完整外部就绪仍待验。原型必须记录 SDK/OS 版本、步骤和输出，不记录 auth key 或登录 URL；只有相应门槛通过后才可宣称该安装流程已验收。
+本地 NodeControl、固定 SDK 的测试控制面登录/身份保持、真实 tsnet/UDS/TLS 传输和普通用户宿主崩溃恢复已有运行证据，详见 15/16。真实 systemd PID1 容器的服务保活和普通用户 user-agent、原生 macOS 当前 GUI 登录域的 LaunchAgent 生命周期已有下述证据；官方Mac/原生VPS登录、key首用/复用拒绝、进程重启身份保持和P2P/DERP已验证，见[23](23-tsnet-external-acceptance.md)；独立未使用key撤销、最终agent节点撤销恢复及审批待批/移除/批准已有后续证据；独立未使用key自然到期拒绝现已通过，见[终态记录](23-tsnet-external-acceptance.md#unused-auth-key-expiry-final-20261031)；官方URL有效期、审批拒绝结果及原因未知回退的完整对照、主机重启登录和Claude完整外部就绪仍待验。原型必须记录 SDK/OS 版本、步骤和输出，不记录 auth key 或登录 URL；只有相应门槛通过后才可宣称该安装流程已验收。
 
 运行预构建产物不要求用户安装 Go/protoc；源码构建要求 Go ≥ 1.26.5，并锁定 Connect-Go 运行库与生成器 v2.0.2。安装器检查发行清单中的核心/插件应用协议能力；不能把 Connect 库版本当作 Shiki 协议 major。
 
