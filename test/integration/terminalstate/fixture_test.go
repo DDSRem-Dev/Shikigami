@@ -129,7 +129,11 @@ func fixture(t *testing.T) *terminalFixture {
 		}
 	})
 	var front *client.Client
-	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+	// Hosted macOS runners can take several seconds to publish the agent UDS
+	// while other architecture jobs are compiling. Keep this bounded, but give
+	// the disposable fixture enough time to become ready before failing the
+	// semantic test.
+	for deadline := time.Now().Add(15 * time.Second); time.Now().Before(deadline); {
 		front, err = client.Open(ctx, configPath, client.Options{Timeout: time.Second})
 		if err == nil {
 			break
