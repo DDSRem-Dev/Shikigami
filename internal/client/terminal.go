@@ -415,9 +415,31 @@ func terminalCause(ctx context.Context, e error) error {
 		if errors.Is(cause, ErrDetached) {
 			return nil
 		}
-		return cause
+		return normalizeTerminalContextError(cause)
 	}
-	return e
+	return normalizeTerminalContextError(e)
+}
+
+// Normalize cancellation observed through a transport so callers receive a
+// stable Connect status while errors.Is still matches the local context cause.
+// Some HTTP/2 paths surface a context cancellation as an Unknown Connect
+// error with the standard cancellation message and no local cause.
+func normalizeTerminalContextError(err error) error {
+	if errors.Is(err, context.Canceled) {
+		return connect.NewError(connect.CodeCanceled, "context canceled").WithCause(context.Canceled)
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return connect.NewError(connect.CodeDeadlineExceeded, "context deadline exceeded").WithCause(context.DeadlineExceeded)
+	}
+	if remote, ok := err.(*connect.Error); ok && remote.Code() == connect.CodeUnknown {
+		switch remote.Message() {
+		case context.Canceled.Error():
+			return connect.NewError(connect.CodeCanceled, context.Canceled.Error()).WithCause(context.Canceled)
+		case context.DeadlineExceeded.Error():
+			return connect.NewError(connect.CodeDeadlineExceeded, context.DeadlineExceeded.Error()).WithCause(context.DeadlineExceeded)
+		}
+	}
+	return err
 }
 func ParseDetachKey(value string) (byte, error) {
 	switch value {

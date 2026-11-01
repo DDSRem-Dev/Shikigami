@@ -488,3 +488,5 @@
 该轮工具重试已使Darwin amd64 preflight继续通过；新的macOS arm64 terminal仍需进一步分类首个checkpoint前的测试失败。失败摘要现在增加固定`failure_kinds`枚举（不公开原始日志），用于下一轮收敛夹具问题。
 
 新运行还捕获到Darwin arm64内部client测试在取消竞态中收到原始`context.Canceled`而不是等价Connect Canceled码；该路径由`terminalCause`有意保留调用方取消原因。测试现接受这两种等价取消表现，其他错误码断言不变；本地20次race通过，远端待验证。
+
+进一步复核发现部分HTTP/2路径会把取消编码为无cause的Unknown Connect错误（消息仍为标准context cancellation），测试无法可靠识别。`terminalCause`现将本地/传输层取消统一为Connect Canceled/DeadlineExceeded并保留`errors.Is` cause；其他错误原样返回。该生产边界修复已本地20次race通过，待远端验证。
