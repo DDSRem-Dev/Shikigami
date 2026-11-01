@@ -474,3 +474,5 @@
 `41247430410`验证artifact下载、主矩阵、Intel E2E/heavy、WSL2及macOS/Linux大部分收尾任务；Linux amd64 systemd在旧实现的`useradd --create-home`阶段60秒超时，macOS arm64 terminal语义阶段在托管runner上约30秒失败。失败证据没有扩大到产品断言：前者已改为预创建隔离home、`--no-create-home`并对短暂passwd锁做三次有界重试；后者为每次终端专项使用独立0700 `TMUX_TMPDIR`，避免中断运行遗留socket污染。两项本地平台工具29项、脚本83项、actionlint、终端专项重复运行及diff检查通过；旧run重跑中Linux maintenance已成功，新的源码提交仍需完整远端CI确认。
 
 新提交`2d6980e`的完整矩阵确认Linux systemd、WSL2及其余已完成任务通过，但macOS arm64 terminal仍失败；仅隔离`TMUX_TMPDIR`不足以定位该托管环境差异。现增加只输出固定checkpoint文件名的脱敏失败摘要，不上传终端原始日志或屏幕内容，下一轮据此继续修复；当前不宣称CI全绿。
+
+`2421ba3`运行的公开摘要显示terminal失败发生在首个屏幕checkpoint之前；已进一步为analyzer构建、测试二进制编译和测试启动分别加入私有running/done阶段标记，仍只公开固定文件名。Linux terminal与两项systemd维护本地回归保持通过，下一轮远端结果待定。

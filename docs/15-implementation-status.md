@@ -1028,6 +1028,8 @@ m6专用agent正常重启后，同一节点/IP已online，既有server却永久R
 
 新提交`2d6980e`的远端运行确认Linux systemd和WSL2成功，但macOS arm64 terminal仍以`terminal-semantics`失败；原始测试输出继续留在私有日志。`platform-ci.py`现仅将已写入的固定checkpoint文件名和数量导出到公开失败摘要，以便定位失败阶段而不泄露屏幕数据、路径或凭据；平台工具30项及本地终端重复验证通过，新的远端修复运行仍待。
 
+`2421ba3`的terminal公开摘要为零个checkpoint，说明失败早于首个屏幕断言；`test-terminal-state.sh`现分别标记analyzer构建、测试二进制编译和测试启动的running/done阶段，失败时只保留固定阶段名。此改动不改变测试命令、超时、tmux隔离或私有日志策略；本地terminal重复运行和平台工具30项通过，远端新运行仍待。
+
 
 ## 原生CI安装路径修复与证据同步（2026-10-31）
 

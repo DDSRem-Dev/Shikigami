@@ -1479,3 +1479,5 @@ docs02明确macOS纯userspace承载与代理边界，08/15/16同步37/42；完�
 `41247430410`暴露两项托管runner收尾不稳定：Linux amd64 systemd旧路径在`useradd --create-home`达到60秒预算，macOS arm64 terminal语义阶段约30秒失败；其余主矩阵、artifact、WSL2及多数收尾阶段通过。七类架构复核确认修复只涉及验收夹具的账号建立与终端socket隔离，不改变插件/SDK-host边界、RPC准入授权、持久状态与revision/去重、进程生命周期、文件/终端/TCP语义或CLI/安装契约。systemd现在预创建私有home并对短暂passwd锁进行身份校验后的有界重试；终端每次运行隔离0700 `TMUX_TMPDIR`。本地29项平台工具、83项脚本、actionlint、终端重复运行和diff均通过；旧run重跑Linux maintenance通过，最终远端新提交验证仍待。
 
 新提交`2d6980e`的收尾验证确认Linux systemd和WSL2通过，但macOS arm64 terminal仍失败；tmux目录隔离未改变该托管环境结果。新增checkpoint文件名摘要只公开固定文件名/数量，不改变终端断言、屏幕字节或私有日志策略，架构七类复核无新增边界偏差；待下一提交用该安全诊断定位后再宣称全绿。
+
+`2421ba3`的安全摘要确认macOS terminal在首个checkpoint前退出；新增三阶段固定标记仅扩大诊断可见性，不改变生产边界、终端断言或验收覆盖。Linux terminal、systemd账号重试及本地架构/脚本检查通过，待下一轮用阶段标记定位托管环境差异。
