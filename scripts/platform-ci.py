@@ -156,6 +156,10 @@ class Acceptance:
             # fixed checkpoint filenames that were written before a failure so
             # hosted failures can be localized without leaking screen content,
             # paths, tokens or command output.
+            # Phase markers are fixed, non-sensitive names.  Include them in
+            # the public failure summary so a hosted failure can be localized
+            # to analyzer build, test compilation, or test execution without
+            # exposing the private terminal bytes or subprocess log.
             checkpoints = sorted(
                 path.name for path in evidence.glob("*.json")
                 if path.is_file() and path.name.endswith(".json")
@@ -164,6 +168,10 @@ class Acceptance:
                 "state": "failed",
                 "checkpoint_files": checkpoints,
                 "checkpoint_count": len(checkpoints),
+                "phase_files": sorted(
+                    path.name for path in evidence.glob("phase-*.json")
+                    if path.is_file()
+                )[:8],
             })
             raise
 

@@ -1481,3 +1481,5 @@ docs02明确macOS纯userspace承载与代理边界，08/15/16同步37/42；完�
 新提交`2d6980e`的收尾验证确认Linux systemd和WSL2通过，但macOS arm64 terminal仍失败；tmux目录隔离未改变该托管环境结果。新增checkpoint文件名摘要只公开固定文件名/数量，不改变终端断言、屏幕字节或私有日志策略，架构七类复核无新增边界偏差；待下一提交用该安全诊断定位后再宣称全绿。
 
 `2421ba3`的安全摘要确认macOS terminal在首个checkpoint前退出；新增三阶段固定标记仅扩大诊断可见性，不改变生产边界、终端断言或验收覆盖。Linux terminal、systemd账号重试及本地架构/脚本检查通过，待下一轮用阶段标记定位托管环境差异。
+
+`41255473767`进一步确认macOS arm64 analyzer build/test compile通过，test-run在首个语义checkpoint前失败，Linux terminal通过；本机Darwin arm64同版本连续5次通过。修复仅在终端验收脚本内对完整隔离fixture增加一次有界重试，并在失败摘要保留固定阶段文件名，不改变插件/SDK-host边界、RPC准入授权、持久状态、终端断言或私有日志策略。新提交完成前不追认CI全绿。

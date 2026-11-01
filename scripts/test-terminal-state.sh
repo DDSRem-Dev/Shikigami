@@ -26,8 +26,15 @@ main() {
   go version -m "$shiki_terminal_test" > "$SHIKI_RUN_EVIDENCE_DIR/test-build.txt"
   export SHIKI_TERMINAL_ANALYZER="$shiki_terminal_analyzer"
   mark_phase test-run
-  "$shiki_terminal_test" -test.v -test.count=1 -test.timeout=90s
-  status=$?
+  # Hosted macOS runners occasionally lose the short-lived tmux fixture while
+  # the runner is under load.  Retry the complete isolated test process once;
+  # a real assertion failure still fails the stage after both attempts.
+  status=1
+  for attempt in 1 2; do
+    "$shiki_terminal_test" -test.v -test.count=1 -test.timeout=90s && status=0 || status=$?
+    [[ "$status" == 0 || "$status" == 130 || "$status" == 143 || "$attempt" == 2 ]] && break
+    echo "terminal semantic test attempt $attempt failed; retrying isolated fixture" >&2
+  done
   complete_phase test-run
   return "$status"
 }

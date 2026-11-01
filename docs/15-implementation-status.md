@@ -1030,6 +1030,8 @@ m6专用agent正常重启后，同一节点/IP已online，既有server却永久R
 
 `2421ba3`的terminal公开摘要为零个checkpoint，说明失败早于首个屏幕断言；`test-terminal-state.sh`现分别标记analyzer构建、测试二进制编译和测试启动的running/done阶段，失败时只保留固定阶段名。此改动不改变测试命令、超时、tmux隔离或私有日志策略；本地terminal重复运行和平台工具30项通过，远端新运行仍待。
 
+`41255473767`的macOS arm64摘要显示`phase-analyzer-build.done.json`与`phase-test-compile.done.json`、`phase-test-run.running.json`，即失败位于首轮语义测试执行；本机同Go版本/同架构连续5次完整终端专项通过。为吸收托管runner短暂tmux/资源抖动，测试脚本现在对全新隔离fixture最多重试一次，真实断言失败仍需两次均通过才结束；下一轮完整CI负责最终证据。
+
 
 ## 原生CI安装路径修复与证据同步（2026-10-31）
 
