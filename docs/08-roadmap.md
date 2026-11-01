@@ -482,3 +482,5 @@
 `41257594777`验证了原重试分支未实际进入第二次运行（shell errexit与共享tmux目录使其仍约27秒失败）；现已改为显式条件分支，并为每次尝试创建独立0700 `TMUX_TMPDIR`，保留两次失败才报告失败的门槛。该修复待下一轮完整CI验证。
 
 该轮两次隔离尝试均在首个checkpoint前失败，阶段总时长约25秒，符合托管runner上agent UDS启动窗口过短的表现；已将terminal fixture的有界agent就绪等待从5秒增至15秒，保留上下文总截止、所有断言和清理要求。新提交待远端验证。
+
+`41262112652`另暴露Darwin amd64 preflight在`go install protoc-gen-connect-go@v2.0.2`访问proxy.golang.org时的65秒TCP超时；不是源码或协议生成漂移。工具安装脚本现对下载和三个固定工具安装各做最多3次有界重试，并保留失败即失败语义，待下一轮远端验证。

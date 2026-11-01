@@ -2,6 +2,20 @@
 set -euo pipefail
 shiki_root=$(cd "$(dirname "$0")/.." && pwd)
 source "$shiki_root/scripts/tool-versions.env"
+
+shiki_retry() {
+  local attempt
+  for attempt in 1 2 3; do
+    if "$@"; then
+      return 0
+    fi
+    if [[ "$attempt" != 3 ]]; then
+      sleep $((attempt * 2))
+    fi
+  done
+  return 1
+}
+
 case "$(uname -s):$(uname -m)" in
   Darwin:arm64|Darwin:x86_64) shiki_platform=osx-universal_binary ;;
   Linux:x86_64) shiki_platform=linux-x86_64 ;;
@@ -12,7 +26,8 @@ shiki_archive="protoc-${PROTOC_VERSION}-${shiki_platform}.zip"
 shiki_tools="$shiki_root/.tools"
 mkdir -p "$shiki_tools/downloads" "$shiki_tools/bin"
 if [[ ! -f "$shiki_tools/downloads/$shiki_archive" ]]; then
-  curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
+  shiki_retry curl --fail --location --retry 3 --retry-all-errors --connect-timeout 20 --max-time 180 \
+    --proto '=https' --tlsv1.2 \
     "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/$shiki_archive" \
     --output "$shiki_tools/downloads/$shiki_archive.part"
   mv "$shiki_tools/downloads/$shiki_archive.part" "$shiki_tools/downloads/$shiki_archive"
@@ -29,7 +44,7 @@ if [[ -z "$shiki_expected" || "$shiki_actual" != "$shiki_expected" ]]; then
 fi
 mkdir -p "$shiki_tools/protoc-$PROTOC_VERSION"
 unzip -oq "$shiki_tools/downloads/$shiki_archive" -d "$shiki_tools/protoc-$PROTOC_VERSION"
-GOBIN="$shiki_tools/bin" go install "google.golang.org/protobuf/cmd/protoc-gen-go@$PROTOC_GEN_GO_VERSION"
-GOBIN="$shiki_tools/bin" go install "connectrpc.com/connect/v2/cmd/protoc-gen-connect-go@$PROTOC_GEN_CONNECT_GO_VERSION"
-GOBIN="$shiki_tools/bin" go install "google.golang.org/grpc/cmd/protoc-gen-go-grpc@$PROTOC_GEN_GO_GRPC_VERSION"
+shiki_retry env GOBIN="$shiki_tools/bin" go install "google.golang.org/protobuf/cmd/protoc-gen-go@$PROTOC_GEN_GO_VERSION"
+shiki_retry env GOBIN="$shiki_tools/bin" go install "connectrpc.com/connect/v2/cmd/protoc-gen-connect-go@$PROTOC_GEN_CONNECT_GO_VERSION"
+shiki_retry env GOBIN="$shiki_tools/bin" go install "google.golang.org/grpc/cmd/protoc-gen-go-grpc@$PROTOC_GEN_GO_GRPC_VERSION"
 "$shiki_tools/protoc-$PROTOC_VERSION/bin/protoc" --version

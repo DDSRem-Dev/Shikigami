@@ -1036,6 +1036,8 @@ m6专用agent正常重启后，同一节点/IP已online，既有server却永久R
 
 后续`41259732438`确认两次独立尝试均在首个语义checkpoint前失败，阶段约24.9秒；本机同架构终端专项仍通过。现将fixture等待agent UDS就绪的有界窗口由5秒增至15秒，作为托管资源抖动的测试夹具稳定性修复，不改变生产超时、终端协议或断言，待新CI确认。
 
+`41262112652`的Darwin amd64 preflight失败原因为`go install protoc-gen-connect-go@v2.0.2`向proxy.golang.org建立TCP连接超时，工具下载/生成尚未开始，其他平台前置通过。`scripts/dev-setup.sh`现对protoc下载和三个版本锁定的生成器安装各执行最多3次、带连接和总时限；本地`make tools generate-proto`通过，下一轮验证远端网络抖动恢复。
+
 
 ## 原生CI安装路径修复与证据同步（2026-10-31）
 
