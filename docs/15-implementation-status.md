@@ -1038,6 +1038,8 @@ m6专用agent正常重启后，同一节点/IP已online，既有server却永久R
 
 `41262112652`的Darwin amd64 preflight失败原因为`go install protoc-gen-connect-go@v2.0.2`向proxy.golang.org建立TCP连接超时，工具下载/生成尚未开始，其他平台前置通过。`scripts/dev-setup.sh`现对protoc下载和三个版本锁定的生成器安装各执行最多3次、带连接和总时限；本地`make tools generate-proto`通过，下一轮验证远端网络抖动恢复。
 
+新运行的Darwin amd64 preflight已通过重试继续完成；macOS arm64 terminal仍在两次隔离尝试后失败，阶段约27.6秒且无屏幕checkpoint。公开摘要新增固定失败类别枚举，原始测试日志继续只存私有目录，下一轮用于定位具体fixture边界。
+
 
 ## 原生CI安装路径修复与证据同步（2026-10-31）
 

@@ -164,6 +164,30 @@ class Acceptance:
                 path.name for path in evidence.glob("*.json")
                 if path.is_file() and path.name.endswith(".json")
             )[:64]
+            log_text = ""
+            log_path = self.private / "terminal-semantics.log"
+            if log_path.is_file():
+                log_text = log_path.read_text(errors="replace")
+            failure_kinds = []
+            for marker, kind in (
+                ("tmux required", "tmux-unavailable"),
+                ("independent analyzer", "analyzer-failure"),
+                ("termios not restored", "termios-restore"),
+                ("terminal stuck", "terminal-stuck"),
+                ("capture reader stuck", "capture-reader-stuck"),
+                ("agent did not stop", "agent-shutdown"),
+                ("missing rendered marker", "semantic-mismatch"),
+                ("semantic state", "semantic-mismatch"),
+                ("context deadline exceeded", "fixture-timeout"),
+                ("permission denied", "fixture-permission"),
+                ("fixture_test.go:", "fixture-setup-failure"),
+                ("capture_test.go:", "capture-failure"),
+                ("semantic_test.go:", "semantic-test-failure"),
+            ):
+                if marker in log_text:
+                    failure_kinds.append(kind)
+            if not failure_kinds:
+                failure_kinds = ["test-failure"]
             write_json(self.public / "terminal-failure.json", {
                 "state": "failed",
                 "checkpoint_files": checkpoints,
@@ -172,6 +196,7 @@ class Acceptance:
                     path.name for path in evidence.glob("phase-*.json")
                     if path.is_file()
                 )[:8],
+                "failure_kinds": failure_kinds,
             })
             raise
 

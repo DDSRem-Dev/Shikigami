@@ -484,3 +484,5 @@
 该轮两次隔离尝试均在首个checkpoint前失败，阶段总时长约25秒，符合托管runner上agent UDS启动窗口过短的表现；已将terminal fixture的有界agent就绪等待从5秒增至15秒，保留上下文总截止、所有断言和清理要求。新提交待远端验证。
 
 `41262112652`另暴露Darwin amd64 preflight在`go install protoc-gen-connect-go@v2.0.2`访问proxy.golang.org时的65秒TCP超时；不是源码或协议生成漂移。工具安装脚本现对下载和三个固定工具安装各做最多3次有界重试，并保留失败即失败语义，待下一轮远端验证。
+
+该轮工具重试已使Darwin amd64 preflight继续通过；新的macOS arm64 terminal仍需进一步分类首个checkpoint前的测试失败。失败摘要现在增加固定`failure_kinds`枚举（不公开原始日志），用于下一轮收敛夹具问题。
