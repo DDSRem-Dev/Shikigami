@@ -490,3 +490,5 @@
 新运行还捕获到Darwin arm64内部client测试在取消竞态中收到原始`context.Canceled`而不是等价Connect Canceled码；该路径由`terminalCause`有意保留调用方取消原因。测试现接受这两种等价取消表现，其他错误码断言不变；本地20次race通过，远端待验证。
 
 进一步复核发现部分HTTP/2路径会把取消编码为无cause的Unknown Connect错误（消息仍为标准context cancellation），测试无法可靠识别。`terminalCause`现将本地/传输层取消统一为Connect Canceled/DeadlineExceeded并保留`errors.Is` cause；其他错误原样返回。该生产边界修复已本地20次race通过，待远端验证。
+
+同轮还发现Darwin arm64的端口准入测试在32个静默请求尚未全部进入 admission counter 时就探测第33个请求，偶发得到插件不可用而非预算耗尽。测试现先等待精确计数后再探测；本地10次race通过，未改变生产限额或错误语义。

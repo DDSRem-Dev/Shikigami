@@ -1495,3 +1495,5 @@ docs02明确macOS纯userspace承载与代理边界，08/15/16同步37/42；完�
 该轮Darwin arm64内部client race暴露取消竞态的错误表示差异：`terminalCause`按设计保留`context.Canceled`，传输路径可能报告Connect Canceled。测试仅放宽这两个等价取消表示，raw-mode与终端恢复断言保持严格；本地20次race通过，未改生产协议/生命周期语义。
 
 进一步审查确认某些HTTP/2取消会产生无cause Unknown Connect错误；`terminalCause`现只对标准取消原因/固定取消消息做Connect状态归一化并保留本地cause，数据、权限、协议和其他Unknown错误继续原样失败。该修复不改变RPC准入、终端raw/恢复或生命周期边界，待远端CI验证。
+
+端口准入失败属于测试观察竞态：32个静默请求尚未全部取得admission slot时提前发送第33个请求，不能据此判断生产预算失效。测试现等待精确计数器达到上限再执行探测，未放宽ResourceExhausted断言，也未改端口限额/准入实现；本地10次race通过。

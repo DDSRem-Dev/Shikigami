@@ -1044,6 +1044,8 @@ m6专用agent正常重启后，同一节点/IP已online，既有server却永久R
 
 复核发现部分HTTP/2取消返回无cause的Unknown Connect错误，导致仅测试放宽仍不稳定；现由`terminalCause`统一映射本地及标准取消消息到Connect Canceled/DeadlineExceeded并附加本地cause，保留`errors.Is`语义，其他错误不改变。本地20次race通过，提交后由完整CI复验。
 
+同轮Darwin arm64 `TestPortAdmissionSharesBudgetBeforeFirstFrame/WatchPorts`因测试在32个请求尚未进入计数器时提前探测，收到`plugin is unavailable`；已等待对应精确admission计数达到上限后再断言ResourceExhausted。本地10次race通过，生产端口预算未改。
+
 
 ## 原生CI安装路径修复与证据同步（2026-10-31）
 

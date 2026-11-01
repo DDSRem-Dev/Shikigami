@@ -54,6 +54,8 @@ func TestPortAdmissionSharesBudgetBeforeFirstFrame(t *testing.T) {
 				default:
 				}
 			}
+			counter, maximum := f.service.portCalls.budget("/shiki.v1.ShikiDaemon/" + method)
+			waitFileCount(t, counter, maximum)
 			var observed error
 			until := time.Now().Add(500 * time.Millisecond)
 			for time.Now().Before(until) {
