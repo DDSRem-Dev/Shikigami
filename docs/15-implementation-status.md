@@ -1032,6 +1032,8 @@ m6专用agent正常重启后，同一节点/IP已online，既有server却永久R
 
 `41255473767`的macOS arm64摘要显示`phase-analyzer-build.done.json`与`phase-test-compile.done.json`、`phase-test-run.running.json`，即失败位于首轮语义测试执行；本机同Go版本/同架构连续5次完整终端专项通过。为吸收托管runner短暂tmux/资源抖动，测试脚本现在对全新隔离fixture最多重试一次，真实断言失败仍需两次均通过才结束；下一轮完整CI负责最终证据。
 
+`41257594777`显示上述重试分支受shell errexit影响未执行第二次（阶段约27秒即失败）。已改用显式`if`控制并给每次尝试分配独立0700 `TMUX_TMPDIR`，避免失败fixture的tmux状态影响后续尝试；本机终端专项与工具检查保持通过，等待新远端证据。
+
 
 ## 原生CI安装路径修复与证据同步（2026-10-31）
 

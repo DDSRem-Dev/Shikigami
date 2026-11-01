@@ -11,7 +11,6 @@ main() {
   # process; sharing it makes the first pane attach nondeterministic.
   shiki_tmux_tmpdir="$SHIKI_RUN_EVIDENCE_DIR/tmux-tmp"
   mkdir -m 700 "$shiki_tmux_tmpdir"
-  export TMUX_TMPDIR="$shiki_tmux_tmpdir"
   mark_phase() { printf '{}\n' > "$SHIKI_RUN_EVIDENCE_DIR/phase-$1.running.json"; }
   complete_phase() { mv "$SHIKI_RUN_EVIDENCE_DIR/phase-$1.running.json" "$SHIKI_RUN_EVIDENCE_DIR/phase-$1.done.json"; }
   shiki_terminal_analyzer="$SHIKI_RUN_EVIDENCE_DIR/terminal-analyzer"
@@ -31,8 +30,12 @@ main() {
   # a real assertion failure still fails the stage after both attempts.
   status=1
   for attempt in 1 2; do
-    "$shiki_terminal_test" -test.v -test.count=1 -test.timeout=90s && status=0 || status=$?
-    [[ "$status" == 0 || "$status" == 130 || "$status" == 143 || "$attempt" == 2 ]] && break
+    attempt_tmux_tmpdir="$shiki_tmux_tmpdir/attempt-$attempt"
+    mkdir -m 700 "$attempt_tmux_tmpdir"
+    TMUX_TMPDIR="$attempt_tmux_tmpdir" "$shiki_terminal_test" -test.v -test.count=1 -test.timeout=90s && status=0 || status=$?
+    if [[ "$status" == 0 || "$status" == 130 || "$status" == 143 || "$attempt" == 2 ]]; then
+      break
+    fi
     echo "terminal semantic test attempt $attempt failed; retrying isolated fixture" >&2
   done
   complete_phase test-run
