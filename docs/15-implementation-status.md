@@ -1040,6 +1040,8 @@ m6专用agent正常重启后，同一节点/IP已online，既有server却永久R
 
 新运行的Darwin amd64 preflight已通过重试继续完成；macOS arm64 terminal仍在两次隔离尝试后失败，阶段约27.6秒且无屏幕checkpoint。公开摘要新增固定失败类别枚举，原始测试日志继续只存私有目录，下一轮用于定位具体fixture边界。
 
+同轮Darwin arm64 `internal/client` race在`TestTerminalTakeoverFailureDoesNotEnterRaw/cancel`报告`context.Canceled`与Connect Canceled码的观察顺序差异；生产`terminalCause`保留调用方取消原因，测试现接受这两个等价结果，仍严格检查未进入raw及终端状态未改变。本地20次race通过，待远端复验。
+
 
 ## 原生CI安装路径修复与证据同步（2026-10-31）
 

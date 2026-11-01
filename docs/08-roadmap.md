@@ -486,3 +486,5 @@
 `41262112652`另暴露Darwin amd64 preflight在`go install protoc-gen-connect-go@v2.0.2`访问proxy.golang.org时的65秒TCP超时；不是源码或协议生成漂移。工具安装脚本现对下载和三个固定工具安装各做最多3次有界重试，并保留失败即失败语义，待下一轮远端验证。
 
 该轮工具重试已使Darwin amd64 preflight继续通过；新的macOS arm64 terminal仍需进一步分类首个checkpoint前的测试失败。失败摘要现在增加固定`failure_kinds`枚举（不公开原始日志），用于下一轮收敛夹具问题。
+
+新运行还捕获到Darwin arm64内部client测试在取消竞态中收到原始`context.Canceled`而不是等价Connect Canceled码；该路径由`terminalCause`有意保留调用方取消原因。测试现接受这两种等价取消表现，其他错误码断言不变；本地20次race通过，远端待验证。

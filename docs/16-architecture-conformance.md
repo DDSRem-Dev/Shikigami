@@ -1491,3 +1491,5 @@ docs02明确macOS纯userspace承载与代理边界，08/15/16同步37/42；完�
 `41262112652`的独立失败发生在Darwin amd64 preflight工具安装的proxy TCP超时，未进入协议生成或产品测试；七类架构边界无变化。`dev-setup.sh`现在对固定工具网络操作提供最多3次有界重试和连接/总时限，仍在最终失败时退出，不缓存不完整工具或放宽生成漂移检查。
 
 新轮次确认工具重试可使Darwin amd64 preflight通过；arm64 terminal两次隔离测试仍在首个checkpoint前失败。失败摘要仅新增固定`failure_kinds`分类，不上传屏幕/凭据/原始日志，也不改变终端语义断言或任何生产架构边界。
+
+该轮Darwin arm64内部client race暴露取消竞态的错误表示差异：`terminalCause`按设计保留`context.Canceled`，传输路径可能报告Connect Canceled。测试仅放宽这两个等价取消表示，raw-mode与终端恢复断言保持严格；本地20次race通过，未改生产协议/生命周期语义。

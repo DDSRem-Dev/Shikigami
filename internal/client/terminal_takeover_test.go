@@ -240,7 +240,12 @@ func TestTerminalTakeoverFailureDoesNotEnterRaw(t *testing.T) {
 			client := frontendFixture(t, probe)()
 			shown := false
 			err = client.Terminal(ctx, "server", "session", TerminalOptions{Input: slave, Output: slave, TakeControl: true, BeforeRaw: func(TerminalState) { shown = true }})
-			if connect.CodeOf(err) != scenario.code {
+			// Caller cancellation is intentionally preserved as context.Canceled
+			// by terminalCause; transports may instead surface the equivalent
+			// Connect Canceled code depending on which side observes it first.
+			if scenario.name == "cancel" && errors.Is(err, context.Canceled) {
+				// accepted below
+			} else if connect.CodeOf(err) != scenario.code {
 				t.Fatalf("got %v, want %v", err, scenario.code)
 			}
 			if scenario.name == "peer-eof" && !errors.Is(err, io.EOF) {
