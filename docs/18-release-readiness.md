@@ -4,6 +4,54 @@
 
 历史首个公开预发布 [v0.0.1-alpha.1](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.1) 已通过 tag 全自动工作流发布；固定提交为 `f0b5f83dce599c8e0d715bda5e7806a0ef6aaa72`，[Actions 40895007350](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40895007350) 已完成且成功，包含同源 CI、四目标构建、签名验签和公开发布。Release 于 `2026-10-29T15:13:47Z` 公开，`draft=false`、`prerelease=true`，共22个资产；独立下载与实际产物验证结果见[公开发行证据](15-implementation-status.md#evidence-public-alpha-release-20261029)。本文件保存发布流程、验收边界与剩余门槛；[该版本说明](./releases/v0.0.1-alpha.1.md) 随 tag 冻结。完整范围仍由 [08 路线图](./08-roadmap.md) 决定，预发布不缩小交付要求。
 
+<a id="current-support"></a>
+## 当前支持声明（2026-11-05）
+
+本节是当前支持范围的统一入口。路线图 Phase 0–5 的原42项已完成验收登记与支持声明核对；这不表示已发布包含当前修复的新版本或稳定版。下文按日期保留的候选、失败、平台待办仅代表当时范围，不能覆盖本节。
+
+### 版本与证据来源
+
+| 对象 | 当前结论 | 来源与限制 |
+|---|---|---|
+| 当前源码 | 本轮基于 `0727b3b4cc0f1ccdc0f7a9ec932838de9ea09075`，工作树变更仅为文档；下表描述其已有实现及限定验收 | 仓库记录 `b948664` 的 CI [41269137757](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41269137757) 为57/57成功；本轮不声称重新运行该CI或全部产品测试，逐批来源见15/16 |
+| 认证生命周期、长稳/资源/性能 | 2026-11-01按用户确认测试通过关闭 | 既有实测证据分别见23、20；用户确认与独立实测分别记录，不补造官方URL到期现场或生产heap/object归因结果 |
+| 公开安装包 | 本仓库安装入口及Formula固定为 `v0.0.1-alpha.2`，来源 `fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2` | 公开包证据见22/24及冻结发布说明；不包含其后认证、取消和macOS系统代理等修复，本轮未重新查询远端Release列表 |
+| 下一发行版 | 尚未由本轮创建、构建或发布 | 需固定新tag、通过该来源的发布流水线，并核验新资产、安装与渠道；不能从源码验收直接推定新包通过 |
+
+### 功能支持矩阵
+
+“已支持”限于当前源码、对应权限/配置和下述已验平台；不同历史测试分别绑定各自源码，不能拼接成所有场景均在当前二进制上重跑过。
+
+| 功能 | 当前支持范围 | 验收依据与边界 |
+|---|---|---|
+| CLI/TUI、本地agent、项目/会话 | 受限IPC、多前端共用后台、项目/会话管理、配置、诊断 | 13/15及CLI/agent测试；一个daemon对应一个OS用户，同用户多设备，不提供多租户隔离 |
+| tmux终端与恢复 | 输入输出、屏幕初始化、resize、多观察者/显式控制权接管、断线保活及有界恢复 | 15/25终端与崩溃验收；旧输入不重放，不提供会话历史录制/回放 |
+| tsnet与TLS | 内嵌节点登录、身份保持、P2P/DERP、Token权限/撤销、显式TLS回退 | 23及用户确认；认证失败不换路线绕过。SDK无法区分的原因保持unknown/既有回退，不承诺额外细分信号 |
+| sync双端插件 | 项目双向同步、共同基线、冲突处理、原子文件替换、watch/ignore、后台pause/resume与恢复 | 15/25；未知提交按日志恢复，不静默覆盖冲突；非备份或三方自动合并 |
+| port双端插件 | TCP发现/授权、loopback监听、双向流、半关闭、限额、后台转发 | 15/25及真实插件集成；不提供UDP业务转发、WSS隧道或无限连接 |
+| 会话配置快照与模板 | 保存启动配置、从当前项目文件创建新会话 | `session-config-snapshot.v1`、CLI帮助及session快照测试；不恢复文件、环境、进程或Claude对话历史 |
+| 安装与维护 | 认证bundle、显式安装/升级/回滚、systemd或LaunchAgent、卸载保留数据 | 11/24/26；历史公开包和本地候选分别记录，跨schema回退受兼容性限制；Homebrew不自动启动或升级受管服务 |
+| 长稳、资源与性能 | 已记录负载下的默认12小时轮换、恢复尾部、资源回收、故障及性能回归 | 20及15专项、用户确认；c4长跑为direct-TLS/shell夹具，不是tsnet/Claude长跑。没有全环境零泄漏、最大容量、延迟SLA承诺 |
+| 签名、分发与支持入口 | Ed25519归档认证、固定版本Release/Homebrew、GitHub Issues | 21/22/24；不是Apple公证或在线密钥撤销服务；无响应时限/SLA承诺 |
+
+### 已验平台与角色
+
+| 环境 | 可声明范围 | 依据及限制 |
+|---|---|---|
+| macOS 15 arm64 / amd64原生runner | CLI/TUI、agent、双端业务链中的客户端、LaunchAgent维护 | 26同源五平台及后续CI；不因darwin包包含daemon就宣布macOS daemon部署受支持 |
+| macOS 27.0.1 arm64本机 | 已记录客户端、官方网络及实际安装/维护场景 | 23/24；Homebrew有该机器Xcode/CLT限制，不能外推所有macOS 27机器完整brew链 |
+| Ubuntu 24.04 amd64 / arm64原生runner | Linux客户端、daemon、插件、systemd及用户服务维护 | 26；限定已验镜像/依赖，不推定所有Linux发行版通过 |
+| WSL2 amd64，Windows Server 2025宿主、隔离Ubuntu 24.04.5 | Linux文件系统及systemd模式下的产品/维护矩阵 | 26；不包含原生Windows程序、WSL1或Windows挂载盘上的完整文件语义 |
+| Debian amd64 VPS、Debian bookworm arm64容器 | VPS官方网络/服务场景；容器systemd与故障场景 | 23/24/25；物理VPS与容器证据分别使用，不把容器poweroff当实际主机重启 |
+
+上述是验收环境清单，不是最低OS版本兼容保证。其他版本/架构、真实硬件重启/重新登录及自然切网组合仍未实测。服务恢复以11的已完成替代矩阵为依据。真实Claude登录/推理按用户范围排除且未实测，shell夹具不代表Claude账号可用；安装器仍按实际依赖/登录报告返回ready或application_pending。
+
+### 明确未支持与后续发布
+
+GUI、WSS、文件级快照/worktree恢复、三方自动合并、终端历史录制回放、Claude对话恢复集成、多租户隔离和插件市场均属后续范围，不由当前帮助或capability承诺支持。Windows仅声明上表的WSL2范围。
+
+最后一项的结束条件为：本矩阵与源码能力/命令帮助相符；各声明可追溯至对应证据或用户确认；未实测与未实现范围明确；README、08/15/16及安装入口版本一致。本轮据此关闭支持声明，原清单42/42；生产heap归因等边界保留，不作为已经取得的新测试结果。后续发布必须单独记录新版本、固定源码、流水线与归档验收，原alpha.2和旧失败不追改。
+
 ## 当前许可证与 Homebrew 首发
 
 用户指定Homebrew首发版本为`v0.0.1-alpha.2`，采用GPL-3.0-only。根[LICENSE](../LICENSE)为[GNU官网GPLv3完整正文](https://www.gnu.org/licenses/gpl-3.0.txt)，35,149字节，SHA-256 `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`；项目授权范围在根README明确为version3 only。构建原样复制LICENSE并纳入归档签名/hash；生成器从四目标已认证归档的完整LICENSE识别许可证，未知或不一致拒绝。旧alpha.1及其固定源码保留MIT，不覆盖或追改历史产物。
@@ -108,7 +156,8 @@ Homebrew首发`v0.0.1-alpha.2`已由上述tag运行自动发布公式，版本/U
 新流程本地38项工具测试、actionlint及真实verifier的四目标签名/篡改拒绝验证已通过；
 首次真实tag运行40895007350已完整成功并公开22个资产；22个公开资产独立下载后的签名、payload hash、pin及远端摘要核对通过，24个二进制的版本/提交/目标和macOS arm64、Linux arm64的直接运行/重复离线暂存通过；未激活服务，BuiltAt仅4个shiki二进制静态保留、其余20个已被链接器优化掉，不冒充验证。详细范围见[公开发行证据](15-implementation-status.md#evidence-public-alpha-release-20261029)。
 
-## 当前公开版本与历史候选的验收边界
+<a id="当前公开版本与历史候选的验收边界"></a>
+## 历史公开版本与候选的验收边界
 
 **公开版本：** v0.0.1-alpha.1来自f0b5f83及自动运行40895007350，四目标归档已经公开；下载认证及直接运行/暂存检查的实际范围见[公开发行证据](15-implementation-status.md#evidence-public-alpha-release-20261029)，不以旧候选替代新归档验收。
 
@@ -151,7 +200,10 @@ Shikigami 通过本地 CLI/TUI 和常驻 agent 使用远端普通用户的 tmux/
 
 上述为历史开发候选的实现/验收边界，不是当前待办清单或正式版本的平台支持承诺；当时真实Claude账号、官方Tailscale政策、物理多设备、原生VPS、重启/登录持久化、生产长稳和最终签名分发仍有待验项。当前进度见08，真实Claude登录/推理已按[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)移出交付验收且未实测。GUI、WSS、增量同步、文件快照、终端历史回放和多租户仍在首版之后。
 
-## 平台与证据矩阵
+<a id="平台与证据矩阵"></a>
+## 历史平台与证据矩阵（2026-10-29）
+
+本节保留当时快照；WSL与原生Intel等后续通过结果已纳入[当前支持声明](#current-support)，不再作为当前待办。
 
 当前更正：默认连接准入发现client单连接拒绝取消整组转发，已按文档修复并恢复Phase3条目，当前29/42。633源码v2真实双端回归有效红绿、双平台受影响race/vet、普通完整混合负载及default128保持/释放一槽均通过；见[隔离修复](15-implementation-status.md#evidence-port-limit-isolation-validation)。原Linux12小时运行已于09:13:50失败于替换进程身份读取ENOENT，只有server-sync旧代到期退役得到导出证据，无完整恢复或30分钟尾部；见[轮换结果](15-implementation-status.md#evidence-default-rotation-validation)。
 
@@ -219,7 +271,10 @@ Shikigami 通过本地 CLI/TUI 和常驻 agent 使用远端普通用户的 tmux/
 
 反馈材料应包括准确 build/OS/arch、操作与退出码、脱敏 reason_code、受影响范围、可复现步骤，以及对应的测试/运行日志位置。不要附 Token、auth key、登录 URL、账号原始输出、私有配置全文或项目内容。`shiki logs` 是宿主脱敏的插件日志，不能代替不存在的 daemon 文件日志；Linux daemon 默认查看相应 systemd journal。
 
-## 预发布后的剩余交付门槛
+<a id="预发布后的剩余交付门槛"></a>
+## 历史预发布后的交付门槛（2026-10-29）
+
+以下是首发时的证据与待办，当前完成状态和未实测边界以[当前支持声明](#current-support)为准。
 
 首个公开alpha已固定版本/tag `v0.0.1-alpha.1`、源码 `f0b5f83dce599c8e0d715bda5e7806a0ef6aaa72`、成功自动运行 `40895007350`、四目标签名归档、专用公钥及真实Release/Issues入口。来源与独立下载验证结果见[发行证据](15-implementation-status.md#evidence-public-alpha-release-20261029)。92cafaf、CI40872062129及签名运行40877214329仅为首发前候选历史，不是公开资产来源。完整平台/服务/外部账号矩阵及其余交付门槛继续保留。
 

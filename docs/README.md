@@ -1,6 +1,6 @@
 # Shikigami 设计文档导航
 
-**状态：当前公开预发布 v0.0.1-alpha.2 已通过 tag 全自动构建、签名、发布并更新 Homebrew Formula；Phase 0–5 尚未完整交付。** 三宿主命令、终端闭环、双端同步/端口插件、监控、配置快照、TUI 与诊断已有实现及本地测试；安装事务和产物工具已有隔离验收，原生macOS LaunchAgent及Linux容器真实systemd生命周期已通过；官方tsnet登录、进程身份保持与真实P2P/DERP业务流已通过；四目标原生Homebrew和Mac/VPS双客户端/关键恢复验收亦已通过，同源五平台完整产品与服务验收已通过，路线图39/42；官方身份下实际安装/升级/回滚、服务恢复替代矩阵及卸载保持已通过，专用测试环境已清理，见[24终态](24-public-package-compatibility.md#installer-final-20261031)；完整Tailscale认证生命周期、生产资源归因及最终支持声明仍未完成；真实Claude登录/推理不纳入当前交付验收，且未实测，见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)；按用户明确约束不重启实际Mac/VPS，执行方案见[11替代验收](11-automated-installation.md#no-host-reboot-acceptance-20261031)。逐项进度见 [08 路线图](./08-roadmap.md)，证据与待完成门槛见 [15 实施记录](./15-implementation-status.md)。00–14 保留设计契约，不能仅凭示例认定功能已经可用。
+**状态：当前源码 Phase 0–5 验收清单已闭环（42/42）。** [当前支持声明](18-release-readiness.md#current-support)统一功能、平台、证据和未支持范围；[08 路线图](08-roadmap.md)、[15 实施记录](15-implementation-status.md)与[16 架构复核](16-architecture-conformance.md)记录关闭依据。认证生命周期和长稳、资源与性能按用户确认通过；真实 Claude 登录/推理、物理主机重启及生产 heap/object 归因仍保留未实测边界。公开安装入口仍为 v0.0.1-alpha.2，未包含后续 master 修复，本轮未发布新版本。00–14 保留设计契约，不能仅凭示例认定功能已经可用。
 
 ## 文档清单
 
@@ -26,7 +26,7 @@
 
 原型复盘与条件估算：[17 原型复盘](./17-prototype-reassessment.md)。公开预发布、自动发布流程与交付门槛：[18 发布准备](./18-release-readiness.md)。
 
-当前候选的证据矩阵与待验条件：[19 本地验收收敛](./19-local-acceptance-closure.md)。完整长跑记录分析：[20 资源审查](./20-long-run-resource-review.md)。隔离签名演练：[21 密钥轮换与撤信](./21-release-key-rotation.md)。Homebrew渠道：[22 分发与安装](./22-homebrew-distribution.md)。官方网络与认证矩阵：[23 外部tsnet验收](./23-tsnet-external-acceptance.md)。
+各候选的历史证据矩阵与验收边界：[19 本地验收收敛](./19-local-acceptance-closure.md)。完整长跑记录分析：[20 资源审查](./20-long-run-resource-review.md)。隔离签名演练：[21 密钥轮换与撤信](./21-release-key-rotation.md)。Homebrew渠道：[22 分发与安装](./22-homebrew-distribution.md)。官方网络与认证矩阵：[23 外部tsnet验收](./23-tsnet-external-acceptance.md)。
 
 公开包升级、回滚与兼容证据：[24 公开包验收](24-public-package-compatibility.md)。双客户端与硬崩溃验收：[25 双主机验收](25-multihost-acceptance.md)。完整产品的原生平台及WSL矩阵：[26 原生平台验收](26-native-platform-acceptance.md)。
 

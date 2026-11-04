@@ -1,6 +1,6 @@
 # Protocol 定义
 
-本文档是远端 ConnectRPC 与插件进程间接口草案的唯一来源（插件 CoreAPI 用 Connect；go-plugin 生命周期/worker 保留 gRPC），已生成真实源码并实现部分原型/核心 RPC，具体证据见 [15](./15-implementation-status.md)。下列三个 protobuf 块分别对应 shiki.proto、types.proto、plugin.proto；定义和流程不代表所有服务已经实现。
+本文档是远端 ConnectRPC 与插件进程间接口的设计基准（插件 CoreAPI 用 Connect；go-plugin 生命周期/worker 保留 gRPC）。实际支持范围及验收依据见[18 支持声明](18-release-readiness.md#current-support)与[15 实施记录](15-implementation-status.md)。下列三个 protobuf 块分别对应 shiki.proto、types.proto、plugin.proto；调用仍受版本、能力协商、插件就绪状态及授权约束，不能仅凭协议定义认定服务可用。
 
 ## 协议行为
 

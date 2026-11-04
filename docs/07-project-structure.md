@@ -1,6 +1,6 @@
 # 项目结构与依赖
 
-仓库正在实施 Phase 0–5，实现状态见 [15](./15-implementation-status.md)。下列是最终目标目录，不代表全部已存在；完整开发顺序见 [08](./08-roadmap.md)。
+当前源码 Phase 0–5 验收清单已闭环（42/42），实现状态见[15](15-implementation-status.md)，支持边界见[18](18-release-readiness.md#current-support)。下列包含目标目录与后续扩展，不代表全部已存在或受支持；完整开发顺序见[08](08-roadmap.md)。
 
 ```text
 shikigami/
