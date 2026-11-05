@@ -133,6 +133,28 @@ func smartReadPTY(t *testing.T, ctx context.Context, fd int, want string) string
 		}
 	}
 }
+
+// Keep consuming terminal output while the command renders its final frame and
+// restores the terminal. A PTY with no reader can block shutdown itself.
+func smartWaitPTY(ctx context.Context, fd int, done <-chan error) error {
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+	var output [4096]byte
+	for {
+		_, err := unix.Read(fd, output[:])
+		if err != nil && !errors.Is(err, unix.EAGAIN) && !errors.Is(err, unix.EINTR) {
+			return err
+		}
+		select {
+		case err := <-done:
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-tick.C:
+		}
+	}
+}
+
 func TestSmartActiveSessionPTY(t *testing.T) {
 	for _, action := range []string{"observe", "create", "manage", "exit"} {
 		t.Run(action, func(t *testing.T) {
@@ -147,7 +169,12 @@ func TestSmartActiveSessionPTY(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer master.Close()
-			defer slave.Close()
+			closeSlave := true
+			defer func() {
+				if closeSlave {
+					_ = slave.Close()
+				}
+			}()
 			if err = pty.Setsize(slave, &pty.Winsize{Rows: 24, Cols: 100}); err != nil {
 				t.Fatal(err)
 			}
@@ -183,7 +210,28 @@ func TestSmartActiveSessionPTY(t *testing.T) {
 			root := newRoot(slave, slave, slave)
 			root.SetArgs([]string{"--config", path, "--verbose"})
 			done := make(chan error, 1)
-			go func() { done <- root.ExecuteContext(ctx) }()
+			finished := make(chan struct{})
+			go func() {
+				defer close(finished)
+				done <- root.ExecuteContext(ctx)
+			}()
+			defer func() {
+				cancel()
+				// On assertion failure, wake any blocked output before joining.
+				// The slave must outlive the command's input reader and renderer.
+				_ = master.Close()
+				select {
+				case <-finished:
+				case <-time.After(5 * time.Second):
+					// Preserve input ownership even when cleanup itself fails.
+					closeSlave = false
+					go func() {
+						<-finished
+						_ = slave.Close()
+					}()
+					t.Error("command did not terminate during PTY cleanup")
+				}
+			}()
 			menu := smartReadPTY(t, ctx, fd, "Action:")
 			for _, want := range []string{"read-only", "Create a new session", "Manage sessions", "Exit"} {
 				if !strings.Contains(menu, want) {
@@ -212,13 +260,8 @@ func TestSmartActiveSessionPTY(t *testing.T) {
 					t.Fatal("missing safe post-detach logs", after)
 				}
 			}
-			select {
-			case err = <-done:
-				if err != nil {
-					t.Fatal(err)
-				}
-			case <-ctx.Done():
-				t.Fatal(ctx.Err())
+			if err = smartWaitPTY(ctx, fd, done); err != nil {
+				t.Fatal(err)
 			}
 			restored, err := term.GetState(int(slave.Fd()))
 			if err != nil || !reflect.DeepEqual(saved, restored) {
