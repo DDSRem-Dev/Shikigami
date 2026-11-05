@@ -460,6 +460,52 @@ func TestNewLoginDoesNotInheritEarlierURLObservation(t *testing.T) {
 	}
 }
 
+func TestStartupRegistrationIsAdoptedBeforeURLArrives(t *testing.T) {
+	// tsnet.Start has already requested first-time login in NeedsLogin. A
+	// known identity can instead have expired after startup, requiring an
+	// explicit registration even when the coarse backend state is the same.
+	for _, tc := range []struct {
+		name        string
+		self        *ipnstate.PeerStatus
+		haveNodeKey bool
+		wantPosts   int
+	}{
+		{name: "no-self"},
+		{name: "zero-key", self: &ipnstate.PeerStatus{}},
+		{name: "persisted-without-map", haveNodeKey: true, wantPosts: 1},
+		{name: "expired-identity", self: &ipnstate.PeerStatus{PublicKey: key.NewNode().Public(), Expired: true}, wantPosts: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			observed := &ipnstate.Status{BackendState: "NeedsLogin", Self: tc.self, HaveNodeKey: tc.haveNodeKey}
+			encoded, err := json.Marshal(observed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			posts := 0
+			lc := &local.Client{OmitAuth: true, Transport: peerStatusTransport(func(request *http.Request) (*http.Response, error) {
+				if request.Method == http.MethodPost {
+					posts++
+					return &http.Response{StatusCode: http.StatusNoContent, Header: make(http.Header), Body: http.NoBody, Request: request}, nil
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(encoded)), Request: request}, nil
+			})}
+			attempt := &loginAttempt{id: "startup", requestID: "startup", interactive: true, expires: time.Now().Add(time.Minute), done: make(chan struct{})}
+			n := &Node{ctx: t.Context(), attempt: attempt, status: &apb.NodeStatus{State: "authenticating"}}
+			if err := n.requestLogin(t.Context(), lc, attempt, nil); err != nil {
+				t.Fatal(err)
+			}
+			if posts != tc.wantPosts || !attempt.loginStarted || attempt.sawAuthURL || attempt.finished || n.DataPlaneAuthorized() {
+				t.Fatal("registration was incorrectly restarted/adopted or treated as authenticated")
+			}
+			observed.AuthURL = "https://control.invalid/login/startup"
+			n.applyStatus(0, observed)
+			if n.snapshot().LoginUrl != observed.AuthURL || !attempt.sawAuthURL || attempt.finished || n.DataPlaneAuthorized() {
+				t.Fatal("startup URL was hidden or authorized before completion")
+			}
+		})
+	}
+}
+
 func TestLoginStartupPermitWaitIsCancelable(t *testing.T) {
 	n := &Node{statusPermit: make(chan struct{}, 1)}
 	n.statusPermit <- struct{}{}

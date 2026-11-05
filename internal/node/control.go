@@ -284,7 +284,7 @@ func (n *Node) requestLogin(ctx context.Context, lc *local.Client, attempt *logi
 	n.mu.Lock()
 	attempt.sawAuthURL = false
 	n.mu.Unlock()
-	adoptURL := false
+	adoptRegistration := false
 	// Capture the existing key before requesting registration. SDK startup
 	// may already have loaded a cached Running map, which is not completion.
 	if attempt.interactive {
@@ -298,7 +298,15 @@ func (n *Node) requestLogin(ctx context.Context, lc *local.Client, attempt *logi
 			}
 			if observed.AuthURL != "" {
 				attempt.sawAuthURL = true
-				adoptURL = true
+				adoptRegistration = true
+			}
+			// With no registered identity, tsnet.Start synchronously requests
+			// interactive login in NeedsLogin. Its URL arrives asynchronously;
+			// restarting that registration can publish an obsolete URL. A known
+			// identity may instead have expired after startup and still needs
+			// an explicit login when no URL exists.
+			if observed.BackendState == "NeedsLogin" && !observed.HaveNodeKey && (observed.Self == nil || observed.Self.PublicKey.IsZero()) {
+				adoptRegistration = true
 			}
 			n.mu.Unlock()
 		}
@@ -306,7 +314,7 @@ func (n *Node) requestLogin(ctx context.Context, lc *local.Client, attempt *logi
 	if err == nil && attempt.interactive {
 		// Adopt an existing registration. Calling StartLoginInteractive again
 		// could race its completion and silently begin a second registration.
-		if !adoptURL {
+		if !adoptRegistration {
 			err = lc.StartLoginInteractive(ctx)
 		}
 	} else if err == nil {

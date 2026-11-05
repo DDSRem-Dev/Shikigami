@@ -67,6 +67,18 @@ func awaitState(t *testing.T, node *Node, predicate func(*agentpb.NodeStatus) bo
 }
 func loginInteractive(t *testing.T, node *Node, control *testcontrol.Server) {
 	t.Helper()
+	phase, completedURL := "url", ""
+	defer func() {
+		if !t.Failed() {
+			return
+		}
+		node.mu.Lock()
+		defer node.mu.Unlock()
+		attempt := node.attempt
+		if attempt != nil {
+			t.Logf("login phase=%s host=%s started=%t finished=%t saw_url=%t has_url=%t url_changed=%t", phase, node.options.Hostname, attempt.loginStarted, attempt.finished, attempt.sawAuthURL, node.status.LoginUrl != "", completedURL != "" && node.status.LoginUrl != completedURL)
+		}
+	}()
 	_, err := node.beginLogin(&agentpb.BeginLoginRequest{Method: &agentpb.BeginLoginRequest_Interactive{Interactive: true}, RequestId: "login-" + node.options.Hostname})
 	if err != nil {
 		t.Fatal(err)
@@ -75,6 +87,7 @@ func loginInteractive(t *testing.T, node *Node, control *testcontrol.Server) {
 	if !control.CompleteAuth(status.LoginUrl) {
 		t.Fatal("test control did not recognize SDK login URL")
 	}
+	phase, completedURL = "online", status.LoginUrl
 	awaitState(t, node, func(s *agentpb.NodeStatus) bool { return s.State == "online" })
 }
 func TestNodeControlBeforeLoginCancelAndPersistence(t *testing.T) {

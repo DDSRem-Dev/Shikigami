@@ -2,7 +2,7 @@
 
 **当前进度（2026-11-05）：42/42，原清单最后一项已关闭。** 当前源码的功能、平台、验收依据及未支持范围已统一到[支持声明](18-release-readiness.md#current-support)。Phase 0–5各阶段为11/11、7/7、6/6、6/6、6/6、6/6。认证生命周期和长稳/资源/性能沿用2026-11-01用户确认的关闭结论，历史实测/失败及源码范围保留；生产heap/object归因、真实Claude登录/推理及物理主机重启仍按未实测边界披露。42/42表示当前源码验收登记与声明核对完成，不表示新包或稳定版已发布；仓库公开安装入口仍为alpha.2，未包含后续master修复。
 
-**本批CI修复（2026-11-05，远端复验待完成）：** 文档提交`8f5407a`的[CI41888706987](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41888706987)在macOS arm64出现两项真实节点测试失败，另有5个macOS arm64任务因托管runner容量不足未获执行而取消；取消/跳过不计通过。已修复登录worker接管注册前提前公开URL的竞争，以及发送期间调用方deadline被清理取消覆盖的问题；host与独立插件SDK同步保留原始取消原因。路线图42/42是前序验收登记，不替代本批回归结果；原平台矩阵、测试预算与断言保持，未发布新包。
+**本批CI修复（2026-11-05，远端复验待完成）：** 文档提交`8f5407a`的[CI41888706987](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41888706987)在macOS arm64出现两项真实节点测试失败，另有5个macOS arm64任务因托管runner容量不足未获执行而取消；取消/跳过不计通过。已修复登录worker接管注册前提前公开URL的竞争，以及发送期间调用方deadline被清理取消覆盖的问题；host与独立插件SDK同步保留原始取消原因。首轮修复`c1d0c0b`的[CI42012596520](https://github.com/DDSRem-Dev/Shikigami/actions/runs/42012596520)已结束，56/57任务通过，唯一失败为首次登录；对端错误、全部其他平台/业务/维护任务已通过。现继续补齐SDK已自动发起、尚无URL的首次注册接管，最终远端结果待核验。路线图42/42是前序验收登记，不替代本批回归结果；原平台矩阵、测试预算与断言保持，未发布新包。
 
 <a id="support-closeout-20261105"></a>
 ## 支持声明闭环（2026-11-05）
@@ -1203,3 +1203,9 @@ Mac冻结8fdfe25的local.proxy.1/.2完整原生矩阵passed=true，六组业务�
 对端关闭测试在本机10轮race中复现一次：probe已达到截止，但错误树仅保留context.Canceled。发送操作在transport子context被清理取消后没有回读caller原因。host及独立SDK发送路径现在保留caller的Canceled/DeadlineExceeded；SDK已关闭流的相同缺口同步修复。确定性回归修前失败，网络重试分类和原真实对端测试断言不放宽；错误诊断仅增加原因类型及布尔字段，不输出凭据或原始URL。完整包回归与远端最终状态在完成后补记。
 
 本地最终验证：node整包race通过（49.820秒）；实际对端关闭用例15轮race全通过（71.111秒）；host connection与独立SDK coretransport整包race通过（2.448/6.493秒）；架构race通过（1.390秒），agent路线选择/截止专项race通过（1.950秒），三处受影响包vet及diff检查通过。首轮node全包暴露旧cached-Running夹具缺少loginStarted前提，已明确为已接管注册后复验通过，原断言未降低。 远端新提交尚待实际运行，不从本地结果推定整轮成功。
+
+首轮远端复验保留失败：`c1d0c0b`的`unit-internal (darwin, arm64)`仍在初始注册超时，peer shutdown已通过。单独50轮本地旧修复验证未复现（90.348秒），因此不以本机重复通过代替远端结果。进一步对照固定SDK v1.98.10确认`tsnet.Start`已为新节点同步提交交互登录，而URL异步到达；第二次StartLogin会与首个注册及旧URL通知竞争。本次只对`NeedsLogin && !HaveNodeKey && Self无公钥`接管已启动注册；已观察URL仍接管，已有持久/过期身份无URL仍显式请求。接管不等于认证，不合成URL、不设置sawAuthURL或提前放行业务。
+
+新增确定性测试修前因二次POST失败；四种状态覆盖无Self、零key、持久身份尚无map和过期身份。首次无key接管版本的实际授权epoch用例与状态回归20轮race通过（37.597秒）；最终HaveNodeKey约束与完整node回归单独验证。登录失败诊断只增加阶段、fixture主机名与状态布尔值，不输出URL/凭据。
+
+最终四分支注册回归及node完整race通过（50.718秒），node vet与diff检查通过。GitHub查询遇到TLS/EOF连接中断，期间不推定尚未读到的远端结果；下一源码提交及远端补验继续单独记录。
