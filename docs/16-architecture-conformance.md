@@ -4,7 +4,7 @@
 
 **本批CI修复与验证（2026-11-05）：** 补充提交`17ed77f`的[CI42017919620](https://github.com/DDSRem-Dev/Shikigami/actions/runs/42017919620)已completed/success，57/57任务通过，无失败、取消或跳过任务。修复首次tsnet注册被重复启动、过早公开URL及发送期间deadline被清理取消覆盖；host与独立SDK保持相同取消语义。macOS arm64两项原失败用例及四分支注册回归已直接读取日志确认pass；全部原生平台、WSL2、插件/E2E、终端和服务维护通过。旧CI41888706987的失败/容量取消及首轮CI42012596520的56/57结果保留。文档提交`d49310d`的稳定性复验[CI42023610286](https://github.com/DDSRem-Dev/Shikigami/actions/runs/42023610286)已结束，56/57通过，唯一失败为Intel macOS显式断网恢复登录等待URL超时；后续`ff338f9`的[CI42028867098](https://github.com/DDSRem-Dev/Shikigami/actions/runs/42028867098)已结束56/57，所有节点认证回归及Intel内部包通过，唯一失败为arm64快速退出pane的空PID解析。有效授权SDK复用及失败退役已通过本地与该轮节点验证；本批继续修复tmux 3.8关闭PTY但waitpid状态未到的合法过渡，并明确禁止据此自动重启或开始自动清理，最终tmux/session/架构race与vet通过；冻结`5254892`的原生macOS arm64隔离tmux 3.8两整包race亦通过（71顶层/104含子项，零fail/skip），该提交的[CI42034435896](https://github.com/DDSRem-Dev/Shikigami/actions/runs/42034435896)已completed/success，57/57全通过，macOS arm64原失败及新增回归已核对日志；单轮成功按其来源记录，稳定性继续用完整矩阵复验。原42项验收登记、平台矩阵、测试预算和断言未削弱；本轮未发布新包。
 
-**追加多轮稳定性验证（2026-11-05起）：** 用户要求再次触发完整CI。冻结生产/测试源码`886de184ad11f35a7b6879c2ca1b9d2dbab27a53`，计划追加3轮完整矩阵，逐attempt要求57个job全success，并核对四平台各7个必需E2E/重型集成用例实际pass。首轮CI42040152398 attempt2已完成56/57，唯一WSL2产品测试的端口较早截止用例失败，不把本轮计入成功；发现并修复共享准入错误分类两次读取ctx.Err导致DeadlineExceeded误判Canceled的竞态，修后FILE/PORT较早截止真实wire各50轮race、server/架构整包race及vet通过，最终来源须重新连续验证。三项原不稳定真实节点用例各50轮race已通过（150 pass、0 fail/skip，883.157秒），590个源码输入哈希保持，内部期限未改；完整CI结果单独记录。本轮不扩大原42项验收或发行声明。
+**追加多轮稳定性验证（2026-11-05起）：** 用户要求再次触发完整CI。冻结生产/测试源码`886de184ad11f35a7b6879c2ca1b9d2dbab27a53`，计划追加3轮完整矩阵，逐attempt要求57个job全success，并核对四平台各7个必需E2E/重型集成用例实际pass。首轮CI42040152398 attempt2已完成56/57，唯一WSL2产品测试的端口较早截止用例失败，不把本轮计入成功；发现并修复共享准入错误分类两次读取ctx.Err导致DeadlineExceeded误判Canceled的竞态，修后FILE/PORT较早截止真实wire各50轮race、server/架构整包race及vet通过，修复提交`e95ff1c`的CI42063751769 attempt1与attempt2连续两轮均57/57通过（含WSL原失败项及新回归），每轮四平台28条加WSL7条必需记录与下游产物ID均核验；本次仅提交验证记录以触发第3轮，生产和测试源码保持不变，按最终修复源码累计连续3轮成功。三项原不稳定真实节点用例各50轮race已通过（150 pass、0 fail/skip，883.157秒），590个源码输入哈希保持，内部期限未改；完整CI结果单独记录。本轮不扩大原42项验收或发行声明。
 
 <a id="support-closeout-20261105"></a>
 ## 支持声明与实现对照（2026-11-05）
@@ -1555,7 +1555,7 @@ docs02明确macOS纯userspace承载与代理边界，08/15/16同步37/42；完�
 
 初始复验阶段仅触发CI、冻结源码做定向重复和记录证据；下述WSL失败后追加共享准入错误分类修复。独立复核七类边界：目录/SDK-host/plugin依赖、RPC/权限和能力、持久schema/revision/去重、进程/取消归属、文件/终端/TCP、CLI/安装布局均未变化；测试使用-count=1/-race，continue-on-error仅可选缓存，不掩盖测试、构建或验收失败。原生terminal/maintenance仅Linux amd64及macOS arm64，另有WSL2；不得宣称这两组原生任务覆盖四平台。
 
-每轮独立核对attempt jobs终态及四平台7项REQUIRED用例pass，失败/取消/跳过不代替通过。定向150次race全部pass，源码/证据hash复核成功，来源与完整CI分开。首次重跑已成功上传的预检artifact创建时间对应本轮步骤；下游下载ID仍需在完成后核对，不单靠源码一致就宣称attempt来源正确。原42项清单不改，三份追加摘要一致。
+每轮独立核对attempt jobs终态及四平台7项REQUIRED用例pass，失败/取消/跳过不代替通过。定向150次race全部pass，源码/证据hash复核成功，来源与完整CI分开。首次重跑初始阶段已核对预检artifact创建时间，随后按每轮实际完成结果核对下游下载ID，最终匹配结果见下文，不单靠源码一致就宣称attempt来源正确。原42项清单不改，三份追加摘要一致。
 
 2026-11-06追加失败定位：CI42040152398 attempt2的WSL2 job127341328488失败；本轮artifact13430625424确认internal/server TestPortAdmissionFirstFrameDeadlineAndCancellation/earlier-wire-parent在port_admission_test.go原198行、0.54秒失败。节点、tmux、原生systemd及清理均pass，product失败使WSL后续E2E/terminal/发行阶段未验，不计通过。公开摘要未保留call.err/body，不能声称已证明具体错误码。
 
@@ -1568,3 +1568,9 @@ docs02明确macOS纯userspace承载与代理边界，08/15/16同步37/42；完�
 旧源码886de18的attempt2最终56/57，唯一WSL2失败保留，其余56项全部成功；四平台8个E2E/重型集成job中的28条REQUIRED记录已逐份验证pass、无同名fail/skip。证据按attempt独立保存于`/tmp/shiki-ci-stability-20261105/42040152398-attempt-2`；本批新源码提交后的完整矩阵及连续轮次单独核验，不将旧通过继承给新提交。
 
 最终artifact来源复核：本轮两Linux下游下载预检ID13429320871，两macOS arm64下游下载ID13430197338，四者均与本attempt上传ID/时间匹配，4份下载日志SHA及4平台上传元数据保存在artifact-audit.json，all_four_downloads_verified=true。该来源核对不替代WSL失败，也不把旧attempt结果算作新验收。
+
+修复后第1轮完整成功：CI42063751769 attempt1，源码`e95ff1ca07719c6dac34a3a920a70447de4e8ba9`，57/57 success，无failed/cancelled/skipped任务。WSL artifact13434298539的source.commit吻合，原端口earlier-wire-parent0.54秒pass、FILE/PORT新回归pass；全部stage passed、incomplete_stages为空、cleanup passed，七个REQUIRED用例实际通过。四原生平台8个集成/E2E日志另核验28个必需用例pass，合计35条。四平台预检上传与四下游下载ID全部匹配本轮，metadata精度跨秒检查按秒级完成时间包含最后1秒处理，严格ID/attempt/SHA保持；初始审计误报记录保留，不涉及CI断言或预算变化。证据目录`/tmp/shiki-ci-stability-20261105/42063751769-attempt-1`。第二轮完整重跑固定同一源码，结果见下文。
+
+修复后第2轮完整成功：CI42063751769 attempt2，源码仍为`e95ff1ca07719c6dac34a3a920a70447de4e8ba9`，57/57 success，无failed/cancelled/skipped任务。WSL artifact13438066604来源吻合，13个stage及cleanup均passed，七个REQUIRED用例、原端口earlier-wire-parent（0.53秒）和新增FILE/PORT回归均pass；四原生平台另外28条必需记录逐项通过。本轮Linux下游实际下载ID13435588184、macOS arm64下游下载ID13437302412，四下游与本attempt上传记录及来源全部匹配。证据目录`/tmp/shiki-ci-stability-20261105/42063751769-attempt-2`包含独立jobs/run、required-tests-result、wsl-verification和artifact-audit；短暂GitHub查询网络失败恢复后重新取得实际结果，不作为测试失败或通过。此提交仅同步三份记录，触发生产/测试源码不变的第3轮完整CI，结果待实际完成后单独报告。
+
+本次文档批次七类复核：目录依赖与SDK/host/plugin归属、RPC准入/版本/能力/授权、持久状态/原子性/revision/去重、进程所有权/取消/恢复、文件/终端/网络语义与限额、CLI/TUI/配置/安装布局均无代码变化；测试证据按run/attempt及源码独立核验，失败历史保留。三份摘要保持一致，原42条清单文字、顺序与勾选不变，外部环境和公开发行边界未扩大。
