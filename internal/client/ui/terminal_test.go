@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -194,22 +195,86 @@ func readPTY(t *testing.T, ctx context.Context, fd int, want string) {
 		}
 	}
 }
-func TestDashboardTerminalHandoffRestoresReaderAndRawMode(t *testing.T) {
-	t.Setenv("NO_COLOR", "1")
-	c, probe, remote := dashboardClient(t)
+
+// dashboardPTY keeps the input file alive until every dashboard/attachment
+// using it has exited. Its master stays drained during normal shutdown.
+type dashboardPTY struct {
+	master, slave *os.File
+	fd            int
+	workers       sync.WaitGroup
+	cancels       []context.CancelFunc
+}
+
+func newDashboardPTY(t *testing.T) *dashboardPTY {
+	t.Helper()
 	master, slave, err := pty.Open()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer master.Close()
-	defer slave.Close()
+	fixture := &dashboardPTY{master: master, slave: slave, fd: int(master.Fd())}
+	t.Cleanup(func() {
+		for _, cancel := range fixture.cancels {
+			cancel()
+		}
+		// A stalled renderer cannot finish until its output reader wakes it.
+		_ = master.Close()
+		joined := make(chan struct{})
+		go func() { fixture.workers.Wait(); close(joined) }()
+		select {
+		case <-joined:
+			_ = slave.Close()
+		case <-time.After(5 * time.Second):
+			// Failure cleanup has its own bound, but never closes live input.
+			go func() { <-joined; _ = slave.Close() }()
+			t.Error("dashboard/attachment did not terminate during PTY cleanup")
+		}
+	})
+	if err := unix.SetNonblock(fixture.fd, true); err != nil {
+		t.Fatal(err)
+	}
+	return fixture
+}
+
+func (p *dashboardPTY) start(cancel context.CancelFunc, run func()) <-chan struct{} {
+	p.cancels = append(p.cancels, cancel)
+	finished := make(chan struct{})
+	p.workers.Add(1)
+	go func() {
+		defer p.workers.Done()
+		defer close(finished)
+		run()
+	}()
+	return finished
+}
+
+func (p *dashboardPTY) wait(ctx context.Context, finished <-chan struct{}) error {
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+	var output [4096]byte
+	for {
+		_, err := unix.Read(p.fd, output[:])
+		if err != nil && !errors.Is(err, unix.EAGAIN) && !errors.Is(err, unix.EINTR) {
+			return err
+		}
+		select {
+		case <-finished:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-tick.C:
+		}
+	}
+}
+
+func TestDashboardTerminalHandoffRestoresReaderAndRawMode(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	c, probe, remote := dashboardClient(t)
+	fixture := newDashboardPTY(t)
+	slave := fixture.slave
 	if err := pty.Setsize(slave, &pty.Winsize{Rows: 24, Cols: 100}); err != nil {
 		t.Fatal(err)
 	}
-	fd := int(master.Fd())
-	if err := unix.SetNonblock(fd, true); err != nil {
-		t.Fatal(err)
-	}
+	fd := fixture.fd
 	saved, err := term.GetState(int(slave.Fd()))
 	if err != nil {
 		t.Fatal(err)
@@ -221,24 +286,22 @@ func TestDashboardTerminalHandoffRestoresReaderAndRawMode(t *testing.T) {
 		err    error
 	}
 	done := make(chan result, 1)
-	go func() {
+	finished := fixture.start(cancel, func() {
 		action, err := Run(ctx, c, Options{Input: slave, Output: slave, ServerID: "server", NoColor: true})
 		done <- result{action, err}
-	}()
+	})
 	readPTY(t, ctx, fd, "unique-session")
 	if _, err := unix.Write(fd, []byte("\r")); err != nil {
 		t.Fatal(err)
 	}
-	var action Action
-	select {
-	case result := <-done:
-		if result.err != nil {
-			t.Fatal(result.err)
-		}
-		action = result.action
-	case <-ctx.Done():
-		t.Fatal("dashboard did not exit for attachment")
+	if err := fixture.wait(ctx, finished); err != nil {
+		t.Fatal("dashboard did not exit for attachment", err)
 	}
+	outcome := <-done
+	if outcome.err != nil {
+		t.Fatal(outcome.err)
+	}
+	action := outcome.action
 	if action.Session == nil || action.Session.Id != "sess_test" || probe.snapshots.Load() == 0 {
 		t.Fatal("dashboard did not load/choose real IPC session", action)
 	}
@@ -247,9 +310,9 @@ func TestDashboardTerminalHandoffRestoresReaderAndRawMode(t *testing.T) {
 		t.Fatal("dashboard did not restore terminal before handoff", err)
 	}
 	terminalDone := make(chan error, 1)
-	go func() {
+	terminalFinished := fixture.start(cancel, func() {
 		terminalDone <- c.Terminal(ctx, action.ServerID, action.Session.Id, client.TerminalOptions{Input: slave, Output: slave, DetachKey: 17})
-	}()
+	})
 	readPTY(t, ctx, fd, "HANDOFF_READY")
 	if _, err := unix.Write(fd, []byte("x")); err != nil {
 		t.Fatal(err)
@@ -265,13 +328,11 @@ func TestDashboardTerminalHandoffRestoresReaderAndRawMode(t *testing.T) {
 	if _, err := unix.Write(fd, []byte{17}); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case err := <-terminalDone:
-		if err != nil {
-			t.Fatal(err)
-		}
-	case <-ctx.Done():
-		t.Fatal("terminal did not detach")
+	if err := fixture.wait(ctx, terminalFinished); err != nil {
+		t.Fatal("terminal did not detach", err)
+	}
+	if err := <-terminalDone; err != nil {
+		t.Fatal(err)
 	}
 	restored, err = term.GetState(int(slave.Fd()))
 	if err != nil || !reflect.DeepEqual(saved, restored) {
@@ -281,19 +342,12 @@ func TestDashboardTerminalHandoffRestoresReaderAndRawMode(t *testing.T) {
 
 func TestDashboardCancellationWithoutKeyRestoresTerminal(t *testing.T) {
 	c, _, remote := dashboardClient(t)
-	master, slave, err := pty.Open()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer master.Close()
-	defer slave.Close()
+	fixture := newDashboardPTY(t)
+	slave := fixture.slave
 	if err := pty.Setsize(slave, &pty.Winsize{Rows: 24, Cols: 80}); err != nil {
 		t.Fatal(err)
 	}
-	fd := int(master.Fd())
-	if err := unix.SetNonblock(fd, true); err != nil {
-		t.Fatal(err)
-	}
+	fd := fixture.fd
 	saved, err := term.GetState(int(slave.Fd()))
 	if err != nil {
 		t.Fatal(err)
@@ -301,21 +355,19 @@ func TestDashboardCancellationWithoutKeyRestoresTerminal(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	done := make(chan error, 1)
-	go func() {
+	finished := fixture.start(cancel, func() {
 		_, err := Run(ctx, c, Options{Input: slave, Output: slave, ServerID: "server", NoColor: true})
 		done <- err
-	}()
+	})
 	wait, stop := context.WithTimeout(t.Context(), 5*time.Second)
 	defer stop()
 	readPTY(t, wait, fd, "unique-session")
 	cancel()
-	select {
-	case err := <-done:
-		if err != nil && strings.Contains(err.Error(), "unexpected dashboard model") {
-			t.Fatal(err)
-		}
-	case <-wait.Done():
-		t.Fatal("dashboard cancellation did not terminate")
+	if err := fixture.wait(wait, finished); err != nil {
+		t.Fatal("dashboard cancellation did not terminate", err)
+	}
+	if err := <-done; err != nil && strings.Contains(err.Error(), "unexpected dashboard model") {
+		t.Fatal(err)
 	}
 	restored, err := term.GetState(int(slave.Fd()))
 	if err != nil || !reflect.DeepEqual(saved, restored) {
@@ -324,9 +376,9 @@ func TestDashboardCancellationWithoutKeyRestoresTerminal(t *testing.T) {
 	// Cancellation must relinquish input ownership as completely as Enter
 	// handoff. An old reader must not consume the next attachment's keystroke.
 	terminalDone := make(chan error, 1)
-	go func() {
+	terminalFinished := fixture.start(stop, func() {
 		terminalDone <- c.Terminal(wait, "server", "sess_test", client.TerminalOptions{Input: slave, Output: slave, DetachKey: 17})
-	}()
+	})
 	readPTY(t, wait, fd, "HANDOFF_READY")
 	if _, err := unix.Write(fd, []byte("x")); err != nil {
 		t.Fatal(err)
@@ -342,13 +394,11 @@ func TestDashboardCancellationWithoutKeyRestoresTerminal(t *testing.T) {
 	if _, err := unix.Write(fd, []byte{17}); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case err := <-terminalDone:
-		if err != nil {
-			t.Fatal(err)
-		}
-	case <-wait.Done():
-		t.Fatal("post-cancellation attachment did not detach")
+	if err := fixture.wait(wait, terminalFinished); err != nil {
+		t.Fatal("post-cancellation attachment did not detach", err)
+	}
+	if err := <-terminalDone; err != nil {
+		t.Fatal(err)
 	}
 	restored, err = term.GetState(int(slave.Fd()))
 	if err != nil || !reflect.DeepEqual(saved, restored) {

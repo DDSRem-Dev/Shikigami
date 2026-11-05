@@ -75,8 +75,8 @@ func TestSmartFirstRunKeepsExplicitlySkippedSyncPaused(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer master.Close()
-	defer slave.Close()
+	process := smartPTYProcess{t: t, master: master, slave: slave}
+	defer process.close()
 	if err = pty.Setsize(slave, &pty.Winsize{Rows: 24, Cols: 100}); err != nil {
 		t.Fatal(err)
 	}
@@ -88,8 +88,7 @@ func TestSmartFirstRunKeepsExplicitlySkippedSyncPaused(t *testing.T) {
 	defer cancel()
 	root := newRoot(slave, slave, slave)
 	root.SetArgs([]string{"--config", path, "--request-id", "first-run-batch"})
-	done := make(chan error, 1)
-	go func() { done <- root.ExecuteContext(ctx) }()
+	done := process.start(cancel, func() error { return root.ExecuteContext(ctx) })
 	smartReadPTY(t, ctx, fd, "Project:")
 	if _, err = unix.Write(fd, []byte("2\nyes\n1\nmain\n\nFirst session\n")); err != nil {
 		t.Fatal(err)
@@ -98,13 +97,11 @@ func TestSmartFirstRunKeepsExplicitlySkippedSyncPaused(t *testing.T) {
 	if _, err = unix.Write(fd, []byte{17}); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case err = <-done:
-		if err != nil {
-			t.Fatal(err)
-		}
-	case <-ctx.Done():
-		t.Fatal(ctx.Err())
+	if err = smartWaitPTY(ctx, fd, process.finished); err != nil {
+		t.Fatal(err)
+	}
+	if err = <-done; err != nil {
+		t.Fatal(err)
 	}
 	probe.guard.Lock()
 	defer probe.guard.Unlock()

@@ -67,35 +67,31 @@ func TestSmartDirectoryPickerScopePaginationAndReservedNames(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer master.Close()
-			defer slave.Close()
+			process := smartPTYProcess{t: t, master: master, slave: slave}
+			defer process.close()
 			fd := int(master.Fd())
 			if err = unix.SetNonblock(fd, true); err != nil {
 				t.Fatal(err)
 			}
 			a := &app{input: slave, output: slave, errorOutput: slave}
-			type result struct {
-				path string
-				err  error
-			}
-			done := make(chan result, 1)
-			go func() {
+			var chosen string
+			done := process.start(cancel, func() error {
 				path, err := a.chooseWorkingDirectory(ctx, c, "server", "project", &pb.ProtocolAgreement{DaemonId: "daemon", Capabilities: []string{"project.directories.v1"}, GrantedPermissions: []string{"file.read"}})
-				done <- result{path, err}
-			}()
+				chosen = path
+				return err
+			})
 			if tc.answers != "" {
 				smartReadPTY(t, ctx, fd, "Working directory · server server · project project:")
 				if _, err = unix.Write(fd, []byte(tc.answers)); err != nil {
 					t.Fatal(err)
 				}
 			}
-			select {
-			case got := <-done:
-				if (got.err != nil) != tc.wantErr || got.path != tc.want {
-					t.Fatalf("got %q %v", got.path, got.err)
-				}
-			case <-ctx.Done():
-				t.Fatal(ctx.Err())
+			if err = smartWaitPTY(ctx, fd, process.finished); err != nil {
+				t.Fatal(err)
+			}
+			err = <-done
+			if (err != nil) != tc.wantErr || chosen != tc.want {
+				t.Fatalf("got %q %v", chosen, err)
 			}
 			remote.mu.Lock()
 			defer remote.mu.Unlock()

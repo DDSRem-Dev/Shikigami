@@ -108,18 +108,17 @@ func TestSmartInitialSyncExplicitDecisions(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer master.Close()
-			defer slave.Close()
+			process := smartPTYProcess{t: t, master: master, slave: slave}
+			defer process.close()
 			fd := int(master.Fd())
 			if err = unix.SetNonblock(fd, true); err != nil {
 				t.Fatal(err)
 			}
 			a := &app{input: slave, output: slave, errorOutput: slave}
-			done := make(chan error, 1)
-			go func() {
+			done := process.start(cancel, func() error {
 				_, err := a.setupSmartSync(ctx, c, mapping, &pb.ProtocolAgreement{DaemonId: "daemon", Capabilities: []string{"sync.revision.v1"}, GrantedPermissions: []string{"file.read", "file.write", "file.watch"}})
-				done <- err
-			}()
+				return err
+			})
 			smartReadPTY(t, ctx, fd, "Initial synchronization:")
 			if _, err = unix.Write(fd, []byte(tc.answers)); err != nil {
 				t.Fatal(err)
@@ -127,13 +126,12 @@ func TestSmartInitialSyncExplicitDecisions(t *testing.T) {
 			if tc.failAfterSave {
 				smartReadPTY(t, ctx, fd, "current saved sync_enabled=true")
 			}
-			select {
-			case err = <-done:
-				if (err != nil) != tc.wantErr {
-					t.Fatal(err)
-				}
-			case <-ctx.Done():
-				t.Fatal(ctx.Err())
+			if err = smartWaitPTY(ctx, fd, process.finished); err != nil {
+				t.Fatal(err)
+			}
+			err = <-done
+			if (err != nil) != tc.wantErr {
+				t.Fatal(err)
 			}
 			probe.guard.Lock()
 			defer probe.guard.Unlock()
