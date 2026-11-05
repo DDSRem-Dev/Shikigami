@@ -2,6 +2,8 @@
 
 **当前进度（2026-11-05）：42/42，原清单最后一项已关闭。** 当前源码的功能、平台、验收依据及未支持范围已统一到[支持声明](18-release-readiness.md#current-support)。Phase 0–5各阶段为11/11、7/7、6/6、6/6、6/6、6/6。认证生命周期和长稳/资源/性能沿用2026-11-01用户确认的关闭结论，历史实测/失败及源码范围保留；生产heap/object归因、真实Claude登录/推理及物理主机重启仍按未实测边界披露。42/42表示当前源码验收登记与声明核对完成，不表示新包或稳定版已发布；仓库公开安装入口仍为alpha.2，未包含后续master修复。
 
+**本批CI修复（2026-11-05，远端复验待完成）：** 文档提交`8f5407a`的[CI41888706987](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41888706987)在macOS arm64出现两项真实节点测试失败，另有5个macOS arm64任务因托管runner容量不足未获执行而取消；取消/跳过不计通过。已修复登录worker接管注册前提前公开URL的竞争，以及发送期间调用方deadline被清理取消覆盖的问题；host与独立插件SDK同步保留原始取消原因。路线图42/42是前序验收登记，不替代本批回归结果；原平台矩阵、测试预算与断言保持，未发布新包。
+
 <a id="support-closeout-20261105"></a>
 ## 支持声明闭环（2026-11-05）
 
@@ -1190,3 +1192,14 @@ Mac保留SDK原有UDP策略，仅为SDK HTTP(S)路径采用既有系统代理的
 ## 两项安装门槛关闭（2026-10-31）
 
 Mac冻结8fdfe25的local.proxy.1/.2完整原生矩阵passed=true，六组业务、四次旧TCP EOF无重放、18个旧host/worker出生身份回收；实际卸载保持与原环境恢复均通过。结合VPS官方身份systemd和历史公开包/平台/schema证据，独立审查确认关闭Phase4两项，39/42、Phase4为6/6。来源、失败观察顺序修正及未实测范围见[24终态](24-public-package-compatibility.md#installer-final-20261031)。随后按用户授权清理整个测试环境，不再保留专用身份等待其他门槛；清理收据结论见[24](24-public-package-compatibility.md#test-environment-cleanup-20261031)。
+
+<a id="ci-node-races-20261105"></a>
+## CI节点时序与取消原因修复（2026-11-05）
+
+`41888706987`的`unit-internal (darwin, arm64)`失败于`TestTwoEmbeddedNodesAuthorizationEpoch`（15秒后仍needs_login）及`TestSDKPeerShutdownErrorRetainsNetworkCause`（对端关闭后得到本地Canceled）。其他macOS arm64取消任务的GitHub注释为“The job was not acquired by Runner of type hosted even after multiple attempts”与capacity constraints，不能混同为代码失败，也不能记为通过。
+
+登录SDK的启动观察可在`requestLogin`获得状态发布许可前公开临时URL；调用方完成该URL后，worker可能再次发起注册。现在只在本次登录已明确接管/启动后公开URL并记录本次URL观察；不改变online、密钥、过期、撤销或身份授权判定。现有接管测试补齐启动前隐藏→接管后公开→真实完成的顺序，修前确定性失败；四项状态专项race通过，三个真实SDK登录/授权集成用例各重复10次race通过（44.266秒）。
+
+对端关闭测试在本机10轮race中复现一次：probe已达到截止，但错误树仅保留context.Canceled。发送操作在transport子context被清理取消后没有回读caller原因。host及独立SDK发送路径现在保留caller的Canceled/DeadlineExceeded；SDK已关闭流的相同缺口同步修复。确定性回归修前失败，网络重试分类和原真实对端测试断言不放宽；错误诊断仅增加原因类型及布尔字段，不输出凭据或原始URL。完整包回归与远端最终状态在完成后补记。
+
+本地最终验证：node整包race通过（49.820秒）；实际对端关闭用例15轮race全通过（71.111秒）；host connection与独立SDK coretransport整包race通过（2.448/6.493秒）；架构race通过（1.390秒），agent路线选择/截止专项race通过（1.950秒），三处受影响包vet及diff检查通过。首轮node全包暴露旧cached-Running夹具缺少loginStarted前提，已明确为已接管注册后复验通过，原断言未降低。 远端新提交尚待实际运行，不从本地结果推定整轮成功。

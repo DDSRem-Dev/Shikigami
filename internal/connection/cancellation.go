@@ -76,7 +76,14 @@ func (s *cancelStream) sendOperation(fn func() error) error {
 			return io.EOF
 		}
 	}
-	return fn()
+	err := fn()
+	// The cancellation hook can cancel the transport child before the
+	// caller's deadline propagates into it. Preserve the caller's cause,
+	// just as Receive does, instead of leaking cleanup's context.Canceled.
+	if cause := s.ctx.Err(); cause != nil {
+		return RebuildError(cause)
+	}
+	return err
 }
 
 func (s *cancelStream) Send(message any) error {

@@ -33,8 +33,8 @@ func TestCachedRunningCannotAuthorizeOrCompleteLogin(t *testing.T) {
 	if n.snapshot().State != "offline" || n.snapshot().ReasonCode != "NODE_CONTROL_UNAVAILABLE" || n.authorization != nil || len(n.snapshot().Addresses) != 0 {
 		t.Fatal("cached Running state advertised live control authorization")
 	}
-	// A URL from a pending SDK registration must remain visible over an old map.
-	n.attempt = &loginAttempt{id: "pending", interactive: true, expires: time.Now().Add(time.Minute), done: make(chan struct{})}
+	// A URL from an adopted SDK registration must remain visible over an old map.
+	n.attempt = &loginAttempt{id: "pending", interactive: true, loginStarted: true, expires: time.Now().Add(time.Minute), done: make(chan struct{})}
 	observed.AuthURL = "https://control.invalid/login/test"
 	n.applyStatus(0, observed)
 	if n.attempt.finished || n.snapshot().LoginUrl != observed.AuthURL || n.authorization != nil {
@@ -405,11 +405,22 @@ func TestExistingURLIsAdoptedWithoutStartingAnotherRegistration(t *testing.T) {
 	})}
 	attempt := &loginAttempt{id: "adopt", requestID: "adopt", interactive: true, expires: time.Now().Add(time.Minute), done: make(chan struct{})}
 	n := &Node{ctx: t.Context(), state: store, attempt: attempt, status: &apb.NodeStatus{State: "authenticating"}}
+	// The SDK can publish its automatic startup registration before the login
+	// worker acquires the status permit. Exposing that URL here lets the caller
+	// finish it before requestLogin decides whether to adopt or start a flow.
+	n.applyStatus(0, observed)
+	if n.snapshot().LoginUrl != "" || attempt.sawAuthURL {
+		t.Fatal("startup URL exposed before the explicit login adopted its registration")
+	}
 	if err := n.requestLogin(t.Context(), lc, attempt, nil); err != nil {
 		t.Fatal(err)
 	}
 	if posts != 0 {
 		t.Fatal("existing URL was restarted; completion racing that call can start a second registration")
+	}
+	n.applyStatus(0, observed)
+	if n.snapshot().LoginUrl != observed.AuthURL || attempt.finished || n.DataPlaneAuthorized() {
+		t.Fatal("adopted registration was hidden or authorized before completion")
 	}
 	observed.AuthURL = ""
 	observed.Self.Online = true

@@ -67,12 +67,15 @@ func (c *ownedCaller) AfterFunc(fn func()) func() bool {
 	}
 }
 func (c *ownedCaller) cancel() {
+	c.finish(context.Canceled)
+}
+func (c *ownedCaller) finish(cause error) {
 	c.mu.Lock()
 	if c.err != nil {
 		c.mu.Unlock()
 		return
 	}
-	c.err = context.Canceled
+	c.err = cause
 	close(c.done)
 	hooks := c.hooks
 	c.hooks = map[*int]func(){}
@@ -80,6 +83,67 @@ func (c *ownedCaller) cancel() {
 	c.mu.Unlock()
 	for _, fn := range hooks {
 		go fn()
+	}
+}
+
+type canceledSendProbe struct {
+	connect.ClientStream
+	operation func() error
+}
+
+func (p *canceledSendProbe) Send(any) error { return p.operation() }
+func (p *canceledSendProbe) SendHeaders() error {
+	if p.operation == nil {
+		return nil // Client streams initialize headers during construction.
+	}
+	return p.operation()
+}
+func (p *canceledSendProbe) CloseSend() error { return p.operation() }
+func (p *canceledSendProbe) Close() error     { return nil }
+
+func TestSendOperationsPreserveCallerCancellationCause(t *testing.T) {
+	for _, kind := range []connect.StreamType{connect.StreamTypeUnary, connect.StreamTypeClient} {
+		for _, operation := range []string{"send", "headers", "half-close"} {
+			for _, cause := range []error{context.Canceled, context.DeadlineExceeded} {
+				t.Run(kind.String()+"/"+operation+"/"+cause.Error(), func(t *testing.T) {
+					caller := newOwnedCaller(t)
+					probe := &canceledSendProbe{}
+					stream, err := closeOnCancellation(func(context.Context, connect.Spec) (connect.ClientStream, error) {
+						return probe, nil
+					})(caller, connect.Spec{StreamType: kind})
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer stream.Close()
+					probe.operation = func() error {
+						// Model a deadline arriving during a transport operation.
+						// The cleanup hook may cancel the transport child before
+						// the parent's deadline propagates into that child.
+						caller.finish(cause)
+						return connect.NewError(connect.CodeCanceled, "transport canceled").WithCause(context.Canceled)
+					}
+					switch operation {
+					case "send":
+						err = stream.Send(nil)
+					case "headers":
+						err = stream.SendHeaders()
+					case "half-close":
+						err = stream.CloseSend()
+					}
+					wantCode := connect.CodeCanceled
+					if cause == context.DeadlineExceeded {
+						wantCode = connect.CodeDeadlineExceeded
+					}
+					if !errors.Is(err, cause) || connect.CodeOf(err) != wantCode {
+						t.Fatalf("caller cancellation cause changed: code=%s want=%s", connect.CodeOf(err), wantCode)
+					}
+					_ = stream.Close()
+					if err = stream.Send(nil); !errors.Is(err, cause) || connect.CodeOf(err) != wantCode {
+						t.Fatal("closed stream lost caller cancellation cause")
+					}
+				})
+			}
+		}
 	}
 }
 func (c *ownedCaller) count() int { c.mu.Lock(); defer c.mu.Unlock(); return len(c.hooks) }

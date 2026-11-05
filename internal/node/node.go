@@ -334,7 +334,7 @@ func (n *Node) applyStatus(generation uint64, observed *ipnstate.Status) {
 	if attempt := n.attempt; attempt != nil {
 		result.LoginId = attempt.id
 		if !attempt.finished {
-			if observed.AuthURL != "" {
+			if attempt.loginStarted && observed.AuthURL != "" {
 				attempt.sawAuthURL = true
 			}
 			// A new interactive flow rotates the key; reopening an existing
@@ -346,7 +346,10 @@ func (n *Node) applyStatus(generation uint64, observed *ipnstate.Status) {
 					result.State, result.ReasonCode = "authenticating", ""
 				}
 				result.LoginExpiresAt = attempt.expires.Unix()
-				if attempt.interactive && observed.AuthURL != "" && time.Now().Before(attempt.expires) {
+				// Startup may publish a URL before requestLogin adopts it. Do not
+				// let the caller complete that flow while the worker could still
+				// decide to start another registration from the resulting status.
+				if attempt.interactive && attempt.loginStarted && observed.AuthURL != "" && time.Now().Before(attempt.expires) {
 					result.LoginUrl = observed.AuthURL
 				}
 			} else {
