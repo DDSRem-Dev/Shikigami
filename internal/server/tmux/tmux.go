@@ -33,8 +33,9 @@ type Pane struct {
 	TmuxSessionID     string // tmux's exact $N target, never a name prefix
 	WindowID          string
 	PaneID            string
-	PID               int // zero when tmux omits the PID of a retained dead pane
-	Dead              bool
+	PID               int  // zero when tmux reports that the pane's PTY is closed
+	Dead              bool // includes a closed PTY whose process exit status is pending
+	ExitPending       bool // pane_pid is empty but pane_dead is 0; not a confirmed exit
 	ExitStatus        *int
 	ExitSignal        int
 	ExitSignalUnknown bool
@@ -43,7 +44,7 @@ type Pane struct {
 // AbnormalExit requires a retained dead pane and an actual observed cause.
 // A signal is distinct from an exit code; unknown signal names fail closed.
 func (p Pane) AbnormalExit() bool {
-	return p.Dead && !p.ExitSignalUnknown && (p.ExitSignal != 0 || p.ExitStatus != nil && *p.ExitStatus != 0)
+	return p.Dead && !p.ExitPending && !p.ExitSignalUnknown && (p.ExitSignal != 0 || p.ExitStatus != nil && *p.ExitStatus != 0)
 }
 
 func New(binary string) (*Client, error) {
@@ -159,11 +160,15 @@ func parsePane(line string) (Pane, error) {
 	if _, err := Name(id); err != nil {
 		return Pane{}, err
 	}
+	if fields[4] != "0" && fields[4] != "1" {
+		return Pane{}, errors.New("invalid tmux pane dead flag")
+	}
 	dead := fields[4] == "1"
 	var pid int
-	// Since tmux 3.8 pane_pid is empty once a pane dies. Its exact tmux
-	// identities and retained exit evidence remain available independently.
-	if fields[3] != "" || !dead {
+	// tmux 3.8 omits pane_pid when wp->fd is closed. pane_dead additionally
+	// requires PANE_STATUSREADY, so the PID can disappear before waitpid has
+	// supplied exit evidence. Exact tmux identities remain available.
+	if fields[3] != "" {
 		var err error
 		pid, err = strconv.Atoi(fields[3])
 		if err != nil {
@@ -174,6 +179,12 @@ func parsePane(line string) (Pane, error) {
 		return Pane{}, errors.New("invalid tmux session identity")
 	}
 	p := Pane{SessionID: id, TmuxSessionID: fields[6], WindowID: fields[1], PaneID: fields[2], PID: pid, Dead: dead}
+	if fields[3] == "" && !dead {
+		// A closed PTY is neither a live process nor a confirmed abnormal
+		// exit. Ignore unconfirmed exit fields until pane_dead reports ready.
+		p.Dead, p.ExitPending = true, true
+		return p, nil
+	}
 	if fields[5] != "" {
 		exit, err := strconv.Atoi(fields[5])
 		if err != nil {
@@ -347,7 +358,7 @@ func (c *Client) DeleteDead(ctx context.Context, id string, expected Pane) (bool
 	if err != nil {
 		return false, err
 	}
-	if !pane.Dead || pane.TmuxSessionID != expected.TmuxSessionID || pane.WindowID != expected.WindowID || pane.PaneID != expected.PaneID {
+	if !pane.Dead || pane.ExitPending || pane.TmuxSessionID != expected.TmuxSessionID || pane.WindowID != expected.WindowID || pane.PaneID != expected.PaneID {
 		return false, nil
 	}
 	if !validTmuxSession.MatchString(pane.TmuxSessionID) || !regexp.MustCompile(`^@[0-9]+$`).MatchString(pane.WindowID) || !regexp.MustCompile(`^%[0-9]+$`).MatchString(pane.PaneID) {

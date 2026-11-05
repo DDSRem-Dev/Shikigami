@@ -2,7 +2,7 @@
 
 **当前进度（2026-11-05）：42/42，原清单最后一项已关闭。** 当前源码的功能、平台、验收依据及未支持范围已统一到[支持声明](18-release-readiness.md#current-support)。Phase 0–5各阶段为11/11、7/7、6/6、6/6、6/6、6/6。认证生命周期和长稳/资源/性能沿用2026-11-01用户确认的关闭结论，历史实测/失败及源码范围保留；生产heap/object归因、真实Claude登录/推理及物理主机重启仍按未实测边界披露。42/42表示当前源码验收登记与声明核对完成，不表示新包或稳定版已发布；仓库公开安装入口仍为alpha.2，未包含后续master修复。
 
-**本批CI修复与验证（2026-11-05）：** 补充提交`17ed77f`的[CI42017919620](https://github.com/DDSRem-Dev/Shikigami/actions/runs/42017919620)已completed/success，57/57任务通过，无失败、取消或跳过任务。修复首次tsnet注册被重复启动、过早公开URL及发送期间deadline被清理取消覆盖；host与独立SDK保持相同取消语义。macOS arm64两项原失败用例及四分支注册回归已直接读取日志确认pass；全部原生平台、WSL2、插件/E2E、终端和服务维护通过。旧CI41888706987的失败/容量取消及首轮CI42012596520的56/57结果保留。文档提交`d49310d`的稳定性复验[CI42023610286](https://github.com/DDSRem-Dev/Shikigami/actions/runs/42023610286)已结束，56/57通过，唯一失败为Intel macOS显式断网恢复登录等待URL超时；本批已补有效授权下复用SDK及API/持久化失败时的完整退役，最终node/架构race与vet通过，新提交远端仍待核验，不能将前一轮全绿推定为稳定。原42项验收登记、平台矩阵、测试预算和断言未削弱；本轮未发布新包。
+**本批CI修复与验证（2026-11-05）：** 补充提交`17ed77f`的[CI42017919620](https://github.com/DDSRem-Dev/Shikigami/actions/runs/42017919620)已completed/success，57/57任务通过，无失败、取消或跳过任务。修复首次tsnet注册被重复启动、过早公开URL及发送期间deadline被清理取消覆盖；host与独立SDK保持相同取消语义。macOS arm64两项原失败用例及四分支注册回归已直接读取日志确认pass；全部原生平台、WSL2、插件/E2E、终端和服务维护通过。旧CI41888706987的失败/容量取消及首轮CI42012596520的56/57结果保留。文档提交`d49310d`的稳定性复验[CI42023610286](https://github.com/DDSRem-Dev/Shikigami/actions/runs/42023610286)已结束，56/57通过，唯一失败为Intel macOS显式断网恢复登录等待URL超时；后续`ff338f9`的[CI42028867098](https://github.com/DDSRem-Dev/Shikigami/actions/runs/42028867098)已结束56/57，所有节点认证回归及Intel内部包通过，唯一失败为arm64快速退出pane的空PID解析。有效授权SDK复用及失败退役已通过本地与该轮节点验证；本批继续修复tmux 3.8关闭PTY但waitpid状态未到的合法过渡，并明确禁止据此自动重启或开始自动清理，最终tmux/session/架构race与vet通过，新提交远端结果待补，不能将单轮全绿推定为稳定。原42项验收登记、平台矩阵、测试预算和断言未削弱；本轮未发布新包。
 
 <a id="support-closeout-20261105"></a>
 ## 支持声明闭环（2026-11-05）
@@ -1221,3 +1221,16 @@ Mac冻结8fdfe25的local.proxy.1/.2完整原生矩阵passed=true，六组业务�
 本批复用边界定向race通过（1.926秒）；真实控制面失联/显式恢复加同SDK断言20轮通过（218.717秒），初版复用node全包/架构race通过（60.671/1.448秒）。独立复核随后发现API失败终态会屏蔽晚到撤权通知、却保留旧epoch的问题：真实SDK回归用overlay旧错误路径确定失败（0.84秒），未回退共享源码。现在错误裁决在opMu内先撤销授权、清地址并记录失败，再stopLocked退役SDK/监听/连接；状态记录写失败也执行退役，只有当前未完成attempt可清理，后续worker不会被旧清理误关。三项定向race（含LocalAPI失败与叠加持久化失败两个真实场景）通过3.593秒，独立复审无剩余阻塞。最终node全包与远端结果继续按真实来源补记。
 
 最终本地冻结回归：node整包race61.309秒、架构race1.458秒及node vet通过。远端CI42023610286已完成56/57，唯一Intel登录恢复失败保留；全部其他业务/平台/终端/维护任务成功。本批追加修复的新提交远端结果尚待，不以本地通过替代。
+
+
+## CI tmux退出过渡状态修复（2026-11-05）
+
+`ff338f9`的CI42028867098完成56/57，唯一失败为arm64 `TestRestartStableWindowQuietProcessAndExplicitStop`的空PID解析；Intel内部包及其余平台/集成/E2E/终端/维护成功。arm64日志确认显式断网恢复10.75秒、授权epoch1.17秒、peer shutdown4.43秒均pass，原认证失败没有重现。
+
+对照tmux 3.8上游`format.c`与`server-fn.c`：关闭PTY使`pane_pid`为空，`pane_dead`还需`PANE_STATUSREADY`，故waitpid结果到达前可合法返回空PID和dead=0。此前仅允许dead=1缺PID的适配不覆盖此窗口。现在保留精确tmux身份，把该观察表示为退出原因未知及运行态`ExitPending`，不采样PID、不计稳定存活、不推断异常或安排自动重启；未确认的退出字段不授予异常退出证据。确认结果到达后仍按原退出原因升级。自动清理要求确认死亡，pending取消原预警/倒计时；原tmux原子删除guard保持。
+
+新增会话回归修前确定失败（0.39秒），cleanup复核回归在缺guard时确定失败（0.53秒）；修复后三项回归（含原CI用例）各20轮race通过37.925秒。真实进程测试在原观察预算内区分临时pending与最终unknown，不把前者当永久暂停结案。整包、架构、vet及最终远端来源另行补记；本机tmux3.7b不替代远端3.8实测。
+
+最终独立七类复核无阻塞；补充CaptureLogs前后比较ExitPending，禁止跨退出就绪状态的快照冒充稳定日志。AbnormalExit与DeleteDead显式拒绝pending，即使存在未确认旧字段也不执行变更命令；两项确定性回归修前红、修后绿。上游依据：[tmux 3.8 pane_dead](https://github.com/tmux/tmux/blob/3.8/format.c#L2257)、[pane_pid](https://github.com/tmux/tmux/blob/3.8/format.c#L2580)、[先关闭fd再等待状态](https://github.com/tmux/tmux/blob/3.8/server-fn.c#L373)。
+
+最终冻结源码验证：tmux整包race8.209秒、session整包race21.688秒、架构race1.378秒，tmux/session vet及diff检查通过。三份当前CI摘要一致，原42项清单文字/顺序/勾选未变；下一提交远端仍须独立确认。

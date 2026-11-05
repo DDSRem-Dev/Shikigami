@@ -80,6 +80,9 @@ func (m *Manager) cleanupEligibility(ctx context.Context, state *storage.Snapsho
 	if pane.PaneID != value.TmuxPane || pane.WindowID != value.TmuxWindow {
 		return "unknown", pane, nil
 	}
+	if pane.ExitPending {
+		return "unknown", pane, nil
+	}
 	if !pane.Dead {
 		return "live_pane", pane, nil
 	}

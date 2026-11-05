@@ -17,17 +17,23 @@ import (
 )
 
 func TestUnknownExitIsNotRestartedAndCanBecomeKnown(t *testing.T) {
-	testUnknownExitUpgrade(t, true)
+	testUnknownExitUpgrade(t, true, false)
+}
+
+func TestClosedPaneBeforeWaitStatusIsNotRestartedAndCanBecomeKnown(t *testing.T) {
+	// tmux 3.8 closes the pane descriptor before waitpid necessarily supplies
+	// the exit status: pane_pid is empty while pane_dead is still zero.
+	testUnknownExitUpgrade(t, true, true)
 }
 
 func TestUnknownSignalExitWithoutAutomaticRestart(t *testing.T) {
 	// The observation source explicitly supplies signal 15. Real tmux versions
 	// may retain no cause at all; the real-process test accepts that unknown
 	// outcome without assuming signal support from a version number.
-	testUnknownExitUpgrade(t, false)
+	testUnknownExitUpgrade(t, false, false)
 }
 
-func testUnknownExitUpgrade(t *testing.T, automaticRestart bool) {
+func testUnknownExitUpgrade(t *testing.T, automaticRestart, pendingWaitStatus bool) {
 	t.Helper()
 	m, _ := managerFixture(t, 2)
 	value, err := m.Create(t.Context(), &pb.CreateSessionRequest{ProjectId: "proj_fixture", Name: "observation", RequestId: "observation"})
@@ -71,15 +77,29 @@ func testUnknownExitUpgrade(t *testing.T, automaticRestart bool) {
 	}()
 	write := func(status, signal string) {
 		t.Helper()
-		data := fmt.Sprintf("shiki-%s|%s|%s|123|1|%s|$1|%s\n", value.Id, value.TmuxWindow, value.TmuxPane, status, signal)
+		pid, dead := "123", "1"
+		if pendingWaitStatus {
+			pid = ""
+			if status == "" && signal == "" {
+				dead = "0"
+			}
+		}
+		data := fmt.Sprintf("shiki-%s|%s|%s|%s|%s|%s|$1|%s\n", value.Id, value.TmuxWindow, value.TmuxPane, pid, dead, status, signal)
 		if err := os.WriteFile(observation, []byte(data), 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
 	write("", "")
+	stable := map[string]stableProcess{value.Id: {
+		pane: "$1/" + value.TmuxWindow + "/" + value.TmuxPane,
+		pid:  123, since: time.Now().Add(-2 * time.Minute),
+	}}
 	for range 3 {
-		if err := m.restartStep(t.Context(), map[string]stableProcess{}); err != nil {
+		if err := m.restartStep(t.Context(), stable); err != nil {
 			t.Fatal(err)
+		}
+		if _, ok := stable[value.Id]; ok {
+			t.Fatal("unknown exit was counted as a stable live process")
 		}
 	}
 	unknown := nextEvent(t, sub, pb.SessionEvent_CLAUDE_STOPPED)
@@ -188,9 +208,12 @@ func TestSignalRestartBudgetAndExplicitStop(t *testing.T) {
 					}
 					state, viewErr := m.store.View()
 					if viewErr == nil && state.Get(restartBucket, value.Id, &observedRecord) == nil && observedRecord.ReasonCode == "EXIT_REASON_UNKNOWN" {
-						unknownOutcome = true
-						cancel()
-						break attempts
+						pane, inspectErr := m.tmux.Inspect(probe, value.Id)
+						if inspectErr == nil && pane.Dead && !pane.ExitPending && !pane.AbnormalExit() && pane.ExitStatus == nil && pane.ExitSignal == 0 {
+							unknownOutcome = true
+							cancel()
+							break attempts
+						}
 					}
 
 					select {

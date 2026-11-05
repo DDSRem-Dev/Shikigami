@@ -28,12 +28,12 @@ func TestDeleteDeadServerGuardAndFailureResult(t *testing.T) {
 				deadline := time.Now().Add(3 * time.Second)
 				for time.Now().Before(deadline) {
 					pane, err = client.Inspect(t.Context(), id)
-					if err == nil && pane.Dead {
+					if err == nil && pane.Dead && !pane.ExitPending {
 						break
 					}
 					time.Sleep(10 * time.Millisecond)
 				}
-				if !pane.Dead {
+				if !pane.Dead || pane.ExitPending {
 					t.Fatal("expected retained dead pane")
 				}
 			}

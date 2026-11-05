@@ -45,7 +45,19 @@ func awaitRestart(t *testing.T, m *Manager, id string, match func(RestartRecord)
 		}
 		var value RestartRecord
 		if err := state.Get(restartBucket, id, &value); err == nil && match(value) {
-			return value
+			if value.ReasonCode != "EXIT_REASON_UNKNOWN" {
+				return value
+			}
+			// A closed PTY can precede waitpid. Only a final pane observation
+			// can establish the durable unknown outcome used by restart tests;
+			// a pending or newly known exit must continue within this deadline.
+			pane, inspectErr := m.tmux.Inspect(ctx, id)
+			if inspectErr != nil {
+				t.Fatal(inspectErr)
+			}
+			if pane.Dead && !pane.ExitPending && pane.ExitStatus == nil && pane.ExitSignal == 0 {
+				return value
+			}
 		}
 		select {
 		case <-ctx.Done():

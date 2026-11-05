@@ -132,6 +132,23 @@ func TestObservedExitEventsWithoutAutomaticRestart(t *testing.T) {
 					verifyCrash(frame)
 					break
 				}
+				// The unknown event may describe a closed PTY whose wait status
+				// is still pending. Capture final diagnostics only after that
+				// transition, retaining the test's original overall deadline.
+				for {
+					observed, err := m.tmux.Inspect(ctx, value.Id)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if observed.Dead && !observed.ExitPending {
+						break
+					}
+					select {
+					case <-ctx.Done():
+						t.Fatal("exit evidence did not settle before log capture", ctx.Err())
+					case <-time.After(10 * time.Millisecond):
+					}
+				}
 				logs, err := m.GetLogs(ctx, &pb.SessionLogsRequest{SessionId: value.Id})
 				if err != nil || logs.State != "available" || !strings.Contains(logs.Text, "RETAINED_CRASH_DIAGNOSTIC") {
 					t.Fatalf("crash diagnostics: %v %v", logs, err)

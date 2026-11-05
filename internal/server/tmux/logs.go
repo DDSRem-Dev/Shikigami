@@ -83,7 +83,7 @@ func (c *Client) CaptureLogs(ctx context.Context, id, expectedPane, expectedWind
 	if err != nil {
 		return unavailable("TMUX_UNAVAILABLE")
 	}
-	if after.PaneID != before.PaneID || after.WindowID != before.WindowID || after.TmuxSessionID != before.TmuxSessionID || after.PID != before.PID || after.Dead != before.Dead || after.ExitSignal != before.ExitSignal || after.ExitSignalUnknown != before.ExitSignalUnknown || !sameExit(before.ExitStatus, after.ExitStatus) {
+	if after.PaneID != before.PaneID || after.WindowID != before.WindowID || after.TmuxSessionID != before.TmuxSessionID || after.PID != before.PID || after.Dead != before.Dead || after.ExitPending != before.ExitPending || after.ExitSignal != before.ExitSignal || after.ExitSignalUnknown != before.ExitSignalUnknown || !sameExit(before.ExitStatus, after.ExitStatus) {
 		return unavailable("PANE_CHANGED_DURING_CAPTURE")
 	}
 	text := strings.ToValidUTF8(string(output.data), "�")

@@ -34,7 +34,7 @@ func TestRetainedLogsAreBoundedAndSeparateFromScreen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for !pane.Dead {
+	for !pane.Dead || pane.ExitPending {
 		select {
 		case <-ctx.Done():
 			t.Fatal(ctx.Err())
@@ -96,6 +96,19 @@ func TestRetainedLogByteTailKeepsNewestOutput(t *testing.T) {
 	}
 }
 
+func TestLogsRejectExitReadinessChangeDuringCapture(t *testing.T) {
+	client, _ := inventoryFixture(t, []inventoryReply{
+		{"list-panes", "shiki-sess_lifecycle|@1|%1||0||$1|", false},
+		{"display-message", "0", false},
+		{"capture-pane", "retained output", false},
+		{"list-panes", "shiki-sess_lifecycle|@1|%1||1||$1|", false},
+	})
+	logs, err := client.CaptureLogs(t.Context(), "sess_lifecycle", "%1", "@1", 20)
+	if err != nil || logs.State != "unavailable" || logs.ReasonCode != "PANE_CHANGED_DURING_CAPTURE" || logs.Text != "" {
+		t.Fatal("exit readiness changed during a supposedly stable capture", logs.State, logs.ReasonCode, err)
+	}
+}
+
 func TestPaneExitSignalFormats(t *testing.T) {
 	for _, test := range []struct {
 		value string
@@ -116,7 +129,7 @@ func TestSignalRespawnRefusesPaneThatBecameAlive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for !pane.Dead {
+	for !pane.Dead || pane.ExitPending {
 		select {
 		case <-ctx.Done():
 			t.Fatal(ctx.Err())

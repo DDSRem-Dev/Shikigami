@@ -40,7 +40,7 @@ func exitCleanupShell(t *testing.T, m *Manager, id string) {
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
 		p, err = m.tmux.Inspect(t.Context(), id)
-		if err == nil && p.Dead {
+		if err == nil && p.Dead && !p.ExitPending {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -205,6 +205,61 @@ func TestAutomaticCleanupDefaultDisabled(t *testing.T) {
 	}
 	if readCleanup(t, m, s.Id).Since != 0 {
 		t.Fatal("default cleanup enabled")
+	}
+}
+
+func TestAutomaticCleanupWaitsForExitStatusObservation(t *testing.T) {
+	m, _ := managerFixture(t, 2)
+	s := stoppedCleanupSession(t, m)
+	dir := t.TempDir()
+	observation := filepath.Join(dir, "pane")
+	script := filepath.Join(dir, "tmux-observation")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\ncase \"$*\" in *list-panes*) cat '"+observation+"';; *) exit 99;; esac\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	fake, err := tmux.New(script)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.operations.Lock()
+	original, opts := m.tmux, m.opts
+	m.tmux = fake
+	m.opts.AutoCleanup = CleanupPolicy{Enabled: true, IdleThreshold: 10 * time.Second, WarnBefore: 3 * time.Second}
+	defer func() {
+		m.tmux, m.opts = original, opts
+		m.operations.Unlock()
+	}()
+	write := func(dead string) {
+		t.Helper()
+		data := fmt.Sprintf("shiki-%s|%s|%s||%s||$1|\n", s.Id, s.TmuxWindow, s.TmuxPane, dead)
+		if err := os.WriteFile(observation, []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now := time.Now().Add(time.Second)
+	write("1")
+	cleanupAt(t, m, now)
+	cleanupAt(t, m, now.Add(7*time.Second))
+	if readCleanup(t, m, s.Id).Warning == 0 {
+		t.Fatal("confirmed dead pane never entered the warning period")
+	}
+	write("0") // Descriptor closed, but tmux has not observed waitpid yet.
+	cleanupAt(t, m, now.Add(8*time.Second))
+	if r := readCleanup(t, m, s.Id); r.Since != 0 || r.Warning != 0 || r.Due != 0 {
+		t.Fatal("pending exit retained the previous cleanup schedule", r)
+	}
+	got, err := m.Get(t.Context(), &pb.GetSessionRequest{Id: s.Id})
+	if err != nil || got.ClaudeStatus != "stopped" || got.CleanupStatus != "unknown" || got.CleanupWarningAt != nil || got.CleanupAfter != nil {
+		t.Fatalf("pending exit lost explicit stop or advertised cleanup: %v %v", got, err)
+	}
+	cleanupAt(t, m, now.Add(20*time.Second))
+	if readCleanup(t, m, s.Id).Since != 0 {
+		t.Fatal("pending exit started a new cleanup observation")
+	}
+	write("1")
+	cleanupAt(t, m, now.Add(21*time.Second))
+	if r := readCleanup(t, m, s.Id); r.Since != now.Add(21*time.Second).UnixMilli() || r.Warning != 0 || r.Due != 0 {
+		t.Fatal("confirmed death did not start a fresh full observation", r)
 	}
 }
 
