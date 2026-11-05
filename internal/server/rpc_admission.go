@@ -13,10 +13,11 @@ import (
 )
 
 func admissionContextError(ctx context.Context, prefix string) error {
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+	err := ctx.Err()
+	if errors.Is(err, context.DeadlineExceeded) {
 		return connect.NewError(connect.CodeDeadlineExceeded, prefix+"_REQUEST_DEADLINE")
 	}
-	if ctx.Err() != nil {
+	if err != nil {
 		return connect.NewError(connect.CodeCanceled, prefix+"_REQUEST_CANCELED")
 	}
 	return nil

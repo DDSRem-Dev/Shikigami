@@ -4,6 +4,8 @@
 
 **本批CI修复与验证（2026-11-05）：** 补充提交`17ed77f`的[CI42017919620](https://github.com/DDSRem-Dev/Shikigami/actions/runs/42017919620)已completed/success，57/57任务通过，无失败、取消或跳过任务。修复首次tsnet注册被重复启动、过早公开URL及发送期间deadline被清理取消覆盖；host与独立SDK保持相同取消语义。macOS arm64两项原失败用例及四分支注册回归已直接读取日志确认pass；全部原生平台、WSL2、插件/E2E、终端和服务维护通过。旧CI41888706987的失败/容量取消及首轮CI42012596520的56/57结果保留。文档提交`d49310d`的稳定性复验[CI42023610286](https://github.com/DDSRem-Dev/Shikigami/actions/runs/42023610286)已结束，56/57通过，唯一失败为Intel macOS显式断网恢复登录等待URL超时；后续`ff338f9`的[CI42028867098](https://github.com/DDSRem-Dev/Shikigami/actions/runs/42028867098)已结束56/57，所有节点认证回归及Intel内部包通过，唯一失败为arm64快速退出pane的空PID解析。有效授权SDK复用及失败退役已通过本地与该轮节点验证；本批继续修复tmux 3.8关闭PTY但waitpid状态未到的合法过渡，并明确禁止据此自动重启或开始自动清理，最终tmux/session/架构race与vet通过；冻结`5254892`的原生macOS arm64隔离tmux 3.8两整包race亦通过（71顶层/104含子项，零fail/skip），该提交的[CI42034435896](https://github.com/DDSRem-Dev/Shikigami/actions/runs/42034435896)已completed/success，57/57全通过，macOS arm64原失败及新增回归已核对日志；单轮成功按其来源记录，稳定性继续用完整矩阵复验。原42项验收登记、平台矩阵、测试预算和断言未削弱；本轮未发布新包。
 
+**追加多轮稳定性验证（2026-11-05起）：** 用户要求再次触发完整CI。冻结生产/测试源码`886de184ad11f35a7b6879c2ca1b9d2dbab27a53`，计划追加3轮完整矩阵，逐attempt要求57个job全success，并核对四平台各7个必需E2E/重型集成用例实际pass。首轮CI42040152398 attempt2已完成56/57，唯一WSL2产品测试的端口较早截止用例失败，不把本轮计入成功；发现并修复共享准入错误分类两次读取ctx.Err导致DeadlineExceeded误判Canceled的竞态，修后FILE/PORT较早截止真实wire各50轮race、server/架构整包race及vet通过，最终来源须重新连续验证。三项原不稳定真实节点用例各50轮race已通过（150 pass、0 fail/skip，883.157秒），590个源码输入哈希保持，内部期限未改；完整CI结果单独记录。本轮不扩大原42项验收或发行声明。
+
 <a id="support-closeout-20261105"></a>
 ## 支持声明闭环（2026-11-05）
 
@@ -1238,3 +1240,20 @@ Mac冻结8fdfe25的local.proxy.1/.2完整原生矩阵passed=true，六组业务�
 补充原生tmux 3.8实测：冻结`5254892b725c944ce44b981d69a85a467853d2af`，官方release tar SHA256 `e79c699c7e949dccd0a4a125e17b8d1261e311b16979dbc8eb34542f3966d82e`隔离构建（启用utf8proc、关闭jemalloc），实际server版本及专用0700 socket核验为3.8。tmux/session整包race9.673/22.178秒，71顶层、104含子项全pass，零fail/skip；命令33.871秒退出0。root逐份核验日志SHA256、JSON测试结果和清理收据，12个任务socket均无服务、私有socket根已移除，未改全局安装或PATH。证据目录`/var/folders/1n/q373cln10fqb0gl9z1ds5d8m0000gn/T/shiki-tmux38-native-4xsjqol1/logs`。这补充前文本机旧版本限制；远端全矩阵仍单独记录。
 
 最终远端CI42034435896已completed/success，来源固定`5254892b725c944ce44b981d69a85a467853d2af`，57/57任务全部成功。arm64内部包job127272252065日志确认原tmux用例0.62秒、新过渡0.29秒、清理0.26秒，以及显式登录恢复0.69秒/授权epoch6.29秒/peer shutdown4.39秒均pass。全部四平台、WSL2、集成/E2E、内嵌产物、终端与原生维护实际完成，未用取消或skip替代必需任务。历史56/57失败保留。收尾提交仅同步08/15/16记录，生产与测试源码保持该通过来源；七类边界复核无新增变动，清单文字/顺序/42项勾选保持。
+
+
+## 追加CI稳定性复验（2026-11-05起）
+
+用户要求额外多轮完整验收。冻结886de18（与前轮5254892仅三份记录差异），先完整重跑CI42040152398，按attempt独立保存57项状态，不把旧attempt成功混入新轮。四平台compile/preflight/unit/integration/E2E/release/embedded/Homebrew保持；原生terminal/maintenance是Linux amd64及macOS arm64两目标，另有完整WSL2。
+
+独立源码快照下三项原不稳定真实节点测试各50轮race：显式断网恢复、首次授权epoch、peer shutdown各50 pass，总150 pass、零fail/skip。单Go进程GOMAXPROCS=2/-p=1，包875.611秒、整体883.157秒退出0；最大单次11.02/2.01/5.12秒，内部预算未改。590个Go/module输入及源码归档哈希核验一致，6份证据SHA复核通过，原始JSON与verification.json位于`/tmp/shiki-node-stability-3vpkfxif/evidence`。该定向重复不替代完整平台CI。
+
+2026-11-06追加失败定位：CI42040152398 attempt2的WSL2 job127341328488失败；本轮artifact13430625424确认internal/server TestPortAdmissionFirstFrameDeadlineAndCancellation/earlier-wire-parent在port_admission_test.go原198行、0.54秒失败。节点、tmux、原生systemd及清理均pass，product失败使WSL后续E2E/terminal/发行阶段未验，不计通过。公开摘要未保留call.err/body，不能声称已证明具体错误码。
+
+源码复核发现独立明确竞态：admissionContextError连续两次ctx.Err取样，第一次nil、第二次DeadlineExceeded时错误返回Canceled。修复为单次快照后分类，FILE/PORT共用路径一并恢复DeadlineExceeded语义。确定性过渡回归修前两分支均Canceled失败，修后race通过1.557秒；原500ms真实wire子项在本机旧代码50轮race通过38.173秒，不替代WSL失败。该竞态与失败现象相符，但远端具体同因仍待验证；不延长原500ms/120ms/5秒预算、不接受错误Canceled或缺少终帧。
+
+最终本地冻结回归：port500ms和file120ms较早parent截止各50轮race通过，100个真实wire子项零fail/skip（包37.747秒、命令41.384秒）；四份相关源码hash前后相同，证据位于`/tmp/shiki-port-deadline-q0o837yi`。server全包race36.444秒、架构race1.381秒及server vet/diff检查通过。远端旧轮继续完成，修复的新提交与连续完整成功结果另行记录。
+
+旧源码886de18的attempt2最终56/57，唯一WSL2失败保留，其余56项全部成功；四平台8个E2E/重型集成job中的28条REQUIRED记录已逐份验证pass、无同名fail/skip。证据按attempt独立保存于`/tmp/shiki-ci-stability-20261105/42040152398-attempt-2`；本批新源码提交后的完整矩阵及连续轮次单独核验，不将旧通过继承给新提交。
+
+最终artifact来源复核：本轮两Linux下游下载预检ID13429320871，两macOS arm64下游下载ID13430197338，四者均与本attempt上传ID/时间匹配，4份下载日志SHA及4平台上传元数据保存在artifact-audit.json，all_four_downloads_verified=true。该来源核对不替代WSL失败，也不把旧attempt结果算作新验收。

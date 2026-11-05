@@ -194,8 +194,14 @@ func TestPortAdmissionFirstFrameDeadlineAndCancellation(t *testing.T) {
 		case <-time.After(5 * time.Second):
 			t.Fatal("earlier port parent deadline left Receive blocked")
 		}
-		if call.err != nil || !bytes.Contains(call.body, []byte("deadline_exceeded")) {
-			t.Fatalf("port parent deadline: %v %q", call.err, call.body)
+		if call.err != nil {
+			t.Fatalf("port parent deadline transport failed: type=%T http_status=%d deadline_body=%t", call.err, call.status, bytes.Contains(call.body, []byte("deadline_exceeded")))
+		}
+		if bytes.Contains(call.body, []byte(`"code":"canceled"`)) {
+			t.Fatalf("port parent deadline became canceled: http_status=%d", call.status)
+		}
+		if !bytes.Contains(call.body, []byte("deadline_exceeded")) {
+			t.Fatalf("port parent deadline missing deadline result: http_status=%d body_bytes=%d", call.status, len(call.body))
 		}
 		waitFileCount(t, &f.service.portCalls.watches, 0)
 	})
