@@ -344,12 +344,12 @@ func (a *app) prepareTailnetLogin(ctx context.Context, c *client.Client) error {
 	for nodeLoginActive(status) && status.LoginUrl == "" {
 		select {
 		case <-deadline.Done():
-			return errors.New("server saved; login is pending: inspect shiki node status")
+			return tailnetLoginWaitError(deadline, nil)
 		case <-ticker.C:
 		}
 		status, err = node.API().GetStatus(deadline, &pb.Empty{})
 		if err != nil {
-			return err
+			return tailnetLoginWaitError(deadline, err)
 		}
 	}
 	if status.State == "online" {
@@ -359,4 +359,13 @@ func (a *app) prepareTailnetLogin(ctx context.Context, c *client.Client) error {
 		fmt.Fprintf(a.errorOutput, "Complete embedded node login: %s\n", safeText(status.LoginUrl))
 	}
 	return errors.New("server saved; finish node login, then retry connect")
+}
+
+// An accepted attempt remains active when the local wait ends, including when
+// its final status poll is interrupted. Independent RPC failures stay visible.
+func tailnetLoginWaitError(ctx context.Context, rpcErr error) error {
+	if cause := nodeLoginWaitCause(ctx, rpcErr); cause != nil {
+		return fmt.Errorf("server saved; login is pending: inspect shiki node status: %w", cause)
+	}
+	return rpcErr
 }

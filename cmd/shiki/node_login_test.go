@@ -175,6 +175,88 @@ func TestNodeLoginPendingWaitIsBounded(t *testing.T) {
 	}
 }
 
+func TestNodeLoginPollErrorKeepsLastAcceptedStatus(t *testing.T) {
+	for _, scenario := range []string{"parent_deadline", "wait_deadline", "parent_cancel", "remote_deadline", "permission_denied", "unauthenticated", "unavailable"} {
+		t.Run(scenario, func(t *testing.T) {
+			pending := pendingLoginStatus()
+			var cancel context.CancelFunc
+			wait := "2s"
+			if scenario == "wait_deadline" {
+				wait = "350ms"
+			}
+			var wantCause error
+			var wantCode connect.Code
+			switch scenario {
+			case "parent_deadline", "wait_deadline":
+				wantCause = context.DeadlineExceeded
+			case "parent_cancel":
+				wantCause = context.Canceled
+			case "remote_deadline":
+				wantCode = connect.CodeDeadlineExceeded
+			case "permission_denied":
+				wantCode = connect.CodePermissionDenied
+			case "unauthenticated":
+				wantCode = connect.CodeUnauthenticated
+			case "unavailable":
+				wantCode = connect.CodeUnavailable
+			}
+			entered := make(chan struct{})
+			release := make(chan struct{})
+			defer close(release)
+			probe := &nodeLoginProbe{statuses: []*apb.NodeStatus{pending}}
+			probe.statusError = func(call context.Context, read int) error {
+				if read != 2 {
+					return nil
+				}
+				close(entered)
+				if scenario == "parent_cancel" {
+					cancel()
+				}
+				if wantCause != nil {
+					// Force local cancellation, not an earlier server response
+					// from the wire timeout's millisecond rounding.
+					<-release
+					return call.Err()
+				}
+				return connect.NewError(wantCode, "status probe rejected")
+			}
+			socket := nodeLoginSocket(t, probe)
+			ctx := t.Context()
+			if scenario == "wait_deadline" {
+				ctx, cancel = context.WithCancel(ctx)
+			} else {
+				ctx, cancel = context.WithTimeout(ctx, 350*time.Millisecond)
+			}
+			defer cancel()
+			out, stderr, err := runNodeLogin(ctx, socket, "--wait-timeout", wait)
+			select {
+			case <-entered:
+			default:
+				t.Fatal("accepted login never reached the controlled status poll")
+			}
+			if wantCause != nil {
+				var status struct {
+					State      string `json:"state"`
+					LoginID    string `json:"login_id"`
+					ReasonCode string `json:"reason_code"`
+				}
+				if decodeErr := json.Unmarshal([]byte(out), &status); decodeErr != nil || status.State != pending.State || status.LoginID != pending.LoginId || status.ReasonCode != pending.ReasonCode {
+					t.Fatalf("interrupted poll lost the last accepted status: output=%q decode=%v", out, decodeErr)
+				}
+				if err == nil || !strings.Contains(err.Error(), "login accepted; inspect node status") || !errors.Is(err, wantCause) {
+					t.Fatalf("local wait lost acceptance/cause: %v", err)
+				}
+			} else if connect.CodeOf(err) != wantCode || out != "" || ctx.Err() != nil {
+				t.Fatalf("live wait changed actual RPC failure: %v, output=%q, parent=%v", err, out, ctx.Err())
+			}
+			if stderr != "" {
+				t.Fatal("unexpected login diagnostics", stderr)
+			}
+			probe.checkCalls(t, 2)
+		})
+	}
+}
+
 func pendingLoginStatus() *apb.NodeStatus {
 	return &apb.NodeStatus{State: "needs_login", ReasonCode: "NODE_AUTH_REQUIRED", LoginId: "login-test", LoginExpiresAt: time.Now().Add(time.Minute).Unix()}
 }
@@ -191,6 +273,7 @@ type nodeLoginProbe struct {
 	arpc.UnimplementedNodeControlHandler
 	mu                     sync.Mutex
 	statuses               []*apb.NodeStatus
+	statusError            func(context.Context, int) error
 	authKey                bool
 	begins, reads, cancels int
 }
@@ -229,9 +312,15 @@ func (p *nodeLoginProbe) GetStatus(ctx context.Context, _ *pb.Empty) (*apb.NodeS
 		return nil, err
 	}
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	result := proto.Clone(p.statuses[min(p.reads, len(p.statuses)-1)]).(*apb.NodeStatus)
 	p.reads++
+	read := p.reads
+	p.mu.Unlock()
+	if p.statusError != nil {
+		if err := p.statusError(ctx, read); err != nil {
+			return nil, err
+		}
+	}
 	return result, nil
 }
 func (p *nodeLoginProbe) CancelLogin(ctx context.Context, _ *apb.CancelLoginRequest) (*apb.NodeStatus, error) {

@@ -107,10 +107,16 @@ func (a *app) runTerminal(ctx context.Context, initial *client.Client, server st
 			fmt.Fprintln(a.errorOutput, "Detached; the remote session continues.")
 			return nil
 		}
+		// Terminal has already restored input and delivered its final result.
+		// Optional diagnostics may outlive the parent deadline; they must not
+		// replace a terminal rejection or its original cancellation cause.
+		if !terminalRetryable(err) {
+			return err
+		}
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if !reconnect || attempt >= 5 || !terminalRetryable(err) {
+		if !reconnect || attempt >= 5 {
 			return err
 		}
 		if current != nil {

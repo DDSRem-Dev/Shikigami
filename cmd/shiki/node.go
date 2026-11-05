@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"connectrpc.com/connect/v2"
 	"github.com/DDSRem-Dev/Shikigami/internal/client"
 	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
 	apb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/agent"
@@ -77,21 +78,28 @@ func (a *app) nodeCommands() *cobra.Command {
 			}
 			ctx, cancel := context.WithTimeout(cmd.Context(), wait)
 			defer cancel()
+			pending := func(cause error) error {
+				if err := a.print(result); err != nil {
+					return err
+				}
+				return fmt.Errorf("login accepted; inspect node status for completion: %w", cause)
+			}
 			ticker := time.NewTicker(100 * time.Millisecond)
 			defer ticker.Stop()
 			for nodeLoginActive(result) && result.LoginUrl == "" {
 				select {
 				case <-ctx.Done():
-					if e = a.print(result); e != nil {
-						return e
-					}
-					return fmt.Errorf("login accepted; inspect node status for completion: %w", ctx.Err())
+					return pending(ctx.Err())
 				case <-ticker.C:
 				}
-				result, e = node.API().GetStatus(ctx, &pb.Empty{})
+				next, e := node.API().GetStatus(ctx, &pb.Empty{})
 				if e != nil {
+					if cause := nodeLoginWaitCause(ctx, e); cause != nil {
+						return pending(cause)
+					}
 					return e
 				}
+				result = next
 			}
 			if e = a.print(result); e != nil {
 				return e
@@ -115,6 +123,17 @@ func (a *app) nodeCommands() *cobra.Command {
 		})
 	}})
 	return root
+}
+
+// Only an interrupted local wait explains an interrupted status RPC. A server
+// deadline or another RPC failure is not evidence that our wait expired.
+func nodeLoginWaitCause(ctx context.Context, rpcErr error) error {
+	cause := ctx.Err()
+	code := connect.CodeOf(rpcErr)
+	if cause != nil && (rpcErr == nil || code == connect.CodeCanceled || code == connect.CodeDeadlineExceeded) {
+		return cause
+	}
+	return nil
 }
 
 // SDK startup, required login/approval or an unavailable control plane can
