@@ -60,6 +60,20 @@ func awaitState(t *testing.T, node *Node, predicate func(*agentpb.NodeStatus) bo
 		}
 		select {
 		case <-deadline.C:
+			node.mu.Lock()
+			lc, attempt := node.local, node.attempt
+			if attempt != nil {
+				t.Logf("login started=%t finished=%t saw_url=%t", attempt.loginStarted, attempt.finished, attempt.sawAuthURL)
+			}
+			node.mu.Unlock()
+			if lc != nil {
+				probe, cancel := context.WithTimeout(context.Background(), time.Second)
+				observed, err := lc.StatusWithoutPeers(probe)
+				cancel()
+				if err == nil {
+					t.Logf("SDK state=%s have_key=%t has_url=%t self_online=%t", observed.BackendState, observed.HaveNodeKey, observed.AuthURL != "", observed.Self != nil && observed.Self.Online)
+				}
+			}
 			t.Fatalf("node state timeout: state=%s reason=%s", status.State, status.ReasonCode)
 		case <-tick.C:
 		}
@@ -422,7 +436,7 @@ func TestInvalidAuthKeyAndNoCredentialPersistence(t *testing.T) {
 	currentServer, currentGeneration := node.server, node.generation
 	rejectedAttempt := node.requests["invalid"]
 	node.mu.Unlock()
-	node.runLogin(rejectedAttempt, []byte("test-invalid-key"))
+	node.runLogin(rejectedAttempt, []byte("test-invalid-key"), false)
 	node.mu.Lock()
 	unchanged := node.server == currentServer && node.generation == currentGeneration
 	node.mu.Unlock()

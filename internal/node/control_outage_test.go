@@ -301,6 +301,9 @@ func TestSDKExplicitLoginAfterControlOutage(t *testing.T) {
 		t.Fatal(err)
 	}
 	previous := control.Node(before.Self.PublicKey)
+	n.mu.Lock()
+	previousServer, previousGeneration := n.server, n.generation
+	n.mu.Unlock()
 	gate.cut(true)
 	awaitState(t, n, func(s *apb.NodeStatus) bool { return s.State == "offline" })
 	request := &apb.BeginLoginRequest{Method: &apb.BeginLoginRequest_Interactive{Interactive: true}, RequestId: "recover-control"}
@@ -314,6 +317,12 @@ func TestSDKExplicitLoginAfterControlOutage(t *testing.T) {
 	}
 	gate.cut(false)
 	url := awaitState(t, n, func(s *apb.NodeStatus) bool { return s.LoginUrl != "" })
+	n.mu.Lock()
+	sameSDK := n.server == previousServer && n.generation == previousGeneration
+	n.mu.Unlock()
+	if !sameSDK {
+		t.Fatal("explicit recovery restarted the already authorized SDK and raced its automatic registration")
+	}
 	if !control.CompleteAuth(url.LoginUrl) {
 		t.Fatal("recovery URL not recognized")
 	}

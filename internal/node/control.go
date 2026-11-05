@@ -143,10 +143,14 @@ func (n *Node) beginLogin(request *agentpb.BeginLoginRequest) (*agentpb.NodeStat
 		n.mu.Unlock()
 		return nil, connect.NewError(connect.CodeFailedPrecondition, "NODE_STATE_WRITE_FAILED")
 	}
-	// Publishing a new attempt immediately retires the previous SDK's events.
-	// runLogin replaces the SDK asynchronously under opMu; until then a queued
-	// rejection/status from the old login must not complete this new attempt.
-	n.generation++
+	// Keep an already authorized SDK for interactive recovery. Restarting it
+	// would race the SDK's automatic same-key login against our interactive
+	// registration. Failed/canceled/auth-key attempts still retire the old
+	// generation before a queued observation can affect the new attempt.
+	reuse := n.reuseLoginSDKLocked(interactive)
+	if !reuse {
+		n.generation++
+	}
 	n.attempt = attempt
 	n.requests[request.RequestId] = attempt
 	n.status = pending
@@ -154,23 +158,40 @@ func (n *Node) beginLogin(request *agentpb.BeginLoginRequest) (*agentpb.NodeStat
 	n.wg.Add(1)
 	n.mu.Unlock()
 	keyCopy := append([]byte(nil), key...)
-	go func() { defer n.wg.Done(); defer clear(keyCopy); n.runLogin(attempt, keyCopy) }()
+	go func() { defer n.wg.Done(); defer clear(keyCopy); n.runLogin(attempt, keyCopy, reuse) }()
 	return result, nil
 }
-func (n *Node) runLogin(attempt *loginAttempt, key []byte) {
+
+// reuseLoginSDKLocked requires n.mu. Only a live authorization lifetime proves
+// this SDK has finished registration; cached keys or Running alone do not.
+func (n *Node) reuseLoginSDKLocked(interactive bool) bool {
+	if previous := n.attempt; previous != nil && previous.finished && previous.result.GetState() != "online" {
+		return false
+	}
+	return interactive && n.server != nil && n.local != nil && n.authorizedLocked()
+}
+
+func (n *Node) runLogin(attempt *loginAttempt, key []byte, reuse bool) {
 	n.opMu.Lock()
 	n.mu.Lock()
 	active := n.attempt == attempt && !attempt.finished
+	// The admission decision belongs to beginLogin's previous attempt. Never
+	// infer it from n.attempt now that it has been replaced with this attempt.
+	reuse = reuse && attempt.interactive && n.server != nil && n.local != nil && n.authorizedLocked()
 	n.mu.Unlock()
 	if !active {
 		n.opMu.Unlock()
 		clear(key)
 		return
 	}
-	// Each explicit attempt gets a fresh control client; old rejected keys and
-	// canceled followups cannot be resumed by a subsequent request.
-	n.stopLocked()
-	err := n.startLocked(attempt)
+	var err error
+	if !reuse {
+		// Recheck under opMu: authorization may have been retired since the
+		// request was published. Fresh, rejected and canceled registrations
+		// must never resume an old control client's auth key or followup.
+		n.stopLocked()
+		err = n.startLocked(attempt)
+	}
 	n.mu.Lock()
 	active = n.attempt == attempt && !attempt.finished
 	lc := n.local
@@ -180,17 +201,33 @@ func (n *Node) runLogin(attempt *loginAttempt, key []byte) {
 		err = n.requestLogin(callCtx, lc, attempt, key)
 		cancel()
 	}
-	n.opMu.Unlock()
-	clear(key)
 	if err != nil {
 		n.mu.Lock()
-		if !attempt.finished {
+		retire := n.attempt == attempt && !attempt.finished
+		if retire {
+			// A failed local request may already have started registration.
+			// Retire authorization before publishing its failed terminal state:
+			// later SDK notifications cannot authorize a finished attempt.
+			if n.authorizationCancel != nil {
+				n.authorizationCancel()
+			}
+			n.authorization, n.authorizationCancel = nil, nil
+			n.selfAddresses = nil
 			n.status = &agentpb.NodeStatus{State: "offline", ReasonCode: "LOGIN_START_FAILED", LoginId: attempt.id}
 			n.finishAttemptLocked(attempt, n.status)
 		}
 		n.mu.Unlock()
+		if retire {
+			// Keep opMu until this SDK is stopped. A later login cannot
+			// replace it and then be closed by this failed worker.
+			n.stopLocked()
+		}
+		n.opMu.Unlock()
+		clear(key)
 		return
 	}
+	n.opMu.Unlock()
+	clear(key)
 	timer := time.NewTimer(time.Until(attempt.expires))
 	defer timer.Stop()
 	select {
