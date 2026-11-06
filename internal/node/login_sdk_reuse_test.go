@@ -149,6 +149,10 @@ func TestInteractiveLoginReusesSDKWithoutAcceptingOldRunning(t *testing.T) {
 		t.Fatal("pending registration failed to publish its URL or retire old authorization")
 	}
 	observed.AuthURL = ""
+	n.applyStatus(generation, observed)
+	if n.attempt.finished || n.snapshot().State == "online" || n.DataPlaneAuthorized() {
+		t.Fatal("URL completion authorized the old cached registration map")
+	}
 	observed.Self.PublicKey = key.NewNode().Public()
 	n.applyStatus(generation, observed)
 	if !n.attempt.finished || n.snapshot().State != "online" || !n.DataPlaneAuthorized() || n.authorization == oldLease {

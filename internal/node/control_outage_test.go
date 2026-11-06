@@ -23,6 +23,7 @@ import (
 	rpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/protocolconnect"
 	"tailscale.com/client/local"
 	"tailscale.com/ipn/ipnstate"
+	"tailscale.com/tailcfg"
 	"tailscale.com/types/key"
 )
 
@@ -230,7 +231,7 @@ func TestLoginCompletionRequiresCurrentRegistration(t *testing.T) {
 				observed.AuthURL = ""
 			}
 			n.applyStatus(0, observed)
-			want := mode == "new-key" || mode == "existing-url"
+			want := mode == "new-key"
 			if attempt.finished != want || (n.authorization != nil) != want {
 				t.Fatalf("registration completed=%v authorized=%v, want %v", attempt.finished, n.authorization != nil, want)
 			}
@@ -284,7 +285,41 @@ func TestSDKPendingInteractiveURLCompletesWithoutAnotherKeyRotation(t *testing.T
 }
 
 func TestSDKExplicitLoginAfterControlOutage(t *testing.T) {
+	testSDKExplicitLoginAfterControlOutage(t, false)
+}
+
+func TestSDKInteractiveRecoveryWaitsForRegisteredMap(t *testing.T) {
+	testSDKExplicitLoginAfterControlOutage(t, true)
+}
+
+func testSDKExplicitLoginAfterControlOutage(t *testing.T, delayMap bool) {
+	t.Helper()
 	control := localControl(t, true, "")
+	var mapMu sync.Mutex
+	var oldKey key.NodePublic
+	var holdOnce sync.Once
+	heldMaps := make(chan *tailcfg.MapResponse, 1)
+	if delayMap {
+		control.ModifyFirstMapResponse = func(response *tailcfg.MapResponse, request *tailcfg.MapRequest) {
+			mapMu.Lock()
+			previousKey := oldKey
+			mapMu.Unlock()
+			if !request.Stream || previousKey.IsZero() || request.NodeKey == previousKey {
+				return
+			}
+			holdOnce.Do(func() {
+				// A real keepalive updates SDK poll health without replacing
+				// its cached self map. Hold the new registration's full map
+				// until the test has observed that intermediate LocalAPI state.
+				saved := *response
+				if !control.AddRawMapResponse(request.NodeKey, &tailcfg.MapResponse{KeepAlive: true}) {
+					t.Error("could not hold the recovery map stream")
+				}
+				*response = tailcfg.MapResponse{KeepAlive: true}
+				heldMaps <- &saved
+			})
+		}
+	}
 	control.HTTPTestServer.Close()
 	httpServer := httptest.NewUnstartedServer(control)
 	gate := &cutControlListener{Listener: httpServer.Listener, conns: map[*cutControlConn]struct{}{}}
@@ -301,6 +336,12 @@ func TestSDKExplicitLoginAfterControlOutage(t *testing.T) {
 		t.Fatal(err)
 	}
 	previous := control.Node(before.Self.PublicKey)
+	if previous == nil {
+		t.Fatal("initial online identity is absent from control")
+	}
+	mapMu.Lock()
+	oldKey = before.Self.PublicKey
+	mapMu.Unlock()
 	n.mu.Lock()
 	previousServer, previousGeneration := n.server, n.generation
 	n.mu.Unlock()
@@ -326,6 +367,40 @@ func TestSDKExplicitLoginAfterControlOutage(t *testing.T) {
 	if !control.CompleteAuth(url.LoginUrl) {
 		t.Fatal("recovery URL not recognized")
 	}
+	if delayMap {
+		var registeredMap *tailcfg.MapResponse
+		select {
+		case registeredMap = <-heldMaps:
+		case <-ctx.Done():
+			t.Fatal("recovery did not reach the map barrier")
+		}
+		tick := time.NewTicker(20 * time.Millisecond)
+		defer tick.Stop()
+		for {
+			observed, err := n.local.StatusWithoutPeers(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if observed.BackendState == "Running" && observed.Self != nil && observed.Self.Online && observed.AuthURL == "" {
+				if observed.Self.PublicKey != before.Self.PublicKey || control.Node(observed.Self.PublicKey) != nil {
+					t.Fatal("map barrier did not retain the removed registration key")
+				}
+				n.applyStatus(previousGeneration, observed)
+				if n.snapshot().State == "online" || n.DataPlaneAuthorized() {
+					t.Fatal("recovery authorized a cached self map before the registered map arrived")
+				}
+				break
+			}
+			select {
+			case <-ctx.Done():
+				t.Fatal("SDK did not expose live poll health with the cached self map")
+			case <-tick.C:
+			}
+		}
+		if registeredMap.Node == nil || !control.AddRawMapResponse(registeredMap.Node.Key, registeredMap) {
+			t.Fatal("could not release the registered recovery map")
+		}
+	}
 	awaitState(t, n, func(s *apb.NodeStatus) bool { return s.State == "online" })
 	after, err := n.local.StatusWithoutPeers(ctx)
 	if err != nil {
@@ -333,7 +408,7 @@ func TestSDKExplicitLoginAfterControlOutage(t *testing.T) {
 	}
 	current := control.Node(after.Self.PublicKey)
 	if current == nil || previous == nil || current.Machine != previous.Machine {
-		t.Fatal("explicit login discarded persisted machine identity")
+		t.Fatalf("explicit login discarded persisted machine identity: previous_present=%t current_present=%t key_rotated=%t", previous != nil, current != nil, before.Self.PublicKey != after.Self.PublicKey)
 	}
 	if before.Self.PublicKey == after.Self.PublicKey {
 		t.Fatal("fresh interactive registration did not rotate the node key")
@@ -341,27 +416,39 @@ func TestSDKExplicitLoginAfterControlOutage(t *testing.T) {
 }
 
 func TestCancelLoginDoesNotMistakeCachedRunningForCompletion(t *testing.T) {
-	store, err := storage.Open(filepath.Join(t.TempDir(), "state"), storage.Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer store.Close()
-	attempt := &loginAttempt{id: "cached-pending", requestID: "cached-pending", interactive: true, loginStarted: true, expires: time.Now().Add(time.Minute), done: make(chan struct{})}
-	cached := &ipnstate.Status{BackendState: "Running", Self: &ipnstate.PeerStatus{PublicKey: key.NewNode().Public()}, TailscaleIPs: []netip.Addr{netip.MustParseAddr("100.64.0.1")}}
-	encoded, err := json.Marshal(cached)
-	if err != nil {
-		t.Fatal(err)
-	}
-	lc := &local.Client{OmitAuth: true, Transport: peerStatusTransport(func(request *http.Request) (*http.Response, error) {
-		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(encoded)), Request: request}, nil
-	})}
-	n := &Node{ctx: t.Context(), state: store, attempt: attempt, local: lc, status: &apb.NodeStatus{State: "authenticating"}}
-	canceled, err := n.cancelAttempt(attempt.id, "LOGIN_CANCELED")
-	if err != nil || !attempt.finished || canceled.ReasonCode != "LOGIN_CANCELED" || canceled.LoginUrl != "" || n.local != nil {
-		t.Fatal("cached Running prevented cancellation", err)
-	}
-	if n.DataPlaneAuthorized() {
-		t.Fatal("canceled pending cache acquired a lease")
+	for _, livePoll := range []bool{false, true} {
+		name := "offline-cached-map"
+		if livePoll {
+			name = "live-poll-old-map"
+		}
+		t.Run(name, func(t *testing.T) {
+			store, err := storage.Open(filepath.Join(t.TempDir(), "state"), storage.Options{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer store.Close()
+			oldKey := key.NewNode().Public()
+			attempt := &loginAttempt{id: "cached-pending", requestID: "cached-pending", interactive: true, loginStarted: true, expires: time.Now().Add(time.Minute), done: make(chan struct{})}
+			if livePoll {
+				attempt.previousKey, attempt.sawAuthURL = oldKey, true
+			}
+			cached := &ipnstate.Status{BackendState: "Running", Self: &ipnstate.PeerStatus{PublicKey: oldKey, Online: livePoll}, TailscaleIPs: []netip.Addr{netip.MustParseAddr("100.64.0.1")}}
+			encoded, err := json.Marshal(cached)
+			if err != nil {
+				t.Fatal(err)
+			}
+			lc := &local.Client{OmitAuth: true, Transport: peerStatusTransport(func(request *http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(encoded)), Request: request}, nil
+			})}
+			n := &Node{ctx: t.Context(), state: store, attempt: attempt, local: lc, status: &apb.NodeStatus{State: "authenticating"}}
+			canceled, err := n.cancelAttempt(attempt.id, "LOGIN_CANCELED")
+			if err != nil || !attempt.finished || canceled.ReasonCode != "LOGIN_CANCELED" || canceled.LoginUrl != "" || n.local != nil {
+				t.Fatal("cached Running prevented cancellation", err)
+			}
+			if n.DataPlaneAuthorized() {
+				t.Fatal("canceled pending cache acquired a lease")
+			}
+		})
 	}
 }
 
@@ -434,8 +521,13 @@ func TestExistingURLIsAdoptedWithoutStartingAnotherRegistration(t *testing.T) {
 	observed.AuthURL = ""
 	observed.Self.Online = true
 	n.applyStatus(0, observed)
-	if !attempt.finished || n.snapshot().State != "online" || attempt.previousKey != oldKey {
-		t.Fatal("adopted URL did not finish with its original key")
+	if attempt.finished || n.snapshot().State == "online" || n.DataPlaneAuthorized() {
+		t.Fatal("adopted URL completed against the old cached registration map")
+	}
+	observed.Self.PublicKey = key.NewNode().Public()
+	n.applyStatus(0, observed)
+	if !attempt.finished || n.snapshot().State != "online" || !n.DataPlaneAuthorized() || attempt.previousKey != oldKey {
+		t.Fatal("adopted URL did not finish after its registered map arrived")
 	}
 }
 

@@ -337,10 +337,11 @@ func (n *Node) applyStatus(generation uint64, observed *ipnstate.Status) {
 			if attempt.loginStarted && observed.AuthURL != "" {
 				attempt.sawAuthURL = true
 			}
-			// A new interactive flow rotates the key; reopening an existing
-			// URL keeps its registration key. Either that key transition or
-			// completion of an observed URL must follow the login call.
-			complete := fresh && attempt.loginStarted && !observed.Self.PublicKey.IsZero() && (attempt.previousKey.IsZero() || observed.Self.PublicKey != attempt.previousKey || attempt.sawAuthURL)
+			// New interactive registration rotates the key. Its URL can clear
+			// and poll health recover before the SDK replaces its cached map.
+			// An adopted URL avoids another registration request, but does not
+			// prove that the cached self key belongs to that registration.
+			complete := fresh && attempt.loginStarted && !observed.Self.PublicKey.IsZero() && (attempt.previousKey.IsZero() || observed.Self.PublicKey != attempt.previousKey)
 			if !complete {
 				if result.State == "online" {
 					result.State, result.ReasonCode = "authenticating", ""
