@@ -18,7 +18,7 @@ jobs:
   preflight:
     name: preflight (${{ matrix.goos }}, ${{ matrix.goarch }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 15
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -92,6 +92,25 @@ jobs:
       - run: make tools generate-proto
       - name: Check generated protocol drift
         run: git diff --exit-code -- pkg/protocol
+      - name: Download Go modules with bounded retries
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          for module in . test/diagnostics/terminalstate/analyzer; do
+            for attempt in 1 2 3; do
+              if go -C "$module" mod download; then
+                break
+              else
+                download_status=$?
+              fi
+              if [ "$attempt" -eq 3 ]; then
+                exit "$download_status"
+              fi
+              echo "Module download failed for $module (attempt $attempt/3); retrying."
+              sleep "$((attempt * 2))"
+            done
+          done
       - run: go mod verify
       - name: Scan dependencies across all packages
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 -scan=package ./...
