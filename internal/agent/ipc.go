@@ -55,6 +55,7 @@ func NewService(ctx context.Context, uid uint32, build string, resolve ResolveCl
 	registry := NewRegistry(ctx)
 	return &Service{Registry: registry, Events: NewEvents(registry.InstanceID()), uid: uid, build: build, resolve: resolve}
 }
+
 // SettingsRegistry returns the active plugin settings registry, or nil if plugins
 // have not been initialized yet. Used by dynamic CLI command registration.
 func (s *Service) SettingsRegistry() *host.SettingsRegistry {
