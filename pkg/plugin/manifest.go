@@ -4,7 +4,8 @@
 // settings sections without launching the plugin.
 //
 // File location: ~/.shiki/plugins/<id>/manifest.json (local/client side)
-//                /var/lib/shiki/plugins/<id>/manifest.json (remote/server side)
+//
+//	/var/lib/shiki/plugins/<id>/manifest.json (remote/server side)
 //
 // Schema version "1" is the only supported version. Unknown fields are rejected
 // by the strictjson decoder used in internal/plugin/manifest.go.

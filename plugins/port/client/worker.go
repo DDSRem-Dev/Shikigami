@@ -3,8 +3,8 @@ package client
 import (
 	"context"
 	"crypto/rand"
-"errors"
-"fmt"
+	"errors"
+	"fmt"
 	"io"
 	"net"
 	"path/filepath"

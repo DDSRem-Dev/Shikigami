@@ -33,22 +33,22 @@ type ResolveClient func(context.Context, string) (*connect.Client, error)
 
 type Service struct {
 	agentrpc.UnimplementedAgentHandler
-	Registry        *Registry
-	Events          *Events
-	uid             uint32
-	build           string
-	resolve         ResolveClient
-	resources       atomic.Pointer[Resources]
-	plugins         atomic.Pointer[host.Supervisor]
+	Registry         *Registry
+	Events           *Events
+	uid              uint32
+	build            string
+	resolve          ResolveClient
+	resources        atomic.Pointer[Resources]
+	plugins          atomic.Pointer[host.Supervisor]
 	settingsRegistry atomic.Pointer[host.SettingsRegistry]
-	handlerMu       sync.Mutex
-	handlers        sync.WaitGroup
-	admissionClosed bool
-	stateMu         sync.Mutex
-	state           string
-	reason          string
-	shutdown        func()
-	startup         *startupObserver
+	handlerMu        sync.Mutex
+	handlers         sync.WaitGroup
+	admissionClosed  bool
+	stateMu          sync.Mutex
+	state            string
+	reason           string
+	shutdown         func()
+	startup          *startupObserver
 }
 
 func NewService(ctx context.Context, uid uint32, build string, resolve ResolveClient) *Service {
