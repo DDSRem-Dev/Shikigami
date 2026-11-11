@@ -2,7 +2,7 @@ module github.com/DDSRem-Dev/Shikigami/test/diagnostics/terminalstate/analyzer
 
 go 1.26.5
 
-toolchain go1.26.10
+toolchain go1.26.11
 
 require github.com/charmbracelet/x/vt v0.1.0
 

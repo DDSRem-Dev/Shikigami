@@ -10,7 +10,7 @@ import re
 import subprocess
 
 
-GO_VERSION = "go1.26.10"
+GO_VERSION = "go1.26.11"
 ARCHES = {"amd64": "amd64", "x86_64": "amd64", "x64": "amd64", "arm64": "arm64", "aarch64": "arm64"}
 
 

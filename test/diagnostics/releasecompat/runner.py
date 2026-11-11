@@ -18,7 +18,7 @@ def digest(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--go", required=True, help="Go 1.26.10 executable for the diagnostic only")
+    parser.add_argument("--go", required=True, help="Go 1.26.11 executable for the diagnostic only")
     args = parser.parse_args()
     source = Path(__file__).resolve().parent
     repository = source.parents[2]

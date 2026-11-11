@@ -45,7 +45,7 @@ class GoCacheTests(unittest.TestCase):
             path.write_text(text)
         subprocess.run(["git", "add", "."], cwd=self.repository, check=True, capture_output=True)
         self.hashes = cache.input_hashes(self.repository)
-        self.go = {"GOVERSION": "go1.26.10", "GOHOSTOS": "linux", "GOHOSTARCH": "amd64", "CGO_ENABLED": "1"}
+        self.go = {"GOVERSION": "go1.26.11", "GOHOSTOS": "linux", "GOHOSTARCH": "amd64", "CGO_ENABLED": "1"}
         self.keys = cache.cache_keys("native", "ubuntu-24.04", "linux", "amd64", self.go, self.hashes)
 
     def test_docs_only_reuses_build_key_but_midrun_edits_block_save(self):

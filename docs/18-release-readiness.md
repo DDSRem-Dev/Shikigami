@@ -227,7 +227,7 @@ Shikigami 通过本地 CLI/TUI 和常驻 agent 使用远端普通用户的 tmux/
 
 同日另完成未登录真实系统tailscaled的21边界安装非干扰及内嵌tsnet独立pending状态验证，原生macOS LaunchAgent实际开发schema恢复/30RPC撤权/最终进程代际清理通过。系统state为2字节{}，已有账户身份、已认证共存、重启登录和正式历史发行仍待；详见[共存报告](15-implementation-status.md#evidence-tailscale-coexist-validation)与[原生schema报告](15-implementation-status.md#evidence-schema-macos-validation)。
 
-版本工具链为 Go 1.26.10（module 最低 1.26.5）、tsnet v1.98.10、Connect-Go v2.0.2。平台实测详情见 [平台报告](15-implementation-status.md#evidence-platform-validation)；服务见 [systemd](15-implementation-status.md#evidence-systemd-validation) 和 [LaunchAgent](15-implementation-status.md#evidence-launchd-validation)。构建成功、翻译执行与原生完整验收是不同证据。
+版本工具链为 Go 1.26.11（module 最低 1.26.5）、tsnet v1.98.10、Connect-Go v2.0.2。平台实测详情见 [平台报告](15-implementation-status.md#evidence-platform-validation)；服务见 [systemd](15-implementation-status.md#evidence-systemd-validation) 和 [LaunchAgent](15-implementation-status.md#evidence-launchd-validation)。构建成功、翻译执行与原生完整验收是不同证据。
 
 以下为历史批次的三个证据快照：529文件的安装预检/备份修复已通过双平台race、原生LaunchAgent上传90.41秒和真实systemd 13次边界；530文件的短TTL两侧×双向在途文件轮换八格通过；527文件的普通构建五窗口内存诊断完成，但Agent后段heap增长未归因。它们不构成当前仓库完整回归、默认12小时、提交后最终ACK丢失、无泄漏或发布验收。详见[安装](15-implementation-status.md#evidence-install-space-validation)、[在途轮换](15-implementation-status.md#evidence-host-rotation-inflight-validation)、[内存诊断](15-implementation-status.md#evidence-memory-windows-diagnostic)。
 

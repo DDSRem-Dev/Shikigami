@@ -1,6 +1,6 @@
 # ConnectRPC 传输契约
 
-本文规定远端 RPC、本地 agent IPC 和插件 RPC 的传输实现；消息与方法分别以 [09](./09-protocol-definition.md)、[13](./13-local-ipc-protocol.md) 为准。当前已有传输实现与部分跨进程测试，完整验收状态见 [15](./15-implementation-status.md)。资料核对日期：2026-10-27；实现基线为 **connectrpc.com/connect/v2 v2.0.2**，库自身要求 Go ≥ 1.26.0；项目为满足固定 tsnet SDK 使用 **Go ≥ 1.26.5、工具链 1.26.10**，不能照搬 Connect-Go v1 示例。
+本文规定远端 RPC、本地 agent IPC 和插件 RPC 的传输实现；消息与方法分别以 [09](./09-protocol-definition.md)、[13](./13-local-ipc-protocol.md) 为准。当前已有传输实现与部分跨进程测试，完整验收状态见 [15](./15-implementation-status.md)。资料核对日期：2026-10-27；实现基线为 **connectrpc.com/connect/v2 v2.0.2**，库自身要求 Go ≥ 1.26.0；项目为满足固定 tsnet SDK 使用 **Go ≥ 1.26.5、工具链 1.26.11**，不能照搬 Connect-Go v1 示例。
 
 ## 1. 选型与协议范围
 

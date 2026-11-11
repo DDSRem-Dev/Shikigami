@@ -17,7 +17,7 @@ brew install ddsrem-dev/shikigami/shikigami
 
 ## 开发
 
-需要 Go ≥ 1.26.5；项目工具链固定为 Go 1.26.10，以满足 tsnet SDK 的最低补丁版本。真实终端测试需要 `tmux`；`make test` 中的验收采集器回归需要 Python 3.10+，并须以普通用户运行。源码中已经包含生成的 protobuf/Connect 代码，普通构建不需要 protoc。
+需要 Go ≥ 1.26.5；项目工具链固定为 Go 1.26.11，以满足 tsnet SDK 的最低补丁版本。真实终端测试需要 `tmux`；`make test` 中的验收采集器回归需要 Python 3.10+，并须以普通用户运行。源码中已经包含生成的 protobuf/Connect 代码，普通构建不需要 protoc。
 
 ```bash
 make build

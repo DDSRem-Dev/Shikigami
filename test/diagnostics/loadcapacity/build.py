@@ -71,7 +71,7 @@ def main(args):
         env = {**os.environ, 'GOMAXPROCS': '2', 'GOFLAGS': '-p=1 -mod=readonly -buildvcs=false',
                'GOPROXY': 'off', 'GOSUMDB': 'off', 'GOTOOLCHAIN': 'local', 'GOCACHE': str(work / 'go-cache')}
         version = run(['go', 'version'], env=env).stdout.strip()
-        assert 'go1.26.10' in version
+        assert 'go1.26.11' in version
         binary = work / 'capacity-bin'
         binary.mkdir(mode=0o700)
         build_log = output / 'build.log'

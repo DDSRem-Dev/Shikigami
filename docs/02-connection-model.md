@@ -2,7 +2,7 @@
 
 ## 传输和节点归属
 
-应用数据统一使用 **Connect 协议 + protobuf 二进制编码 + HTTP/2**，Go 实现基线为 Connect-Go v2.0.2（库要求 Go ≥ 1.26.0；项目固定 tsnet v1.98.10 后要求 Go ≥ 1.26.5，工具链为 1.26.10）。保留 protobuf 的 service/message 定义，替换 RPC 运行库、生成器与 HTTP 传输。所有业务链路的具体约束见 [14 ConnectRPC 传输契约](./14-connectrpc-transport.md)，不通过 SSH。性能是否优于 SSH 需要测量，不作为选型事实。
+应用数据统一使用 **Connect 协议 + protobuf 二进制编码 + HTTP/2**，Go 实现基线为 Connect-Go v2.0.2（库要求 Go ≥ 1.26.0；项目固定 tsnet v1.98.10 后要求 Go ≥ 1.26.5，工具链为 1.26.11）。保留 protobuf 的 service/message 定义，替换 RPC 运行库、生成器与 HTTP 传输。所有业务链路的具体约束见 [14 ConnectRPC 传输契约](./14-connectrpc-transport.md)，不通过 SSH。性能是否优于 SSH 需要测量，不作为选型事实。
 
 采用内嵌 **tsnet**：本地 agent 和远端 daemon 各持有一个长生命周期 `tsnet.Server`，使用私有持久化目录保存节点身份。同一目录只能由一个进程打开；CLI 不自行创建节点。多台设备需不同节点名/身份。
 

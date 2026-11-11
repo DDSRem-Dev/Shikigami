@@ -34,8 +34,8 @@ main() {
   shiki_source_snapshot="$(mktemp -d "${TMPDIR:-/tmp}/shiki-linux-source.XXXXXX")"
   trap 'rm -rf "$shiki_source_snapshot"' EXIT
   tar --exclude='./.git' --exclude='./.tools' --exclude='./bin' --exclude='./dist' -cf - . | tar -xf - -C "$shiki_source_snapshot"
-  # Official multi-platform Go 1.26.10 bookworm manifest, pinned for this test.
-  shiki_test_image='golang@sha256:632dff7351799a5a9954a48dc06670ade72ee44e8c351cdc0e5a57af2fea21af'
+  # Official multi-platform Go 1.26.11 bookworm manifest, pinned for this test.
+  shiki_test_image='golang@sha256:dc40a13b61304647ed7e5d581d246b86413dfc29d63c6d018310feb93cd98fc0'
   if [[ $# == 0 ]]; then set -- ./...; fi
 
   # Source/dependencies are read-only, tests run as an ordinary user. --init
