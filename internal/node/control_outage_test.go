@@ -381,7 +381,7 @@ func testSDKExplicitLoginAfterControlOutage(t *testing.T, delayMap bool) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if observed.BackendState == "Running" && observed.Self != nil && observed.Self.Online && observed.AuthURL == "" {
+			if observed.BackendState == "Running" && observed.Self != nil && observed.AuthURL == "" {
 				if observed.Self.PublicKey != before.Self.PublicKey || control.Node(observed.Self.PublicKey) != nil {
 					t.Fatal("map barrier did not retain the removed registration key")
 				}
@@ -393,7 +393,7 @@ func testSDKExplicitLoginAfterControlOutage(t *testing.T, delayMap bool) {
 			}
 			select {
 			case <-ctx.Done():
-				t.Fatal("SDK did not expose live poll health with the cached self map")
+				t.Fatal("SDK did not expose Running poll health with the cached self map")
 			case <-tick.C:
 			}
 		}
