@@ -23,16 +23,33 @@ import (
 )
 
 func (r *Resources) openPlugins(cfg *config.Client, build string, runtimeOptions RuntimeOptions) error {
-	options := host.SupervisorOptions{StateDir: filepath.Join(cfg.Agent.StateDir, "plugin-intent"), Validate: func(id string, values *structpb.Struct) error {
-		if id == "sync" {
-			return schema.ValidateSyncClient(values)
-		}
-		_, err := schema.Parse(values, "client")
-		if err != nil {
-			return rpcError(connect.CodeInvalidArgument, "INVALID_PORT_CONFIG")
-		}
-		return nil
-	}, Changed: func(id string) { r.publish("plugin", id, "", "") }}
+	settings := host.NewSettingsRegistry()
+	r.service.settingsRegistry.Store(settings)
+
+	options := host.SupervisorOptions{
+		StateDir: filepath.Join(cfg.Agent.StateDir, "plugin-intent"),
+		Validate: func(id string, values *structpb.Struct) error {
+			if id == "sync" {
+				return schema.ValidateSyncClient(values)
+			}
+			_, err := schema.Parse(values, "client")
+			if err != nil {
+				return rpcError(connect.CodeInvalidArgument, "INVALID_PORT_CONFIG")
+			}
+			return nil
+		},
+		Changed: func(id string) { r.publish("plugin", id, "", "") },
+		PluginRegistered: func(id string, ps *host.PluginSettings) {
+			if reg := r.service.settingsRegistry.Load(); reg != nil {
+				reg.Register(ps)
+			}
+		},
+		PluginStopped: func(id string) {
+			if reg := r.service.settingsRegistry.Load(); reg != nil {
+				reg.Unregister(id)
+			}
+		},
+	}
 	options.Config = func(id string, values *structpb.Struct) (host.Config, error) {
 		manifest, err := host.ResolveBuiltinManifest(cfg.PluginsDir, id, "client", build)
 		if err != nil {
@@ -56,7 +73,21 @@ func (r *Resources) openPlugins(cfg *config.Client, build string, runtimeOptions
 			scopes = nil
 			core.RemoteCore.AuthorizeForward = core.authorizeForward
 		}
-		return host.Config{Manifest: manifest, RunDir: filepath.Join(cfg.Agent.StateDir, "plugin-run"), StateDir: filepath.Join(cfg.Agent.StateDir, "plugin-state", id), HostInstanceID: r.service.Registry.InstanceID(), Values: values, Core: core, CredentialLifetime: runtimeOptions.PluginCredentialLifetime, Policy: host.Policy{Side: "client", Capabilities: capabilities, Scopes: scopes, AuthorizeScope: core.authorize}}, nil
+		return host.Config{
+			Manifest:           manifest,
+			RunDir:             filepath.Join(cfg.Agent.StateDir, "plugin-run"),
+			StateDir:           filepath.Join(cfg.Agent.StateDir, "plugin-state", id),
+			HostInstanceID:     r.service.Registry.InstanceID(),
+			Values:             values,
+			Core:               core,
+			CredentialLifetime: runtimeOptions.PluginCredentialLifetime,
+			Policy: host.Policy{
+				Side:           "client",
+				Capabilities:   capabilities,
+				Scopes:         scopes,
+				AuthorizeScope: core.authorize,
+			},
+		}, nil
 	}
 	options.Ready = func(ctx context.Context, id string, lifecycle sdk.Lifecycle) error {
 		if id == "port" {

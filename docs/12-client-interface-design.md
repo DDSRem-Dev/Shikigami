@@ -44,6 +44,35 @@ Claude 崩溃事件先结束当前 raw attachment；CLI 和 dashboard 的终端�
 
 配色使用语义令牌、兼容浅色/深色终端、支持 NO_COLOR，不假设终端总是黑底。窄屏下减少列，不以负宽度渲染面板。
 
+### 插件 UI 注入（Manifest 声明）
+
+插件通过 `manifest.json` 的 `ui` 字段向宿主声明 UI 节点，宿主在 agent 启动时读取并注册，无需修改宿主代码：
+
+**状态栏 / 状态槽**
+
+- 状态槽（`UIStatusSlot`）来自插件 manifest 的 `ui.status_slots`；每个槽定义 `id`、`label`、`default_text` 和 `event_type`。
+- 状态栏通过订阅 `plugin.status.<id>.v1` 类型的 CoreAPI 事件更新；payload 为 `StatusPayload`，包含 `text`/`state`/`icon`/`detail` 字段。
+- `state` 使用有限词汇（`ok`/`warning`/`error`/`syncing`/`paused`），前端根据 `state` 映射图标和颜色；未知 state 降级为默认样式，不静默丢弃。
+- 当前 TUI 状态栏展示格式：`● sync (23 files)  ● port (2 ports)` 是静态示例；后续由 `StatusPayload.text` 替换。
+
+**Dashboard 面板**
+
+- Dashboard 面板（`UIDashboardPanel`）来自插件 manifest 的 `ui.dashboard_panels`，每个面板包含 `id`、`title` 和 `action_id`。
+- 面板列表在 TUI/GUI dashboard 区静态展示，激活时调用 `InvokePluginAction(action_id)` 获取面板内容；实际渲染为下一阶段门槛。
+
+**设置界面**
+
+- 设置界面（`UISettingsSection`）来自插件 manifest 的 `ui.settings_section`，自动从 `config_schema`（`ConfigField` 数组）生成表单字段。
+- 宿主在提交配置前调用 `pkg/plugin.ValidateConfig` 预校验，校验失败不下发 `SetConfig`；实际表单渲染为下一阶段门槛。
+
+**动态 CLI 命令**
+
+- CLI 命令（`UICLICommand`）来自插件 manifest 的 `ui.cli_commands`，每条命令包含 `name`、`description`、`action_id` 和 `flags`。
+- agent 启动时在 `cmd/shiki/dynamic_commands.go` 注册，路径为 `shiki plugins <id> <command> [flags]`。
+- 执行时通过 agent IPC `AgentActions.InvokePluginAction` 调用插件，结果以纯文本、JSON 或通知形式输出到终端。
+- 命令路径不与 `shiki plugins list|enable|disable|status|logs|restart` 冲突；已保留的管理子命令不可被 manifest 覆盖。
+
+
 ## 后续 GUI
 
 GUI 的 Go 后端通过 Connect-Go v2 调用 agent UDS，JS 前端使用 Wails 桥接。浏览器 fetch/Connect-Web 不能直接访问 Unix socket，也不能承载此设计的客户端流/双向终端流；不为迁移 ConnectRPC 增设浏览器可访问的本地 TCP/CORS 端点。独立 Web 客户端需另行设计传输和认证。

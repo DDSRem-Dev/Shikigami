@@ -41,6 +41,9 @@ type Manifest struct {
 	SHA256     string            `json:"sha256"`
 	Side       string            `json:"side"`
 	Protocol   *pb.ProtocolOffer `json:"protocol"`
+	// PluginManifest is non-nil for plugins launched with a manifest.json
+	// (new-style user-installed plugins). Legacy installed artifacts leave this nil.
+	PluginManifest *sdk.PluginManifest `json:"-"`
 }
 type Config struct {
 	Manifest                           Manifest

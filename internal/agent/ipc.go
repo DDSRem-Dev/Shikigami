@@ -40,6 +40,7 @@ type Service struct {
 	resolve         ResolveClient
 	resources       atomic.Pointer[Resources]
 	plugins         atomic.Pointer[host.Supervisor]
+	settingsRegistry atomic.Pointer[host.SettingsRegistry]
 	handlerMu       sync.Mutex
 	handlers        sync.WaitGroup
 	admissionClosed bool
@@ -53,6 +54,11 @@ type Service struct {
 func NewService(ctx context.Context, uid uint32, build string, resolve ResolveClient) *Service {
 	registry := NewRegistry(ctx)
 	return &Service{Registry: registry, Events: NewEvents(registry.InstanceID()), uid: uid, build: build, resolve: resolve}
+}
+// SettingsRegistry returns the active plugin settings registry, or nil if plugins
+// have not been initialized yet. Used by dynamic CLI command registration.
+func (s *Service) SettingsRegistry() *host.SettingsRegistry {
+	return s.settingsRegistry.Load()
 }
 func (s *Service) Handshake(ctx context.Context, in *agentpb.HandshakeRequest) (*agentpb.HandshakeResponse, error) {
 	agreement, err := version.Negotiate(&pb.ProtocolOffer{Major: 1, Capabilities: []string{"agent.control.v1", "agent.events.v1", "agent.startup.v1"}}, in.GetProtocol(), s.build)
@@ -103,6 +109,7 @@ func (s *Service) WatchEvents(ctx context.Context, _ *pb.Empty, out agentrpc.Age
 func (s *Service) RPCServer() *connect.Server {
 	server := connect.NewServer(s.Interceptor())
 	agentrpc.RegisterAgentHandler(server, s)
+	agentrpc.RegisterAgentActionsHandler(server, s)
 	s.registerProxy(server)
 	server.SetUnknownHandler(func(context.Context, connect.Spec, connect.ServerStream) error {
 		return connect.NewError(connect.CodePermissionDenied, "IPC_METHOD_FORBIDDEN")
@@ -224,9 +231,10 @@ func (s *Service) Interceptor() connect.ServerInterceptor {
 					return connect.NewError(connect.CodeUnavailable, "SERVER_UNAVAILABLE")
 				}
 				ctx = context.WithValue(ctx, remoteClientKey{}, client)
-			} else if !strings.HasPrefix(spec.Procedure, "/"+agentrpc.AgentName+"/") {
+			} else if !strings.HasPrefix(spec.Procedure, "/"+agentrpc.AgentName+"/") &&
+				!strings.HasPrefix(spec.Procedure, "/"+agentrpc.AgentActionsName+"/") {
 				return connect.NewError(connect.CodePermissionDenied, "IPC_METHOD_FORBIDDEN")
-			} else if serverID != "" {
+			} else if serverID != "" && !strings.HasPrefix(spec.Procedure, "/"+agentrpc.AgentActionsName+"/") {
 				stream = &routeCheckingStream{ServerStream: stream, serverID: serverID}
 			}
 			return next(ctx, spec, stream)

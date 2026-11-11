@@ -31,7 +31,7 @@ func (p *managementProbe) WatchPluginLogs(_ context.Context, request *apb.Plugin
 			return err
 		}
 	}
-	if request.Target.Side != apb.PluginTarget_LOCAL || request.Request.PluginId != "sync" {
+	if request.Target.Side != apb.PluginTarget_LOCAL {
 		return connect.NewError(connect.CodeInvalidArgument, "invalid log scope")
 	}
 	return stream.Send(&pb.LogRecord{Timestamp: 1, Level: "info", Message: "PLUGIN_READY"})

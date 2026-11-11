@@ -1,0 +1,70 @@
+{
+  "schema_version": "1",
+  "id": "port",
+  "version": "${BUILD_VERSION}",
+  "display_name": "端口转发",
+  "description": "扫描远端端口并建立本地 TCP 转发隧道",
+  "capabilities": ["core.scope.v1", "port.worker.v1", "port.tcp-half-close.v1", "port.authorization.v1", "port.auto-forward.v1", "ui.action.v1"],
+  "sides": ["client", "server"],
+  "binary": "shiki-plugin-port",
+  "binary_flags": ["--side=${side}"],
+  "config_schema": [
+    {
+      "key": "auto_forward",
+      "type": "bool",
+      "label": "自动转发",
+      "description": "允许自动转发已确认的会话端口。启用前须配置允许规则。",
+      "default_json": "false",
+      "ui_hint": "checkbox"
+    },
+    {
+      "key": "bind_address",
+      "type": "string",
+      "label": "绑定地址",
+      "description": "本地监听地址，默认仅本地回环。",
+      "default_json": "\"127.0.0.1\"",
+      "ui_hint": "text",
+      "constraints": {"pattern": "^(127\\.0\\.0\\.1|::1)$"}
+    },
+    {
+      "key": "auto_allow_ports",
+      "type": "array",
+      "label": "自动允许端口列表",
+      "description": "客户端侧明确允许自动转发的端口号列表。",
+      "default_json": "[]",
+      "ui_hint": "textarea"
+    }
+  ],
+  "ui": {
+    "status_slots": [
+      {
+        "slot_id": "primary",
+        "event_type": "plugin.status.port.v1",
+        "label": "Port"
+      }
+    ],
+    "dashboard_panels": [
+      {
+        "panel_id": "port-overview",
+        "title": "端口转发",
+        "event_type": "plugin.panel.port.v1",
+        "priority": 20,
+        "layout": "compact"
+      }
+    ],
+    "settings_section": {
+      "section_id": "port",
+      "title": "端口转发"
+    },
+    "cli_commands": [
+      {
+        "name": "list",
+        "description": "列出当前活动的端口转发",
+        "action_id": "list-forwards",
+        "flags": [
+          {"name": "json", "type": "bool", "default": "false", "description": "以 JSON 格式输出"}
+        ]
+      }
+    ]
+  }
+}

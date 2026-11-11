@@ -7,6 +7,10 @@ import (
 
 const CoreCapability = "core.scope.v1"
 
+// UIActionCapability is advertised by plugins that implement ActionImplementation
+// and can handle InvokeAction calls declared in their manifest.json UI.
+const UIActionCapability = "ui.action.v1"
+
 // BuiltinProtocol describes the distinct boundaries defined in docs/09.
 // A dual-side artifact advertises the union; a host requires only its own side.
 func BuiltinProtocol(id, side string) (*pb.ProtocolOffer, error) {

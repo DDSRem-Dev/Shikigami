@@ -41,6 +41,7 @@ type Lifecycle interface {
 	Start(context.Context) error
 	Stop(context.Context) error
 	Health(context.Context) (*pb.HealthStatus, error)
+	InvokeAction(context.Context, *ActionRequest) (*ActionResult, error)
 	Done() <-chan struct{}
 	Files() FileClient
 	Ports() PortClient
@@ -172,4 +173,34 @@ func (r *runtime) authorized(ctx context.Context) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.instance != "" && ids[0] == r.instance && subtle.ConstantTimeCompare([]byte(tokens[0]), []byte("Bearer "+r.token)) == 1
+}
+
+// InvokeAction implements ppb.PluginActionsServer. If the plugin implementation
+// satisfies ActionImplementation, the action is dispatched to it; otherwise
+// CodeUnimplemented is returned. The request struct is unmarshaled to
+// ActionRequest, the result is marshaled back to structpb.Struct.
+func (r *runtime) InvokeAction(ctx context.Context, in *structpb.Struct) (*structpb.Struct, error) {
+	r.mu.Lock()
+	state := r.state
+	r.mu.Unlock()
+	if state != "running" && state != "initialized" {
+		return nil, ToGRPC(connect.NewError(connect.CodeFailedPrecondition, "plugin not ready for actions"))
+	}
+	impl, ok := r.impl.(ActionImplementation)
+	if !ok {
+		return nil, ToGRPC(connect.NewError(connect.CodeUnimplemented, "plugin does not implement actions"))
+	}
+	req, err := UnmarshalActionRequest(in)
+	if err != nil {
+		return nil, ToGRPC(connect.NewError(connect.CodeInvalidArgument, err.Error()))
+	}
+	res, err := impl.InvokeAction(ctx, req)
+	if err != nil {
+		return nil, ToGRPC(err)
+	}
+	out, err := MarshalActionResult(res)
+	if err != nil {
+		return nil, ToGRPC(connect.NewError(connect.CodeInternal, err.Error()))
+	}
+	return out, nil
 }

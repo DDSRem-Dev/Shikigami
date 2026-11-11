@@ -13,6 +13,7 @@ import (
 	arpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/agent/agentconnect"
 	ppb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/plugin"
 	rpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/protocolconnect"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func (s *Service) pluginTarget(ctx context.Context, target *apb.PluginTarget) (*host.Supervisor, rpc.ShikiDaemonClient, error) {
@@ -185,4 +186,59 @@ func (s *Service) ReadConflictFile(ctx context.Context, request *ppb.ReadConflic
 			}
 		}
 	})
+}
+
+// InvokePluginAction implements AgentActionsHandler. It decodes the struct
+// payload, routes to the local plugin supervisor, and returns the action result
+// struct. Remote-side invocation is not yet supported.
+func (s *Service) InvokePluginAction(ctx context.Context, req *structpb.Struct) (*structpb.Struct, error) {
+	if req == nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, "ACTION_REQUEST_REQUIRED")
+	}
+	fields := req.GetFields()
+
+	pluginID := ""
+	if v, ok := fields["plugin_id"]; ok {
+		pluginID = v.GetStringValue()
+	}
+	if pluginID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, "PLUGIN_ID_REQUIRED")
+	}
+
+	side := ""
+	if v, ok := fields["side"]; ok {
+		side = v.GetStringValue()
+	}
+	if side == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, "PLUGIN_SIDE_REQUIRED")
+	}
+
+	actionReq, err := sdk.UnmarshalActionRequest(req)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err.Error())
+	}
+
+	switch side {
+	case "local":
+		manager := s.plugins.Load()
+		if manager == nil {
+			return nil, unavailableWorker()
+		}
+		var result *sdk.ActionResult
+		if callErr := manager.Call(ctx, pluginID, sdk.UIActionCapability, func(callCtx context.Context, lc sdk.Lifecycle) error {
+			result, err = lc.InvokeAction(callCtx, actionReq)
+			return err
+		}); callErr != nil {
+			return nil, callErr
+		}
+		out, marshalErr := sdk.MarshalActionResult(result)
+		if marshalErr != nil {
+			return nil, connect.NewError(connect.CodeInternal, marshalErr.Error())
+		}
+		return out, nil
+	case "remote":
+		return nil, connect.NewError(connect.CodeUnimplemented, "remote plugin action invocation not yet supported")
+	default:
+		return nil, connect.NewError(connect.CodeInvalidArgument, "PLUGIN_SIDE_REQUIRED")
+	}
 }

@@ -3,13 +3,15 @@ package client
 import (
 	"context"
 	"crypto/rand"
-	"errors"
+"errors"
+"fmt"
 	"io"
 	"net"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -47,7 +49,7 @@ type task struct {
 
 func New() *Worker { return &Worker{tasks: map[string]*task{}} }
 func (w *Worker) Info() *ppb.PluginInfo {
-	return &ppb.PluginInfo{Name: "port", Version: buildinfo.Version, Side: "client", Protocol: &pb.ProtocolOffer{Major: 1, Capabilities: []string{"core.scope.v1", sdk.PortWorkerCapability, sdk.PortAutoCapability}}}
+	return &ppb.PluginInfo{Name: "port", Version: buildinfo.Version, Side: "client", Protocol: &pb.ProtocolOffer{Major: 1, Capabilities: []string{"core.scope.v1", sdk.PortWorkerCapability, sdk.PortAutoCapability, sdk.UIActionCapability}}}
 }
 func ValidateConfig(config *structpb.Struct) error {
 	_, err := portplugin.Parse(config, "client")
@@ -405,3 +407,72 @@ func (w *Worker) failed(t *task, err error) {
 		t.state.ReasonCode = "FORWARD_STREAM_FAILED"
 	}
 }
+
+// InvokeAction implements sdk.ActionImplementation.
+func (w *Worker) InvokeAction(ctx context.Context, req *sdk.ActionRequest) (*sdk.ActionResult, error) {
+	if req == nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, "ACTION_REQUEST_REQUIRED")
+	}
+	jsonOut := req.Flags["json"] == "true" || req.Flags["json"] == "1"
+	switch req.ActionID {
+	case "list-actions":
+		actions := []map[string]string{
+			{"id": "list-forwards", "description": "List active port forwards"},
+			{"id": "list-actions", "description": "List available actions"},
+		}
+		return &sdk.ActionResult{Kind: sdk.ActionResultJSON, JSON: map[string]any{"actions": actions}, Done: true}, nil
+
+	case "list-forwards":
+		list, err := w.ListForwards(ctx)
+		if err != nil {
+			return nil, err
+		}
+		type fwdEntry struct {
+			ID          string `json:"id"`
+			LocalAddr   string `json:"local_address"`
+			BoundPort   uint32 `json:"bound_port"`
+			RemoteAddr  string `json:"remote_address"`
+			RemotePort  uint32 `json:"remote_port"`
+			State       string `json:"state"`
+			Connections uint64 `json:"connections"`
+			Bytes       uint64 `json:"bytes_transferred"`
+			ReasonCode  string `json:"reason_code,omitempty"`
+		}
+		entries := make([]fwdEntry, 0, len(list.Forwards))
+		for _, f := range list.Forwards {
+			sp := f.GetSpec()
+			entries = append(entries, fwdEntry{
+				ID: sp.GetId(), LocalAddr: sp.GetLocalAddress(),
+				BoundPort: f.BoundPort, RemoteAddr: sp.GetRemoteAddress(),
+				RemotePort: sp.GetRemotePort(), State: f.State,
+				Connections: f.Connections, Bytes: f.BytesTransferred,
+				ReasonCode: f.ReasonCode,
+			})
+		}
+		if jsonOut {
+			return &sdk.ActionResult{Kind: sdk.ActionResultJSON, JSON: map[string]any{"forwards": entries}, Done: true}, nil
+		}
+		if len(entries) == 0 {
+			return &sdk.ActionResult{Kind: sdk.ActionResultText, Text: "No active forwards.\n", Done: true}, nil
+		}
+		var sb strings.Builder
+		for _, e := range entries {
+			bind := "not listening"
+			if e.State == "listening" && e.BoundPort > 0 {
+				bind = net.JoinHostPort(e.LocalAddr, strconv.Itoa(int(e.BoundPort)))
+			}
+			fmt.Fprintf(&sb, "%s → %s  %s  conns %d  bytes %d",
+				bind, net.JoinHostPort(e.RemoteAddr, strconv.Itoa(int(e.RemotePort))), e.State, e.Connections, e.Bytes)
+			if e.ReasonCode != "" {
+				fmt.Fprintf(&sb, "  (%s)", e.ReasonCode)
+			}
+			sb.WriteByte('\n')
+		}
+		return &sdk.ActionResult{Kind: sdk.ActionResultText, Text: sb.String(), Done: true}, nil
+
+	default:
+		return nil, connect.NewError(connect.CodeUnimplemented, "ACTION_NOT_IMPLEMENTED")
+	}
+}
+
+var _ sdk.ActionImplementation = (*Worker)(nil)

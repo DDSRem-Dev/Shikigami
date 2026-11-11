@@ -459,3 +459,32 @@
 进一步复核发现部分HTTP/2路径会把取消编码为无cause的Unknown Connect错误（消息仍为标准context cancellation），测试无法可靠识别。`terminalCause`现将本地/传输层取消统一为Connect Canceled/DeadlineExceeded并保留`errors.Is` cause；其他错误原样返回。该生产边界修复已本地20次race通过，待远端验证。
 
 同轮还发现Darwin arm64的端口准入测试在32个静默请求尚未全部进入 admission counter 时就探测第33个请求，偶发得到插件不可用而非预算耗尽。测试现先等待精确计数后再探测；本地10次race通过，未改变生产限额或错误语义。
+
+<a id="plugin-manifest-phase-extension"></a>
+## 插件 Manifest 与 UI 注入（Phase 5 后扩展，2026-11-11）
+
+本批为 42/42 原清单关闭后的后续工程扩展，不修改原路线图条目数量或计数，不替代既有验收门槛。
+
+**已完成：**
+
+- manifest.json schema 及 `PluginManifest`、`ValidateManifest` 类型（`pkg/plugin/manifest.go`）
+- `ConfigField` schema 及 `ValidateConfig` 宿主预校验（`pkg/plugin/schema.go`）
+- `UIContribution`、`StatusPayload`、`NotifyPayload` 类型（`pkg/plugin/ui_contribution.go`）
+- `ActionRequest/Result`、`ActionImplementation` 接口（`pkg/plugin/action.go`）
+- `PluginActions` gRPC 非生成扩展（`pkg/protocol/plugin/invoke_action.go`）
+- `AgentActions` Connect 非生成扩展（`pkg/protocol/agent/agentconnect/agent_actions.go`）
+- `Lifecycle.InvokeAction` 及运行时实现（`pkg/plugin/lifecycle.go`、`pkg/plugin/grpc.go`）
+- `PluginRegistry` 第三方插件目录扫描（`internal/plugin/registry.go`）
+- `SettingsRegistry` 活跃 UI 注入记录（`internal/plugin/settings.go`）
+- `ActionRouter` 路由 InvokePluginAction 到 Supervisor（`internal/plugin/action_router.go`）
+- agent `InvokePluginAction` IPC 接入，`internal/agent/ipc.go` 拦截器扩展（AgentActionsName OR 条件）
+- 动态 CLI 命令注册（`cmd/shiki/dynamic_commands.go`，路径 `shiki plugins <id> <command>`）
+- `plugins/sync/manifest.json`、`plugins/port/manifest.json`
+
+**下一阶段门槛（TUI/GUI 渲染，当前 PENDING）：**
+
+- TUI 状态栏状态槽渲染：订阅 `plugin.status.<id>.v1` 事件，从 `StatusPayload.text`/`state` 更新状态栏
+- TUI/GUI dashboard 面板区渲染（`UIDashboardPanel` 声明）
+- 设置界面从 `ConfigSchema` 自动生成表单
+
+TUI/GUI 渲染层实现前，`shiki plugins <id> <command>` CLI 路径和第三方插件注册能力已完全可用。

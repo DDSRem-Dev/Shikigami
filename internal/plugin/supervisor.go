@@ -26,6 +26,12 @@ type SupervisorOptions struct {
 	Validate func(string, *structpb.Struct) error
 	Ready    func(context.Context, string, sdk.Lifecycle) error
 	Changed  func(string)
+	// PluginRegistered is called after a plugin reaches "ready" state and its
+	// SettingsRegistry entry has been populated from the manifest/Info response.
+	// Called without the supervisor lock; safe to call back into the supervisor.
+	PluginRegistered func(id string, settings *PluginSettings)
+	// PluginStopped is called when a plugin leaves "ready" (stopped, failed, etc.).
+	PluginStopped func(id string)
 }
 type desiredPlugin struct {
 	ID       string           `json:"id"`
@@ -49,6 +55,7 @@ type Supervisor struct {
 	options   SupervisorOptions
 	mu        sync.Mutex
 	slots     map[string]*supervised
+	manifests map[string]*sdk.PluginManifest
 	done      sync.WaitGroup
 	closeOnce sync.Once
 	closeErr  error
@@ -77,7 +84,7 @@ func NewSupervisor(parent context.Context, opts SupervisorOptions) (*Supervisor,
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(parent)
-	m := &Supervisor{ctx: ctx, cancel: cancel, store: store, options: opts, slots: map[string]*supervised{}}
+	m := &Supervisor{ctx: ctx, cancel: cancel, store: store, options: opts, slots: map[string]*supervised{}, manifests: map[string]*sdk.PluginManifest{}}
 	state, err := store.View()
 	if err != nil {
 		cancel()
@@ -321,6 +328,9 @@ func (m *Supervisor) run(id string, slot *supervised) {
 			instance = nil
 		}
 		if !want.Enabled {
+			if m.options.PluginStopped != nil {
+				m.options.PluginStopped(id)
+			}
 			m.publish(id, slot, want, nil, "stopped", "")
 			select {
 			case <-m.ctx.Done():
@@ -398,13 +408,25 @@ func (m *Supervisor) run(id string, slot *supervised) {
 				continue
 			}
 			started = time.Now()
+			m.mu.Lock()
+			m.manifests[id] = cfg.Manifest.PluginManifest
+			m.mu.Unlock()
 			m.publish(id, slot, want, instance, "ready", "")
+			// Notify the SettingsRegistry after publish so the plugin's
+			// config_schema and UI contributions are available to the agent.
+			if m.options.PluginRegistered != nil {
+				settings := buildPluginSettings(id, cfg.Manifest.PluginManifest, instance.lifecycle)
+				m.options.PluginRegistered(id, settings)
+			}
 		}
 		select {
 		case <-m.ctx.Done():
 			return
 		case <-slot.wake:
 		case <-instance.Done():
+			if m.options.PluginStopped != nil {
+				m.options.PluginStopped(id)
+			}
 			m.stop(slot)
 			instance = nil
 			if time.Since(started) >= time.Minute {
@@ -502,4 +524,29 @@ func (m *Supervisor) Settings(id string) (*structpb.Struct, string, error) {
 		return &structpb.Struct{}, want.Revision, nil
 	}
 	return proto.Clone(want.Values).(*structpb.Struct), want.Revision, nil
+}
+
+// PluginManifest returns the sdk.PluginManifest for id if the plugin was
+// launched with a manifest.json (new-style). Returns nil for legacy plugins
+// or if the plugin has never reached the ready state.
+func (m *Supervisor) PluginManifest(id string) *sdk.PluginManifest {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.manifests[id]
+}
+
+// buildPluginSettings constructs a PluginSettings entry from the manifest.
+// When protoc regenerates plugin.pb.go with ConfigSchema/UI fields, this
+// function should also query lifecycle.GetInfo() and prefer live data.
+func buildPluginSettings(id string, manifest *sdk.PluginManifest, _ sdk.Lifecycle) *PluginSettings {
+	settings := &PluginSettings{
+		PluginID: id,
+		Manifest: manifest,
+	}
+	if manifest != nil {
+		settings.DisplayName = manifest.DisplayName
+		settings.ConfigSchema = manifest.ConfigSchema
+		settings.UI = manifest.UI
+	}
+	return settings
 }

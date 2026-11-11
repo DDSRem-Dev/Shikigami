@@ -10,6 +10,10 @@ service Plugin {
   rpc Start(shiki.v1.Empty) returns (shiki.v1.Empty);
   rpc Stop(shiki.v1.Empty) returns (shiki.v1.Empty);
   rpc Health(shiki.v1.Empty) returns (shiki.v1.HealthStatus);
+  // InvokeAction dispatches a manifest-declared action to the plugin.
+  // Request and response are encoded as google.protobuf.Struct (JSON object).
+  // The host authorizes the invocation via the standard instance credential.
+  rpc InvokeAction(google.protobuf.Struct) returns (google.protobuf.Struct);
 }
 message PluginInfo {
   string name = 1;
@@ -17,6 +21,62 @@ message PluginInfo {
   string description = 3;
   string side = 4; // client/server/both
   shiki.v1.ProtocolOffer protocol = 5;
+  // config_schema is returned by GetInfo after Init and reflects the fields
+  // the plugin actively manages. The host pre-validates SetConfig calls.
+  repeated ConfigField config_schema = 6;
+  // ui describes the UI contributions this plugin instance provides.
+  UIContribution ui = 7;
+}
+// ConfigField describes one typed configuration value.
+// Declared in manifest.json and confirmed at runtime via PluginInfo.config_schema.
+message ConfigField {
+  string key         = 1;
+  string type        = 2;  // string|int|bool|float|array|object
+  string label       = 3;
+  string description = 4;
+  string default_json = 5;
+  bool   required    = 6;
+  string ui_hint     = 7;  // text|number|checkbox|select|password|textarea
+  repeated string enum_values = 8;
+  google.protobuf.Struct constraints = 9; // optional: min/max/pattern/min_len/max_len
+  repeated ConfigField children = 10;    // nested object schema / array element schema
+  string group = 11;
+}
+// UIContribution describes the host UI surfaces the plugin contributes to.
+message UIContribution {
+  repeated UIStatusSlot     status_slots     = 1;
+  repeated UIDashboardPanel dashboard_panels = 2;
+  UISettingsSection         settings         = 3;
+  repeated UICLICommand     cli_commands     = 4;
+}
+message UIStatusSlot {
+  string slot_id    = 1;  // primary|secondary|notifications
+  string event_type = 2;
+  string label      = 3;
+}
+message UIDashboardPanel {
+  string panel_id   = 1;
+  string title      = 2;
+  string event_type = 3;
+  int32  priority   = 4;
+  string layout     = 5;  // compact|full|wide
+}
+message UISettingsSection {
+  string section_id = 1;
+  string title      = 2;
+}
+message UICLICommand {
+  string name        = 1;
+  string description = 2;
+  string action_id   = 3;
+  repeated UICLIFlag flags = 4;
+}
+message UICLIFlag {
+  string name        = 1;
+  string shorthand   = 2;
+  string type        = 3;    // string|bool|int
+  string default_val = 4;
+  string description = 5;
 }
 message CoreAPIEndpoint {
   string address = 1; // 宿主独立 CoreAPI Unix socket 的绝对路径；Connect/h2c，非 URL/broker
@@ -75,6 +135,12 @@ message Event {
     ForwardState forward_state = 8;
     shiki.v1.SessionEvent session_event = 9;
     bool rescan_required = 10;
+    // plugin.status.v1 — standard slot status update (text/state/icon/detail)
+    google.protobuf.Struct status_payload = 11;
+    // plugin.notify.v1 — in-app notification to the frontend
+    google.protobuf.Struct notify_payload = 12;
+    // plugin.panel.<id>.v1 — arbitrary panel data (plugin-defined shape)
+    google.protobuf.Struct panel_payload  = 13;
   }
 }
 message PublishEventRequest {

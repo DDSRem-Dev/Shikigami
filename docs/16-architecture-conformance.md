@@ -1656,3 +1656,23 @@ CI预检收敛完成：仅将preflight总任务预算15→30分钟，使现有�
 节点映射修复后的两轮完整成功：源码`09adb4a7b778525a795e1aa9bc0d35f6ed85fa23`，CI42181018164 attempt1与attempt2均57/57 success，无failed/cancelled/skipped任务。每轮四原生平台144条CLI及40条关键node记录均实际pass，含原控制面恢复用例、真实SDK映射屏障、待登录URL复用和取消边界；四平台28条与WSL7条必需集成/E2E均通过。attempt1的WSL artifact13486272865源码吻合、13 stages及cleanup全部passed，四下游实际下载ID13485203800,13485790174均匹配本attempt上传ID、ZIP digest及API run/source。attempt2的WSL artifact13487803711源码吻合、13 stages及cleanup全部passed，四下游实际下载ID13487337113,13487616767均匹配本attempt上传ID、ZIP digest及API run/source。五组证据按run/attempt独立保存于`/tmp/shiki-ci-stability-20261105`。历史失败保留，不将其转为成功；本次仅同步三份文档，触发同代码/测试/依赖/CI配置第3轮完整验证，结果待实际完成后另报。
 
 本次记录批次七类复核：目录与SDK/host/plugin归属、RPC传输/准入/版本/能力/授权、持久状态/原子性/revision/去重、进程所有权/取消/恢复、文件/终端/网络语义与限额、CLI/TUI/配置/安装/发行布局均无实现变更；测试和产物按attempt/source逐项核验，原功能期限与必需断言保持。08/15/16摘要同步，原42条文字、顺序和勾选不变，不扩大外部环境、首次零previousKey观测或公开发行保证。
+
+<a id="plugin-manifest-refactor-conformance-20261111"></a>
+## 插件 Manifest 重构架构一致性检查（2026-11-11）
+
+| 检查项 | 结论 |
+|---|---|
+| `pkg/plugin` 不导入 `internal/` | 合规；manifest.go/schema.go/ui_contribution.go/action.go 均在 pkg/plugin，不引用任何 internal 路径 |
+| `plugins/sync` 和 `plugins/port` 不导入 `internal/` | 合规；内置插件仅依赖 `pkg/plugin` 和 `pkg/protocol/plugin`，业务实现位于各自目录 |
+| `PluginActionsServer` 不在 `plugin_grpc.pb.go` 中 | 合规；该服务定义在非生成文件 `pkg/protocol/plugin/invoke_action.go`，不混入 protoc 输出 |
+| `InvokePluginAction` 不在 `agent.connect.go` 中 | 合规；该 Connect service 定义在非生成文件 `pkg/protocol/agent/agentconnect/agent_actions.go` |
+| `plugins/sync/manifest.json` 存在 | 合规；与 main.go 同目录，宿主在进程启动前读取 |
+| `plugins/port/manifest.json` 存在 | 合规；与 main.go 同目录，宿主在进程启动前读取 |
+| IPC 拦截器允许 `AgentActionsName` 前缀 | 合规；`internal/agent/ipc.go` 追加 OR 条件，AgentActions procedure 不再返回 IPC_METHOD_FORBIDDEN |
+| `routeCheckingStream` 对 AgentActions 跳过 server_id 路由 | 合规；server_id 路由由 `InvokePluginAction` 处理器内部依据 `plugin_id`/`side` 完成 |
+| ConfigField 预校验在宿主侧完成，不在插件进程内 | 合规；`ValidateConfig` 由宿主在 SetConfig 前调用（pkg/plugin/schema.go），校验失败不启动/不下发插件 |
+| `SettingsRegistry` 在 internal/plugin，不暴露到 pkg/ | 合规；仅宿主内部使用，不进入公共 SDK 接口 |
+| `PluginRegistry` 扫描用户/系统目录时按优先级，内嵌插件优先级最低 | 合规；registry.go 先扫 `~/.shiki/plugins/` 与 `/var/lib/shiki/plugins/`，再加载内嵌 manifest |
+| 动态 CLI 命令注册不覆盖已保留的管理子命令 | 合规；`list/enable/disable/status/logs/restart` 不被 manifest 覆盖，第三方命令路径为 `shiki plugins <id> <command>` |
+
+以上各项基于静态代码结构分析，不替代运行时动态测试；TUI 渲染层（状态槽、dashboard 面板、设置表单）在实现后需单独复核。本批不修改原 42 条清单计数，不替代既有验收门槛，不扩大外部环境或发行声明。

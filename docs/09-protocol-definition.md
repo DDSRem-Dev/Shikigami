@@ -743,230 +743,400 @@ message DeleteSnapshotRequest {
 此 schema 覆盖内置 sync/port 插件的宿主回调、客户端 worker 和服务端数据面。`CoreAPI` 由 agent/daemon 提供，其他五个 service 由插件按 side 提供。第三方插件的新能力需另行版本化，不能复用任意字节的通用远程执行入口。
 
 ```protobuf
-syntax = "proto3";
-package shiki.plugin.v1;
-option go_package = "github.com/DDSRem-Dev/Shikigami/pkg/protocol/plugin";
-import "types.proto";
-import "google/protobuf/struct.proto";
-
-service Plugin {
-  rpc GetInfo(shiki.v1.Empty) returns (PluginInfo);
-  rpc Init(InitRequest) returns (shiki.v1.Empty);
-  rpc Start(shiki.v1.Empty) returns (shiki.v1.Empty);
-  rpc Stop(shiki.v1.Empty) returns (shiki.v1.Empty);
-  rpc Health(shiki.v1.Empty) returns (shiki.v1.HealthStatus);
-}
-message PluginInfo {
-  string name = 1;
-  string version = 2;
-  string description = 3;
-  string side = 4; // client/server/both
-  shiki.v1.ProtocolOffer protocol = 5;
-}
-message CoreAPIEndpoint {
-  string address = 1; // 宿主独立 CoreAPI Unix socket 的绝对路径；Connect/h2c，非 URL/broker
-  string token = 2;   // 当前进程实例的短期能力凭据
-}
-message InitRequest {
-  google.protobuf.Struct config = 1;
-  CoreAPIEndpoint core_api = 2;
-  string side = 3;
-  shiki.v1.ProtocolAgreement protocol = 4;
-  string plugin_instance_id = 5;
-  string host_instance_id = 6;
-  string state_dir = 7; // 本实例独占的私有任务状态目录
-}
-message Scope {
-  string server_id = 1; // agent 的服务器记录 ID；不会跨网络传给 daemon
-  string project_id = 2;
-  string session_id = 3;
-  string mapping_id = 4;
-}
-message Mapping {
-  string id = 1;
-  string server_id = 2;
-  string project_id = 3;
-  string local_root = 4; // 宿主规范化；插件不能自行改根
-  string revision = 5;
-  bool sync_enabled = 6;
-  string default_session = 7;
-  map<string, string> session_hints = 8;
-}
-message MappingList { repeated Mapping mappings = 1; }
-message ConfigRequest { Scope scope = 1; }
-message PluginConfig {
-  google.protobuf.Struct values = 1;
-  string revision = 2;
-}
-message SetConfigRequest {
-  Scope scope = 1;
-  google.protobuf.Struct values = 2;
-  string expected_revision = 3;
-  string request_id = 4;
-}
-message SubscribeRequest {
-  Scope scope = 1;
-  repeated string event_types = 2;
-}
-message Event {
-  string event_id = 1;
-  string type = 2;
-  Scope scope = 3;
-  int64 timestamp = 4;
-  string source_instance_id = 5;
-  oneof payload {
-    SyncState sync_state = 6;
-    Conflict conflict = 7;
-    ForwardState forward_state = 8;
-    shiki.v1.SessionEvent session_event = 9;
-    bool rescan_required = 10;
-  }
-}
-message PublishEventRequest {
-  Event event = 1;
-  string expected_host_instance_id = 2;
-}
-
-// 插件 → 同机宿主。Remote* 仅 agent 提供；daemon 端调用会拒绝。
-service CoreAPI {
-  rpc GetProject(Scope) returns (shiki.v1.Project);
-  rpc ListProjects(Scope) returns (shiki.v1.ListProjectsResponse);
-  rpc GetSession(Scope) returns (shiki.v1.Session);
-  rpc ListSessions(Scope) returns (shiki.v1.ListSessionsResponse);
-  rpc GetMapping(Scope) returns (Mapping);
-  rpc ListMappings(Scope) returns (MappingList);
-  rpc SubscribeEvents(SubscribeRequest) returns (stream Event);
-  rpc PublishEvent(PublishEventRequest) returns (shiki.v1.Empty);
-  rpc Log(shiki.v1.LogRecord) returns (shiki.v1.Empty);
-  rpc GetConfig(ConfigRequest) returns (PluginConfig);
-  rpc SetConfig(SetConfigRequest) returns (PluginConfig);
-  rpc RemoteListFiles(RemoteListFilesRequest) returns (shiki.v1.ListFilesResponse);
-  rpc RemoteStatFile(RemoteStatFileRequest) returns (shiki.v1.FileInfo);
-  rpc RemoteReadFile(RemoteReadFileRequest) returns (stream shiki.v1.FileData);
-  rpc RemoteWriteFile(stream RemoteWriteFrame) returns (shiki.v1.FileInfo);
-  rpc RemoteDeleteFile(RemoteDeleteFileRequest) returns (shiki.v1.Empty);
-  rpc RemoteWatchFiles(RemoteWatchFilesRequest) returns (stream shiki.v1.FileEvent);
-  rpc RemoteCheckPort(RemoteCheckPortRequest) returns (shiki.v1.CheckPortResponse);
-  rpc RemoteListPorts(RemoteListPortsRequest) returns (shiki.v1.ListPortsResponse);
-  rpc RemoteWatchPorts(RemoteWatchPortsRequest) returns (stream shiki.v1.PortEvent);
-  rpc RemoteForwardPort(stream RemotePortFrame) returns (stream shiki.v1.PortData);
-}
-message RemoteListFilesRequest { Scope scope = 1; shiki.v1.ListFilesRequest request = 2; }
-message RemoteStatFileRequest { Scope scope = 1; shiki.v1.StatFileRequest request = 2; }
-message RemoteReadFileRequest { Scope scope = 1; shiki.v1.ReadFileRequest request = 2; }
-message RemoteDeleteFileRequest { Scope scope = 1; shiki.v1.DeleteFileRequest request = 2; }
-message RemoteWatchFilesRequest { Scope scope = 1; shiki.v1.WatchFilesRequest request = 2; }
-message RemoteCheckPortRequest { Scope scope = 1; shiki.v1.CheckPortRequest request = 2; }
-message RemoteListPortsRequest { Scope scope = 1; shiki.v1.ListPortsRequest request = 2; }
-message RemoteWatchPortsRequest { Scope scope = 1; shiki.v1.WatchPortsRequest request = 2; }
-message RemoteWriteOpen { Scope scope = 1; shiki.v1.WriteFileHeader header = 2; }
-message RemoteWriteFrame {
-  oneof payload { RemoteWriteOpen open = 1; bytes chunk = 2; }
-}
-message RemotePortOpen { Scope scope = 1; shiki.v1.PortData connect = 2; }
-message RemotePortFrame {
-  oneof payload { RemotePortOpen open = 1; shiki.v1.PortData data = 2; }
-}
-
-// 宿主 → server-side 插件，消息与远端门面复用，业务操作不会回调 Remote*。
-service FileService {
-  rpc ListFiles(shiki.v1.ListFilesRequest) returns (shiki.v1.ListFilesResponse);
-  rpc StatFile(shiki.v1.StatFileRequest) returns (shiki.v1.FileInfo);
-  rpc ReadFile(shiki.v1.ReadFileRequest) returns (stream shiki.v1.FileData);
-  rpc WriteFile(stream shiki.v1.WriteFileRequest) returns (shiki.v1.FileInfo);
-  rpc DeleteFile(shiki.v1.DeleteFileRequest) returns (shiki.v1.Empty);
-  rpc WatchFiles(shiki.v1.WatchFilesRequest) returns (stream shiki.v1.FileEvent);
-}
-service PortService {
-  rpc CheckPort(shiki.v1.CheckPortRequest) returns (shiki.v1.CheckPortResponse);
-  rpc ListPorts(shiki.v1.ListPortsRequest) returns (shiki.v1.ListPortsResponse);
-  rpc WatchPorts(shiki.v1.WatchPortsRequest) returns (stream shiki.v1.PortEvent);
-  rpc ForwardPort(stream shiki.v1.PortData) returns (stream shiki.v1.PortData);
-}
-
-// 宿主 → client-side 插件：管理本地任务，不是跨网络暴露的 RPC。
-service SyncWorker {
-  rpc ConfigureMapping(Mapping) returns (SyncState);
-  rpc GetSyncState(Scope) returns (SyncState);
-  rpc ListConflicts(Scope) returns (ConflictList);
-  rpc ResolveConflict(ResolveConflictRequest) returns (SyncState);
-  rpc ReadConflictFile(ReadConflictFileRequest) returns (stream shiki.v1.FileData);
-}
-message SyncState {
-  string mapping_id = 1;
-  string mapping_revision = 2;
-  string state = 3; // paused/reconciling/active/conflicted/offline/auth_required/error
-  uint64 pending_files = 4;
-  uint64 conflict_count = 5;
-  string reason_code = 6;
-}
-message FileVersion {
-  bool exists = 1;  // false=已删除；读错误不能转换为 false
-  string content_hash = 2;
-  uint32 mode = 3;
-  string revision = 4; // 远端不透明 revision；本地由宿主/worker 计算的观测版本
-}
-message Conflict {
-  string id = 1;
-  string mapping_id = 2;
-  string path = 3;
-  FileVersion base = 4;
-  FileVersion local = 5;
-  FileVersion remote = 6;
-  string generation = 7; // 任一侧版本变化时替换，旧选择不再有效
-}
-message ConflictList { repeated Conflict conflicts = 1; }
-message ResolveConflictRequest {
-  enum Choice {
-    CHOICE_UNSPECIFIED = 0;
-    KEEP_LOCAL = 1;
-    KEEP_REMOTE = 2;
-    KEEP_BOTH = 3;
-  }
-  string mapping_id = 1;
-  string conflict_id = 2;
-  string expected_generation = 3;
-  Choice choice = 4;
-  string request_id = 5;
-}
-message ReadConflictFileRequest {
-  enum Side { SIDE_UNSPECIFIED = 0; LOCAL = 1; REMOTE = 2; }
-  string mapping_id = 1;
-  string conflict_id = 2;
-  string expected_generation = 3;
-  Side side = 4;
-}
-service PortWorker {
-  rpc DiscoverForwards(Scope) returns (ForwardCandidates);
-  rpc StartForward(ForwardSpec) returns (ForwardState);
-  rpc StopForward(ForwardID) returns (shiki.v1.Empty);
-  rpc ListForwards(shiki.v1.Empty) returns (ForwardList);
-}
-message ForwardSpec {
-  string id = 1; // agent 分配，重复启动同 ID 同配置幂等
-  string server_id = 2;
-  string session_id = 3; // 可选，不能替代目标授权
-  string remote_address = 4;
-  uint32 remote_port = 5;
-  string local_address = 6; // 默认 127.0.0.1
-  uint32 local_port = 7; // 0 表示让 OS 选空闲端口
-  bool enabled = 8;
-  string revision = 9;
-  bool automatic = 10; // host-assigned; explicit stop suppresses this source
-  string source_identity = 11;
-}
-message ForwardCandidates { repeated ForwardSpec specs = 1; }
-message ForwardID { string id = 1; }
-message ForwardState {
-  ForwardSpec spec = 1;
-  uint32 bound_port = 2; // 实际 listener 地址，未绑定时为 0
-  string state = 3; // starting/listening/stopped/offline/auth_required/error
-  uint64 connections = 4;
-  uint64 bytes_transferred = 5;
-  string reason_code = 6;
-}
-message ForwardList { repeated ForwardState forwards = 1; }
+syntax = "proto3";
+package shiki.plugin.v1;
+option go_package = "github.com/DDSRem-Dev/Shikigami/pkg/protocol/plugin";
+import "types.proto";
+import "google/protobuf/struct.proto";
+
+service Plugin {
+  rpc GetInfo(shiki.v1.Empty) returns (PluginInfo);
+  rpc Init(InitRequest) returns (shiki.v1.Empty);
+  rpc Start(shiki.v1.Empty) returns (shiki.v1.Empty);
+  rpc Stop(shiki.v1.Empty) returns (shiki.v1.Empty);
+  rpc Health(shiki.v1.Empty) returns (shiki.v1.HealthStatus);
+  // InvokeAction dispatches a manifest-declared action to the plugin.
+  // Request and response are encoded as google.protobuf.Struct (JSON object).
+  // The host authorizes the invocation via the standard instance credential.
+  rpc InvokeAction(google.protobuf.Struct) returns (google.protobuf.Struct);
+}
+message PluginInfo {
+  string name = 1;
+  string version = 2;
+  string description = 3;
+  string side = 4; // client/server/both
+  shiki.v1.ProtocolOffer protocol = 5;
+  // config_schema is returned by GetInfo after Init and reflects the fields
+  // the plugin actively manages. The host pre-validates SetConfig calls.
+  repeated ConfigField config_schema = 6;
+  // ui describes the UI contributions this plugin instance provides.
+  UIContribution ui = 7;
+}
+// ConfigField describes one typed configuration value.
+// Declared in manifest.json and confirmed at runtime via PluginInfo.config_schema.
+message ConfigField {
+  string key         = 1;
+  string type        = 2;  // string|int|bool|float|array|object
+  string label       = 3;
+  string description = 4;
+  string default_json = 5;
+  bool   required    = 6;
+  string ui_hint     = 7;  // text|number|checkbox|select|password|textarea
+  repeated string enum_values = 8;
+  google.protobuf.Struct constraints = 9; // optional: min/max/pattern/min_len/max_len
+  repeated ConfigField children = 10;    // nested object schema / array element schema
+  string group = 11;
+}
+// UIContribution describes the host UI surfaces the plugin contributes to.
+message UIContribution {
+  repeated UIStatusSlot     status_slots     = 1;
+  repeated UIDashboardPanel dashboard_panels = 2;
+  UISettingsSection         settings         = 3;
+  repeated UICLICommand     cli_commands     = 4;
+}
+message UIStatusSlot {
+  string slot_id    = 1;  // primary|secondary|notifications
+  string event_type = 2;
+  string label      = 3;
+}
+message UIDashboardPanel {
+  string panel_id   = 1;
+  string title      = 2;
+  string event_type = 3;
+  int32  priority   = 4;
+  string layout     = 5;  // compact|full|wide
+}
+message UISettingsSection {
+  string section_id = 1;
+  string title      = 2;
+}
+message UICLICommand {
+  string name        = 1;
+  string description = 2;
+  string action_id   = 3;
+  repeated UICLIFlag flags = 4;
+}
+message UICLIFlag {
+  string name        = 1;
+  string shorthand   = 2;
+  string type        = 3;    // string|bool|int
+  string default_val = 4;
+  string description = 5;
+}
+message CoreAPIEndpoint {
+  string address = 1; // 宿主独立 CoreAPI Unix socket 的绝对路径；Connect/h2c，非 URL/broker
+  string token = 2;   // 当前进程实例的短期能力凭据
+}
+message InitRequest {
+  google.protobuf.Struct config = 1;
+  CoreAPIEndpoint core_api = 2;
+  string side = 3;
+  shiki.v1.ProtocolAgreement protocol = 4;
+  string plugin_instance_id = 5;
+  string host_instance_id = 6;
+  string state_dir = 7; // 本实例独占的私有任务状态目录
+}
+message Scope {
+  string server_id = 1; // agent 的服务器记录 ID；不会跨网络传给 daemon
+  string project_id = 2;
+  string session_id = 3;
+  string mapping_id = 4;
+}
+message Mapping {
+  string id = 1;
+  string server_id = 2;
+  string project_id = 3;
+  string local_root = 4; // 宿主规范化；插件不能自行改根
+  string revision = 5;
+  bool sync_enabled = 6;
+  string default_session = 7;
+  map<string, string> session_hints = 8;
+}
+message MappingList { repeated Mapping mappings = 1; }
+message ConfigRequest { Scope scope = 1; }
+message PluginConfig {
+  google.protobuf.Struct values = 1;
+  string revision = 2;
+}
+message SetConfigRequest {
+  Scope scope = 1;
+  google.protobuf.Struct values = 2;
+  string expected_revision = 3;
+  string request_id = 4;
+}
+message SubscribeRequest {
+  Scope scope = 1;
+  repeated string event_types = 2;
+}
+message Event {
+  string event_id = 1;
+  string type = 2;
+  Scope scope = 3;
+  int64 timestamp = 4;
+  string source_instance_id = 5;
+  oneof payload {
+    SyncState sync_state = 6;
+    Conflict conflict = 7;
+    ForwardState forward_state = 8;
+    shiki.v1.SessionEvent session_event = 9;
+    bool rescan_required = 10;
+    // plugin.status.v1 — standard slot status update (text/state/icon/detail)
+    google.protobuf.Struct status_payload = 11;
+    // plugin.notify.v1 — in-app notification to the frontend
+    google.protobuf.Struct notify_payload = 12;
+    // plugin.panel.<id>.v1 — arbitrary panel data (plugin-defined shape)
+    google.protobuf.Struct panel_payload  = 13;
+  }
+}
+message PublishEventRequest {
+  Event event = 1;
+  string expected_host_instance_id = 2;
+}
+
+// 插件 → 同机宿主。Remote* 仅 agent 提供；daemon 端调用会拒绝。
+service CoreAPI {
+  rpc GetProject(Scope) returns (shiki.v1.Project);
+  rpc ListProjects(Scope) returns (shiki.v1.ListProjectsResponse);
+  rpc GetSession(Scope) returns (shiki.v1.Session);
+  rpc ListSessions(Scope) returns (shiki.v1.ListSessionsResponse);
+  rpc GetMapping(Scope) returns (Mapping);
+  rpc ListMappings(Scope) returns (MappingList);
+  rpc SubscribeEvents(SubscribeRequest) returns (stream Event);
+  rpc PublishEvent(PublishEventRequest) returns (shiki.v1.Empty);
+  rpc Log(shiki.v1.LogRecord) returns (shiki.v1.Empty);
+  rpc GetConfig(ConfigRequest) returns (PluginConfig);
+  rpc SetConfig(SetConfigRequest) returns (PluginConfig);
+  rpc RemoteListFiles(RemoteListFilesRequest) returns (shiki.v1.ListFilesResponse);
+  rpc RemoteStatFile(RemoteStatFileRequest) returns (shiki.v1.FileInfo);
+  rpc RemoteReadFile(RemoteReadFileRequest) returns (stream shiki.v1.FileData);
+  rpc RemoteWriteFile(stream RemoteWriteFrame) returns (shiki.v1.FileInfo);
+  rpc RemoteDeleteFile(RemoteDeleteFileRequest) returns (shiki.v1.Empty);
+  rpc RemoteWatchFiles(RemoteWatchFilesRequest) returns (stream shiki.v1.FileEvent);
+  rpc RemoteCheckPort(RemoteCheckPortRequest) returns (shiki.v1.CheckPortResponse);
+  rpc RemoteListPorts(RemoteListPortsRequest) returns (shiki.v1.ListPortsResponse);
+  rpc RemoteWatchPorts(RemoteWatchPortsRequest) returns (stream shiki.v1.PortEvent);
+  rpc RemoteForwardPort(stream RemotePortFrame) returns (stream shiki.v1.PortData);
+}
+message RemoteListFilesRequest { Scope scope = 1; shiki.v1.ListFilesRequest request = 2; }
+message RemoteStatFileRequest { Scope scope = 1; shiki.v1.StatFileRequest request = 2; }
+message RemoteReadFileRequest { Scope scope = 1; shiki.v1.ReadFileRequest request = 2; }
+message RemoteDeleteFileRequest { Scope scope = 1; shiki.v1.DeleteFileRequest request = 2; }
+message RemoteWatchFilesRequest { Scope scope = 1; shiki.v1.WatchFilesRequest request = 2; }
+message RemoteCheckPortRequest { Scope scope = 1; shiki.v1.CheckPortRequest request = 2; }
+message RemoteListPortsRequest { Scope scope = 1; shiki.v1.ListPortsRequest request = 2; }
+message RemoteWatchPortsRequest { Scope scope = 1; shiki.v1.WatchPortsRequest request = 2; }
+message RemoteWriteOpen { Scope scope = 1; shiki.v1.WriteFileHeader header = 2; }
+message RemoteWriteFrame {
+  oneof payload { RemoteWriteOpen open = 1; bytes chunk = 2; }
+}
+message RemotePortOpen { Scope scope = 1; shiki.v1.PortData connect = 2; }
+message RemotePortFrame {
+  oneof payload { RemotePortOpen open = 1; shiki.v1.PortData data = 2; }
+}
+
+// 宿主 → server-side 插件，消息与远端门面复用，业务操作不会回调 Remote*。
+service FileService {
+  rpc ListFiles(shiki.v1.ListFilesRequest) returns (shiki.v1.ListFilesResponse);
+  rpc StatFile(shiki.v1.StatFileRequest) returns (shiki.v1.FileInfo);
+  rpc ReadFile(shiki.v1.ReadFileRequest) returns (stream shiki.v1.FileData);
+  rpc WriteFile(stream shiki.v1.WriteFileRequest) returns (shiki.v1.FileInfo);
+  rpc DeleteFile(shiki.v1.DeleteFileRequest) returns (shiki.v1.Empty);
+  rpc WatchFiles(shiki.v1.WatchFilesRequest) returns (stream shiki.v1.FileEvent);
+}
+service PortService {
+  rpc CheckPort(shiki.v1.CheckPortRequest) returns (shiki.v1.CheckPortResponse);
+  rpc ListPorts(shiki.v1.ListPortsRequest) returns (shiki.v1.ListPortsResponse);
+  rpc WatchPorts(shiki.v1.WatchPortsRequest) returns (stream shiki.v1.PortEvent);
+  rpc ForwardPort(stream shiki.v1.PortData) returns (stream shiki.v1.PortData);
+}
+
+// 宿主 → client-side 插件：管理本地任务，不是跨网络暴露的 RPC。
+service SyncWorker {
+  rpc ConfigureMapping(Mapping) returns (SyncState);
+  rpc GetSyncState(Scope) returns (SyncState);
+  rpc ListConflicts(Scope) returns (ConflictList);
+  rpc ResolveConflict(ResolveConflictRequest) returns (SyncState);
+  rpc ReadConflictFile(ReadConflictFileRequest) returns (stream shiki.v1.FileData);
+}
+message SyncState {
+  string mapping_id = 1;
+  string mapping_revision = 2;
+  string state = 3; // paused/reconciling/active/conflicted/offline/auth_required/error
+  uint64 pending_files = 4;
+  uint64 conflict_count = 5;
+  string reason_code = 6;
+}
+message FileVersion {
+  bool exists = 1;  // false=已删除；读错误不能转换为 false
+  string content_hash = 2;
+  uint32 mode = 3;
+  string revision = 4; // 远端不透明 revision；本地由宿主/worker 计算的观测版本
+}
+message Conflict {
+  string id = 1;
+  string mapping_id = 2;
+  string path = 3;
+  FileVersion base = 4;
+  FileVersion local = 5;
+  FileVersion remote = 6;
+  string generation = 7; // 任一侧版本变化时替换，旧选择不再有效
+}
+message ConflictList { repeated Conflict conflicts = 1; }
+message ResolveConflictRequest {
+  enum Choice {
+    CHOICE_UNSPECIFIED = 0;
+    KEEP_LOCAL = 1;
+    KEEP_REMOTE = 2;
+    KEEP_BOTH = 3;
+  }
+  string mapping_id = 1;
+  string conflict_id = 2;
+  string expected_generation = 3;
+  Choice choice = 4;
+  string request_id = 5;
+}
+message ReadConflictFileRequest {
+  enum Side { SIDE_UNSPECIFIED = 0; LOCAL = 1; REMOTE = 2; }
+  string mapping_id = 1;
+  string conflict_id = 2;
+  string expected_generation = 3;
+  Side side = 4;
+}
+service PortWorker {
+  rpc DiscoverForwards(Scope) returns (ForwardCandidates);
+  rpc StartForward(ForwardSpec) returns (ForwardState);
+  rpc StopForward(ForwardID) returns (shiki.v1.Empty);
+  rpc ListForwards(shiki.v1.Empty) returns (ForwardList);
+}
+message ForwardSpec {
+  string id = 1; // agent 分配，重复启动同 ID 同配置幂等
+  string server_id = 2;
+  string session_id = 3; // 可选，不能替代目标授权
+  string remote_address = 4;
+  uint32 remote_port = 5;
+  string local_address = 6; // 默认 127.0.0.1
+  uint32 local_port = 7; // 0 表示让 OS 选空闲端口
+  bool enabled = 8;
+  string revision = 9;
+  bool automatic = 10; // host-assigned; explicit stop suppresses this source
+  string source_identity = 11;
+}
+message ForwardCandidates { repeated ForwardSpec specs = 1; }
+message ForwardID { string id = 1; }
+message ForwardState {
+  ForwardSpec spec = 1;
+  uint32 bound_port = 2; // 实际 listener 地址，未绑定时为 0
+  string state = 3; // starting/listening/stopped/offline/auth_required/error
+  uint64 connections = 4;
+  uint64 bytes_transferred = 5;
+  string reason_code = 6;
+}
+message ForwardList { repeated ForwardState forwards = 1; }
 ```
+
+
+### plugin.proto 新增（Manifest / UI 注入）
+
+以下字段和消息为插件 manifest 重构后追加；`PluginInfo` 和 `Event` 在原字段后扩展，不复用已发布字段号。
+
+#### PluginInfo 新增字段
+
+```text
+message PluginInfo {
+  // 原字段 1–5 不变
+  repeated ConfigField config_schema = 6; // manifest 声明的配置 schema
+  UIContribution ui = 7;                  // manifest 声明的 UI 注入
+}
+```
+
+#### ConfigField 与 FieldConstraints
+
+```text
+message ConfigField {
+  string key = 1;
+  string type = 2;        // string/number/bool/enum/object/array
+  string label = 3;
+  string description = 4;
+  string default_json = 5;
+  bool required = 6;
+  repeated string enum_values = 7;
+  string ui_hint = 8;
+  string group = 9;
+  FieldConstraints constraints = 10;
+  repeated ConfigField children = 11; // object/array 子字段
+}
+message FieldConstraints {
+  optional double min = 1;
+  optional double max = 2;
+  optional int32 min_len = 3;
+  optional int32 max_len = 4;
+  string pattern = 5;
+}
+```
+
+#### UIContribution 及子消息
+
+```text
+message UIContribution {
+  repeated UIStatusSlot    status_slots     = 1;
+  repeated UIDashboardPanel dashboard_panels = 2;
+  UISettingsSection        settings_section = 3;
+  repeated UICLICommand    cli_commands     = 4;
+}
+message UIStatusSlot     { string id = 1; string label = 2; string default_text = 3; string event_type = 4; }
+message UIDashboardPanel { string id = 1; string title  = 2; string action_id  = 3; }
+message UISettingsSection{ string title = 1; string action_id = 2; }
+message UICLICommand     { string name = 1; string description = 2; string action_id = 3; repeated UICLIFlag flags = 4; }
+message UICLIFlag        { string name = 1; string shorthand = 2; string type = 3; string default = 4; string description = 5; }
+```
+
+#### Event.payload 新增 oneof 分支
+
+```text
+// 在 Event.payload oneof 追加（不复用已用字段号 6–10）：
+// status_payload StatusPayload = 11;
+// notify_payload NotifyPayload = 12;
+// panel_payload  PanelPayload  = 13;  // 预留，当前未使用
+
+message StatusPayload { string text = 1; string state = 2; string icon = 3; string detail = 4; }
+message NotifyPayload { string level = 1; string title = 2; string message = 3; string action_id = 4; }
+```
+
+`state` 使用有限词汇（`ok`/`warning`/`error`/`syncing`/`paused`），未知状态降级展示，不能静默丢弃事件。
+
+#### PluginActions 服务（非生成，位于 pkg/protocol/plugin/invoke_action.go）
+
+`PluginActions` 是独立于 `plugin_grpc.pb.go` 的非生成 gRPC 扩展；宿主向插件进程发起 `InvokeAction`，请求/响应均为 `google.protobuf.Struct`（JSON 透传）。
+
+```text
+service PluginActions {
+  rpc InvokeAction(google.protobuf.Struct) returns (google.protobuf.Struct);
+}
+```
+
+请求 Struct 对应 `ActionRequest` JSON 形状：
+
+```json
+{"plugin_id":"sync","side":"local","server_id":"","action_id":"list-conflicts","invocation_id":"uuid","flags":{"json":"true"},"input_json":""}
+```
+
+响应 Struct 对应 `ActionResult` JSON 形状：`{"kind":"text","text":"...","done":true}`
+
+插件须声明 `ui.action.v1` 能力才能接受此调用；未声明的插件返回 Unimplemented，宿主向调用方传递该错误。
+
+#### AgentActions 服务（非生成，位于 pkg/protocol/agent/agentconnect/agent_actions.go）
+
+`AgentActions` 是独立于 `agent.connect.go` 的非生成 Connect service；CLI 通过 agent IPC 调用此服务，agent 路由到目标插件的 `PluginActions`。
+
+```text
+service AgentActions {
+  rpc InvokePluginAction(google.protobuf.Struct) returns (google.protobuf.Struct);
+}
+```
+
+- `AgentActionsName = "shiki.agent.v1.AgentActions"`
+- procedure：`AgentActionsInvokePluginActionProcedure = "/shiki.agent.v1.AgentActions/InvokePluginAction"`
+- agent IPC 拦截器须同时允许该 procedure 前缀（已在 `internal/agent/ipc.go` 追加 OR 条件）；`routeCheckingStream` 对 AgentActions procedure 同样跳过 server_id 路由检查，由 `InvokePluginAction` 处理器内部依据 `plugin_id`/`side` 路由。
 
 ### CoreAPI 权限与流规则
 

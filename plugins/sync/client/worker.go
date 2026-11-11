@@ -3,8 +3,10 @@ package client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -58,7 +60,7 @@ type task struct {
 
 func New() *Worker { return &Worker{tasks: map[string]*task{}, wake: make(chan struct{}, 1)} }
 func (w *Worker) Info() *ppb.PluginInfo {
-	return &ppb.PluginInfo{Name: "sync", Version: buildinfo.Version, Side: "client", Protocol: &pb.ProtocolOffer{Major: 1, Capabilities: []string{"core.scope.v1", sdk.SyncCapability}}}
+	return &ppb.PluginInfo{Name: "sync", Version: buildinfo.Version, Side: "client", Protocol: &pb.ProtocolOffer{Major: 1, Capabilities: []string{"core.scope.v1", sdk.SyncCapability, sdk.UIActionCapability}}}
 }
 func (w *Worker) Init(_ context.Context, in sdk.InitContext) error {
 	if in.Core == nil || !filepath.IsAbs(in.StateDir) || in.Side != "client" {
@@ -500,6 +502,126 @@ func (w *Worker) GetSyncState(_ context.Context, scope *ppb.Scope) (*ppb.SyncSta
 
 var _ sdk.Implementation = (*Worker)(nil)
 var _ sdk.SyncWorker = (*Worker)(nil)
+
+// InvokeAction implements sdk.ActionImplementation. It handles manifest-declared
+// actions: list-conflicts, get-sync-status, list-actions.
+func (w *Worker) InvokeAction(ctx context.Context, req *sdk.ActionRequest) (*sdk.ActionResult, error) {
+	if req == nil {
+		return nil, fail(connect.CodeInvalidArgument, "ACTION_REQUEST_REQUIRED")
+	}
+	jsonOut := req.Flags["json"] == "true" || req.Flags["json"] == "1"
+	switch req.ActionID {
+	case "list-actions":
+		actions := []map[string]string{
+			{"id": "list-conflicts", "description": "List current sync conflicts"},
+			{"id": "get-sync-status", "description": "Show sync state for all mappings"},
+			{"id": "list-actions", "description": "List available actions"},
+		}
+		return &sdk.ActionResult{Kind: sdk.ActionResultJSON, JSON: map[string]any{"actions": actions}, Done: true}, nil
+
+	case "list-conflicts":
+		w.mu.Lock()
+		tasks := make([]*task, 0, len(w.tasks))
+		for _, t := range w.tasks {
+			tasks = append(tasks, t)
+		}
+		w.mu.Unlock()
+		type conflictEntry struct {
+			MappingID  string `json:"mapping_id"`
+			ConflictID string `json:"conflict_id"`
+			Path       string `json:"path"`
+			Generation string `json:"generation"`
+			IsInitial  bool   `json:"is_initial_sync"`
+		}
+		var entries []conflictEntry
+		for _, t := range tasks {
+			t.op.Lock()
+			scope := scopeFor(t.data.Mapping)
+			t.op.Unlock()
+			if scope.MappingId == "" {
+				continue
+			}
+			conflicts, err := w.ListConflicts(ctx, scope)
+			if err != nil {
+				continue
+			}
+			for _, c := range conflicts.Conflicts {
+				entries = append(entries, conflictEntry{
+					MappingID: c.MappingId, ConflictID: c.Id, Path: c.Path,
+					Generation: c.Generation, IsInitial: c.Base == nil,
+				})
+			}
+		}
+		if jsonOut {
+			return &sdk.ActionResult{Kind: sdk.ActionResultJSON, JSON: map[string]any{"conflicts": entries}, Done: true}, nil
+		}
+		if len(entries) == 0 {
+			return &sdk.ActionResult{Kind: sdk.ActionResultText, Text: "No sync conflicts.\n", Done: true}, nil
+		}
+		var sb strings.Builder
+		for _, e := range entries {
+			kind := "conflict"
+			if e.IsInitial {
+				kind = "initial sync choice required"
+			}
+			fmt.Fprintf(&sb, "%s: %s  mapping %s  id %s  gen %s\n", kind, e.Path, e.MappingID, e.ConflictID, e.Generation)
+		}
+		return &sdk.ActionResult{Kind: sdk.ActionResultText, Text: sb.String(), Done: true}, nil
+
+	case "get-sync-status":
+		w.mu.Lock()
+		tasks := make([]*task, 0, len(w.tasks))
+		for _, t := range w.tasks {
+			tasks = append(tasks, t)
+		}
+		w.mu.Unlock()
+		type statusEntry struct {
+			MappingID    string `json:"mapping_id"`
+			State        string `json:"state"`
+			PendingFiles uint64 `json:"pending_files"`
+			Conflicts    uint64 `json:"conflicts"`
+			ReasonCode   string `json:"reason_code,omitempty"`
+		}
+		var statuses []statusEntry
+		for _, t := range tasks {
+			t.op.Lock()
+			scope := scopeFor(t.data.Mapping)
+			t.op.Unlock()
+			if scope.MappingId == "" {
+				continue
+			}
+			state, err := w.GetSyncState(ctx, scope)
+			if err != nil {
+				continue
+			}
+			statuses = append(statuses, statusEntry{
+				MappingID: state.MappingId, State: state.State,
+				PendingFiles: state.PendingFiles, Conflicts: state.ConflictCount,
+				ReasonCode: state.ReasonCode,
+			})
+		}
+		if jsonOut {
+			return &sdk.ActionResult{Kind: sdk.ActionResultJSON, JSON: map[string]any{"mappings": statuses}, Done: true}, nil
+		}
+		if len(statuses) == 0 {
+			return &sdk.ActionResult{Kind: sdk.ActionResultText, Text: "No active sync mappings.\n", Done: true}, nil
+		}
+		var sb strings.Builder
+		for _, s := range statuses {
+			fmt.Fprintf(&sb, "%s  state: %s  pending: %d  conflicts: %d", s.MappingID, s.State, s.PendingFiles, s.Conflicts)
+			if s.ReasonCode != "" {
+				fmt.Fprintf(&sb, "  (%s)", s.ReasonCode)
+			}
+			sb.WriteByte('\n')
+		}
+		return &sdk.ActionResult{Kind: sdk.ActionResultText, Text: sb.String(), Done: true}, nil
+
+	default:
+		return nil, fail(connect.CodeUnimplemented, "ACTION_NOT_IMPLEMENTED")
+	}
+}
+
+var _ sdk.ActionImplementation = (*Worker)(nil)
 
 func (w *Worker) update(fn func(*storage.Snapshot) error) error {
 	err := w.store.Update(fn)

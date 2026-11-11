@@ -1,0 +1,62 @@
+{
+  "schema_version": "1",
+  "id": "sync",
+  "version": "${BUILD_VERSION}",
+  "display_name": "文件同步",
+  "description": "在本地与远端之间同步项目文件，支持冲突检测与解决",
+  "capabilities": ["core.scope.v1", "sync.worker.v1", "sync.revision.v1", "ui.action.v1"],
+  "sides": ["client", "server"],
+  "binary": "shiki-plugin-sync",
+  "binary_flags": ["--side=${side}"],
+  "config_schema": [
+    {
+      "key": "max_auto_sync_size",
+      "type": "int",
+      "label": "最大自动同步文件大小 (字节)",
+      "description": "单文件大小上限。超过此值的文件需要手动确认同步。",
+      "default_json": "10485760",
+      "ui_hint": "number",
+      "constraints": {"min": 0, "max": 1073741824}
+    }
+  ],
+  "ui": {
+    "status_slots": [
+      {
+        "slot_id": "primary",
+        "event_type": "plugin.status.sync.v1",
+        "label": "Sync"
+      }
+    ],
+    "dashboard_panels": [
+      {
+        "panel_id": "sync-overview",
+        "title": "文件同步",
+        "event_type": "plugin.panel.sync.v1",
+        "priority": 10,
+        "layout": "compact"
+      }
+    ],
+    "settings_section": {
+      "section_id": "sync",
+      "title": "文件同步"
+    },
+    "cli_commands": [
+      {
+        "name": "conflicts",
+        "description": "列出当前映射的同步冲突",
+        "action_id": "list-conflicts",
+        "flags": [
+          {"name": "json", "type": "bool", "default": "false", "description": "以 JSON 格式输出"}
+        ]
+      },
+      {
+        "name": "status",
+        "description": "显示同步状态",
+        "action_id": "get-sync-status",
+        "flags": [
+          {"name": "json", "type": "bool", "default": "false", "description": "以 JSON 格式输出"}
+        ]
+      }
+    ]
+  }
+}

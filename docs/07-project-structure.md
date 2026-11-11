@@ -19,12 +19,18 @@ shikigami/
 │   │   ├── protocolconnect/shiki.connect.go
 │   │   ├── plugin/                    # 独立 go_package，不能混写
 │   │   │   ├── plugin.pb.go / plugin_grpc.pb.go # 仅 go-plugin 使用 gRPC
+│   │   │   ├── invoke_action.go           # PluginActionsServer/Client gRPC，非生成
 │   │   │   └── pluginconnect/plugin.connect.go
-│   │   └── agent/                     # agent.pb.go + agentconnect/agent.connect.go
+│   │   └── agent/                     # agent.pb.go + agentconnect/
+│   │       └── agentconnect/          # agent.connect.go + agent_actions.go（非生成）
 │   ├── plugin/                        # 外部插件可导入的 SDK
 │   │   ├── interface.go / host_client.go / events.go
 │   │   ├── sync.go / port.go           # 类型化 stub 与 scope
-│   │   └── state/ / config/ / limits/ / buildinfo/ # 插件可用的持久化、配置契约和构建信息
+│   │   ├── state/ / config/ / limits/ / buildinfo/ # 插件可用的持久化、配置契约和构建信息
+│   │   ├── manifest.go                # PluginManifest JSON 类型及 ValidateManifest
+│   │   ├── schema.go                  # ConfigField、FieldConstraints、ValidateConfig
+│   │   ├── ui_contribution.go         # UIContribution、StatusPayload、NotifyPayload
+│   │   └── action.go                  # ActionRequest/Result、ActionImplementation 接口
 │   ├── config/                        # 配置 schema / 验证 / 迁移
 │   └── errors/                        # 共享错误映射
 ├── internal/
@@ -50,16 +56,22 @@ shikigami/
 │   └── plugin/                        # 宿主实现，依赖 pkg/plugin
 │       ├── manager.go / loader.go / grpc_adapter.go
 │       ├── core_api.go / connect_adapter.go / routes.go
+│       ├── registry.go                # 第三方插件目录扫描器
+│       ├── settings.go                # SettingsRegistry（活跃插件 UI 注入记录）
+│       ├── action_router.go           # InvokePluginAction → Supervisor 路由
 │       └── builtin*.go / embedded-assets/ # 可选内嵌加载；assets 仅构建时生成
 ├── plugins/
 │   ├── sync/                          # 单一入口 + client/server 模式
 │   │   ├── main.go
-│   │   └── client/ / server/ / filetree/ / reconcile/ # 监听、对账、冲突及受根限制 I/O
+│   │   ├── client/ / server/ / filetree/ / reconcile/ # 监听、对账、冲突及受根限制 I/O
+│   │   └── manifest.json              # 静态插件声明
 │   └── port/
 │       ├── main.go
-│       └── client/ / server/ / tunnel/ / config/ # 扫描、监听、TCP 流与配置
+│       ├── client/ / server/ / tunnel/ / config/ # 扫描、监听、TCP 流与配置
+│       └── manifest.json              # 静态插件声明
 ├── cmd/
 │   ├── shiki/                         # CLI 命令，仅参数和展示
+│   │   └── dynamic_commands.go        # 从 manifest 在启动时注册动态 CLI 命令
 │   ├── shiki-agent/                   # 本地后台入口
 │   ├── shiki-daemon/                  # serve/init/token 等入口
 │   └── shiki-install/                 # 短时安装/运维 helper，不是常驻宿主

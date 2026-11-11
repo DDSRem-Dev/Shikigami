@@ -143,6 +143,11 @@ func (a *app) pluginCommands() *cobra.Command {
 		root.AddCommand(command)
 	}
 	root.AddCommand(a.pluginLogsCommand(&side))
+	// action subcommand does not require --side; override PersistentPreRunE
+	// with a no-op so the parent's --side validation is not enforced.
+	actionCmd := a.pluginActionCommands()
+	actionCmd.PersistentPreRunE = func(*cobra.Command, []string) error { return nil }
+	root.AddCommand(actionCmd)
 	return root
 }
 func (a *app) pluginLogsCommand(side *string) *cobra.Command {

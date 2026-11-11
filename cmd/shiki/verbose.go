@@ -17,14 +17,19 @@ func (a *app) printVerboseLogs(ctx context.Context, c *client.Client) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
+	list, err := c.Agent().ListPlugins(ctx, &apb.PluginTarget{Side: apb.PluginTarget_LOCAL})
+	if err != nil || len(list.GetPlugins()) == 0 {
+		return
+	}
 	fmt.Fprintln(a.errorOutput, "Latest host-redacted local plugin logs (bounded tail; not a complete replay):")
-	for _, plugin := range []string{"sync", "port"} {
-		records, err := c.PluginLogTail(ctx, &apb.PluginTarget{Side: apb.PluginTarget_LOCAL}, plugin, 20)
+	for _, plugin := range list.Plugins {
+		records, err := c.PluginLogTail(ctx, &apb.PluginTarget{Side: apb.PluginTarget_LOCAL}, plugin.PluginId, 20)
 		if err != nil {
-			fmt.Fprintf(a.errorOutput, "[%s] logs unavailable: %s\n", plugin, safeText(err.Error()))
+			fmt.Fprintf(a.errorOutput, "[%s] logs unavailable: %s\n", plugin.PluginId, safeText(err.Error()))
+			continue
 		}
 		for _, record := range records {
-			fmt.Fprintf(a.errorOutput, "[%s] %d [%s] %s\n", plugin, record.Timestamp, safeText(record.Level), safeText(record.Message))
+			fmt.Fprintf(a.errorOutput, "[%s] %d [%s] %s\n", plugin.PluginId, record.Timestamp, safeText(record.Level), safeText(record.Message))
 		}
 	}
 }

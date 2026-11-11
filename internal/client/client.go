@@ -200,6 +200,10 @@ func (c *Client) StartupPolicy(ctx context.Context) (*apb.StartupPolicy, error) 
 	return c.agent.GetStartupPolicy(ctx, &pb.Empty{})
 }
 func (c *Client) Agent() arpc.AgentClient { return c.agent }
+// Actions returns a client for the AgentActions service (InvokePluginAction).
+func (c *Client) Actions() arpc.AgentActionsClient {
+	return arpc.NewAgentActionsClient(connection.NewRPCClient(c.endpoint, c.identity("")))
+}
 func (c *Client) Remote(serverID string) rpc.ShikiDaemonClient {
 	return rpc.NewShikiDaemonClient(connection.NewRPCClient(c.endpoint, c.identity(serverID)))
 }

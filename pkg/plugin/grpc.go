@@ -27,8 +27,12 @@ type adapter struct {
 	services Services
 }
 
+
 func (a *adapter) GRPCServer(_ *goplugin.GRPCBroker, s *grpc.Server) error {
 	ppb.RegisterPluginServer(s, a.runtime)
+	// Register InvokeAction on the separate PluginActions service so the
+	// plugin_grpc.pb.go-generated Plugin_ServiceDesc is not modified.
+	ppb.RegisterPluginActionsServer(s, a.runtime)
 	if a.services.Files != nil {
 		ppb.RegisterFileServiceServer(s, &fileServer{impl: a.services.Files})
 	}
@@ -44,7 +48,7 @@ func (a *adapter) GRPCServer(_ *goplugin.GRPCBroker, s *grpc.Server) error {
 	return nil
 }
 func (a *adapter) GRPCClient(ctx context.Context, _ *goplugin.GRPCBroker, c *grpc.ClientConn) (any, error) {
-	client := &lifecycleClient{client: ppb.NewPluginClient(c), done: ctx.Done()}
+	client := &lifecycleClient{client: ppb.NewPluginClient(c), actions: ppb.NewPluginActionsClient(c), done: ctx.Done()}
 	client.files = &fileClient{owner: client, stub: ppb.NewFileServiceClient(c)}
 	client.ports = &portClient{owner: client, stub: ppb.NewPortServiceClient(c)}
 	client.sync = &syncClient{owner: client, stub: ppb.NewSyncWorkerClient(c)}
@@ -93,7 +97,10 @@ func Serve(side string, impl Implementation, available ...Services) error {
 	if side == "client" && (services.Port != nil) != capabilities[PortWorkerCapability] {
 		return errors.New("client port capability must match registered worker")
 	}
-	workerMethods := map[string]bool{}
+	workerMethods := map[string]bool{
+		// InvokeAction is always permitted on authenticated plugins.
+		ppb.PluginActions_InvokeAction_FullMethodName: true,
+	}
 	if services.Port != nil {
 		for _, method := range []string{ppb.PortWorker_DiscoverForwards_FullMethodName, ppb.PortWorker_StartForward_FullMethodName, ppb.PortWorker_StopForward_FullMethodName, ppb.PortWorker_ListForwards_FullMethodName} {
 			workerMethods[method] = true
@@ -185,6 +192,7 @@ func Serve(side string, impl Implementation, available ...Services) error {
 
 type lifecycleClient struct {
 	client          ppb.PluginClient
+	actions         ppb.PluginActionsClient
 	done            <-chan struct{}
 	instance, token string
 	files           FileClient
@@ -221,6 +229,17 @@ func (c *lifecycleClient) Health(ctx context.Context) (*pb.HealthStatus, error) 
 	return result, FromGRPC(err)
 }
 func (c *lifecycleClient) Done() <-chan struct{} { return c.done }
+func (c *lifecycleClient) InvokeAction(ctx context.Context, req *ActionRequest) (*ActionResult, error) {
+	in, err := MarshalActionRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	out, err := c.actions.InvokeAction(c.context(ctx), in)
+	if err != nil {
+		return nil, FromGRPC(err)
+	}
+	return UnmarshalActionResult(out)
+}
 func (c *lifecycleClient) Files() FileClient     { return c.files }
 func (c *lifecycleClient) Ports() PortClient     { return c.ports }
 func (c *lifecycleClient) Sync() SyncClient      { return c.sync }

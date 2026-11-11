@@ -115,6 +115,109 @@ shiki plugins restart sync
 
 插件管理始终明确 local/remote；远端管理需 plugin.manage。第三方分发、插件市场、自动更新签名信任根为后续工作，未具备前不提供“自动下载并执行任意插件”的承诺。
 
+
+## Manifest 与 UI 注入
+
+### manifest.json 格式
+
+每个插件在二进制同目录提供一个 `manifest.json` 文件，宿主在进程启动**前**读取并缓存。字段说明：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| schema_version | string | 当前为 `"1"` |
+| id | string | 插件唯一 ID（如 `sync`、`port`） |
+| version | string | 插件自身版本字符串 |
+| display_name | string | 展示名 |
+| description | string | 插件描述 |
+| binary | string | 相对于 manifest.json 的可执行文件路径 |
+| capabilities | []string | 插件声明的能力列表，含 `ui.action.v1` |
+| sides | []string | `["client"]` / `["server"]` / `["client","server"]` |
+| binary_flags | []string | 传给二进制的额外启动参数 |
+| config_schema | []ConfigField | 配置字段声明，宿主用于预校验 SetConfig |
+| ui | UIContribution | UI 注入声明 |
+
+`config_schema` 中每个 `ConfigField` 包含 `key`、`type`（`string`/`number`/`bool`/`enum`/`object`/`array`）、`label`、`description`、`default_json`、`required`、`enum_values`、`constraints`（最小/最大/长度/正则）等字段。宿主在把配置转发给插件的 `SetConfig` 前，先用 `pkg/plugin.ValidateConfig` 进行预校验；校验不通过直接返回 `InvalidArgument`，不启动插件进程。`pkg/plugin.ValidateManifest` 在加载 manifest 时验证格式与能力声明的完整性。
+
+### UIContribution
+
+`manifest.json` 的 `ui` 字段声明插件向宿主注入的所有 UI 节点：
+
+```json
+{
+  "ui": {
+    "status_slots": [{
+      "id": "sync.status",
+      "label": "文件同步",
+      "default_text": "等待中",
+      "event_type": "plugin.status.sync.v1"
+    }],
+    "dashboard_panels": [{
+      "id": "sync.panel",
+      "title": "同步状态",
+      "action_id": "sync:show-panel"
+    }],
+    "settings_section": {
+      "title": "文件同步",
+      "action_id": "sync:open-settings"
+    },
+    "cli_commands": [{
+      "name": "list-conflicts",
+      "description": "列出当前冲突",
+      "action_id": "sync:list-conflicts",
+      "flags": [{"name": "json", "type": "bool", "default": "false", "description": "以 JSON 格式输出"}]
+    }]
+  }
+}
+```
+
+宿主把每个插件的 `UIContribution` 注册到 `SettingsRegistry`；agent 启动时从已启用插件的 manifest 中读取 `cli_commands` 并注册到 `cmd/shiki/dynamic_commands.go`，注册路径为 `shiki plugins <id> <command>`。
+
+### StatusPayload 与 NotifyPayload
+
+插件通过 CoreAPI `PublishEvent` 发布以下 payload 类型；TUI/GUI 客户端订阅对应事件类型并渲染：
+
+```
+// 状态槽更新：event_type = "plugin.status.<id>.v1"
+StatusPayload { text, state, icon, detail string }
+
+// 通知横幅：event_type = "plugin.notify.<id>.v1"
+NotifyPayload { level, title, message, action_id string }
+```
+
+`state` 字段使用有限词汇（如 `ok`、`warning`、`error`、`syncing`），前端仅展示已知状态的对应图标；未知状态降级为默认图标。
+
+### InvokeAction 调用链
+
+manifest 中每条 `cli_commands` 和 `dashboard_panels` 声明一个 `action_id`。调用链：
+
+```text
+shiki plugins <id> <command> [flags]
+  → agent IPC InvokePluginAction（AgentActions Connect service）
+  → internal/plugin/action_router.go 解析 plugin_id / side / server_id
+  → internal/plugin/Supervisor.Call(ctx, id, "ui.action.v1", fn)
+  → fn 通过 lifecycleClient.InvokeAction 发送 PluginActions gRPC 到插件进程
+  → 插件 ActionImplementation.InvokeAction 处理并返回 ActionResult
+```
+
+`ActionResult` 的 `kind` 字段决定结果处理方式：
+
+- `ActionResultText` (0)：直接打印文本
+- `ActionResultForm` (1)：展示 `ActionForm`（含字段和 submit action_id）
+- `ActionResultJSON` (2)：格式化 JSON 输出
+- `ActionResultNotify` (3)：触发 `NotifyPayload` 事件
+
+未实现 `ActionImplementation` 的插件（无 `ui.action.v1` 能力）对任何 InvokeAction 返回 Unimplemented，宿主向调用方传递该错误，不崩溃。
+
+### PluginRegistry 扫描路径
+
+`internal/plugin/registry.go` 在 agent 启动时按优先级扫描以下路径：
+
+1. `~/.shiki/plugins/<id>/manifest.json`（用户安装的第三方插件）
+2. `/var/lib/shiki/plugins/<id>/manifest.json`（系统级安装的插件）
+3. 内嵌内置插件（`plugins/sync/manifest.json`、`plugins/port/manifest.json`）
+
+每个目录下必须同时存在合法 `manifest.json` 和对应二进制，才会被注册为可用插件。第三方插件的分发、市场与自动更新签名信任根为后续工作，当前不提供自动下载并执行任意第三方插件的承诺；用户需手动安装并确保二进制完整性。
+
 ## 完整 RPC 分工与双端路由
 
 [09 的 plugin.proto](./09-protocol-definition.md) 是以下接口的 schema 来源。协议已定义，Phase 0 需落盘生成和跨进程验证，不再把 CoreAPI 留作未定义的 Go interface。

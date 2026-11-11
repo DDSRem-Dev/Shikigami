@@ -66,3 +66,39 @@ func ReadInstalledManifest(directory, id, side, build string) (Manifest, error) 
 	manifest.Side = side
 	return manifest, nil
 }
+
+// ReadPluginManifest reads a user-installed plugin manifest at dir/manifest.json.
+// This is distinct from ReadInstalledManifest which reads legacy installer manifests.
+// The same security checks apply: regular file, not world-writable, owned by current
+// UID or root, at most 64KiB. The manifest is decoded with strictjson and validated.
+func ReadPluginManifest(dir string) (*sdk.PluginManifest, error) {
+	path := filepath.Join(dir, "manifest.json")
+	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	owner, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || !info.Mode().IsRegular() || info.Mode().Perm()&0022 != 0 || (owner.Uid != 0 && owner.Uid != uint32(os.Getuid())) || info.Size() > 64<<10 {
+		return nil, errors.New("unsafe plugin manifest")
+	}
+	data, err := io.ReadAll(io.LimitReader(file, (64<<10)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > 64<<10 {
+		return nil, errors.New("plugin manifest exceeds limit")
+	}
+	var manifest sdk.PluginManifest
+	if err = strictjson.Decode(data, &manifest); err != nil {
+		return nil, err
+	}
+	if err = sdk.ValidateManifest(&manifest); err != nil {
+		return nil, err
+	}
+	return &manifest, nil
+}

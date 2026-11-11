@@ -74,7 +74,10 @@ func (p *managementProbe) ListPlugins(_ context.Context, target *apb.PluginTarge
 	if p.managed != nil {
 		revision, state, enabled = "new", "ready", true
 	}
-	return &pb.ListPluginsResponse{Plugins: []*pb.PluginStatus{{PluginId: "file-sync", Revision: revision, State: state, Enabled: enabled}}}, nil
+	return &pb.ListPluginsResponse{Plugins: []*pb.PluginStatus{
+		{PluginId: "file-sync", Revision: revision, State: state, Enabled: enabled},
+		{PluginId: "port-forward", Revision: revision, State: state, Enabled: enabled},
+	}}, nil
 }
 func (p *managementProbe) ManagePlugin(_ context.Context, request *apb.ManagePluginRequest) (*pb.PluginStatus, error) {
 	p.mu.Lock()

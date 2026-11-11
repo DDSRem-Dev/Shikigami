@@ -1345,3 +1345,38 @@ CI预检收敛完成：仅将preflight总任务预算15→30分钟，使现有�
 节点映射修复后的两轮完整成功：源码`09adb4a7b778525a795e1aa9bc0d35f6ed85fa23`，CI42181018164 attempt1与attempt2均57/57 success，无failed/cancelled/skipped任务。每轮四原生平台144条CLI及40条关键node记录均实际pass，含原控制面恢复用例、真实SDK映射屏障、待登录URL复用和取消边界；四平台28条与WSL7条必需集成/E2E均通过。attempt1的WSL artifact13486272865源码吻合、13 stages及cleanup全部passed，四下游实际下载ID13485203800,13485790174均匹配本attempt上传ID、ZIP digest及API run/source。attempt2的WSL artifact13487803711源码吻合、13 stages及cleanup全部passed，四下游实际下载ID13487337113,13487616767均匹配本attempt上传ID、ZIP digest及API run/source。五组证据按run/attempt独立保存于`/tmp/shiki-ci-stability-20261105`。历史失败保留，不将其转为成功；本次仅同步三份文档，触发同代码/测试/依赖/CI配置第3轮完整验证，结果待实际完成后另报。
 
 本次记录批次七类复核：目录与SDK/host/plugin归属、RPC传输/准入/版本/能力/授权、持久状态/原子性/revision/去重、进程所有权/取消/恢复、文件/终端/网络语义与限额、CLI/TUI/配置/安装/发行布局均无实现变更；测试和产物按attempt/source逐项核验，原功能期限与必需断言保持。08/15/16摘要同步，原42条文字、顺序和勾选不变，不扩大外部环境、首次零previousKey观测或公开发行保证。
+
+<a id="plugin-manifest-refactor-20261111"></a>
+## 插件 Manifest 与 UI 注入实现记录（2026-11-11）
+
+以下为 Phase 5 后扩展——插件 manifest 声明式 UI 注入重构的已实现项：
+
+| 组件 | 文件 | 状态 |
+|---|---|---|
+| PluginManifest JSON 类型及 ValidateManifest | pkg/plugin/manifest.go | ✅ 已实现 |
+| ConfigField schema 及 ValidateConfig 预校验 | pkg/plugin/schema.go | ✅ 已实现 |
+| UIContribution、StatusPayload、NotifyPayload 类型 | pkg/plugin/ui_contribution.go | ✅ 已实现 |
+| ActionRequest/Result 类型及 ActionImplementation 接口 | pkg/plugin/action.go | ✅ 已实现 |
+| PluginActionsServer/Client gRPC 非生成扩展 | pkg/protocol/plugin/invoke_action.go | ✅ 已实现 |
+| AgentActionsClient/Handler Connect service 非生成扩展 | pkg/protocol/agent/agentconnect/agent_actions.go | ✅ 已实现 |
+| UIActionCapability = "ui.action.v1" 能力常量 | pkg/plugin/capabilities.go | ✅ 已实现 |
+| Lifecycle.InvokeAction 及 runtime 实现 | pkg/plugin/lifecycle.go | ✅ 已实现 |
+| grpc.go 注册 PluginActionsServer；lifecycleClient.InvokeAction | pkg/plugin/grpc.go | ✅ 已实现 |
+| host.go Manifest 扩展 PluginManifest 字段 | internal/plugin/host.go | ✅ 已实现 |
+| PluginRegistry 第三方插件目录扫描 | internal/plugin/registry.go | ✅ 已实现 |
+| SettingsRegistry 活跃插件 UI 注入记录 | internal/plugin/settings.go | ✅ 已实现 |
+| ActionRouter 路由 InvokePluginAction 到 Supervisor | internal/plugin/action_router.go | ✅ 已实现 |
+| InvokePluginAction agent 层接入，ipc.go 拦截器扩展 | internal/agent/ | ✅ 已实现 |
+| 动态 CLI 命令从 manifest 注册 | cmd/shiki/dynamic_commands.go | ✅ 已实现 |
+| plugins/sync 静态插件声明 | plugins/sync/manifest.json | ✅ 已实现 |
+| plugins/port 静态插件声明 | plugins/port/manifest.json | ✅ 已实现 |
+
+**待实现（TUI/GUI 渲染，下一阶段门槛）：**
+
+| 组件 | 状态 |
+|---|---|
+| TUI 状态栏状态槽渲染（订阅 plugin.status.<id>.v1，展示 StatusPayload.text/state） | ⏳ 待实现 |
+| TUI/GUI dashboard 面板区渲染（UIDashboardPanel 声明） | ⏳ 待实现 |
+| 设置界面从 ConfigSchema 自动生成表单 | ⏳ 待实现 |
+
+以上待实现项不影响 CLI 通道的 InvokeAction 路径和第三方插件注册能力；InvokePluginAction 可通过 `shiki plugins <id> <command>` 实际调用并返回文本/JSON 结果。本批不修改原 42 条清单计数，不替代任何既有验收门槛，不扩大外部环境或发行声明。
