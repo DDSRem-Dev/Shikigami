@@ -195,7 +195,7 @@ shiki plugins <id> <command> [flags]
   → agent IPC InvokePluginAction（AgentActions Connect service）
   → internal/plugin/action_router.go 解析 plugin_id / side / server_id
   → internal/plugin/Supervisor.Call(ctx, id, "ui.action.v1", fn)
-  → fn 通过 lifecycleClient.InvokeAction 发送 PluginActions gRPC 到插件进程
+  → fn 通过 lifecycleClient.InvokeAction 发送生成的 Plugin.InvokeAction gRPC 到插件进程
   → 插件 ActionImplementation.InvokeAction 处理并返回 ActionResult
 ```
 

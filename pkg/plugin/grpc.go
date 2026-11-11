@@ -27,12 +27,8 @@ type adapter struct {
 	services Services
 }
 
-
 func (a *adapter) GRPCServer(_ *goplugin.GRPCBroker, s *grpc.Server) error {
 	ppb.RegisterPluginServer(s, a.runtime)
-	// Register InvokeAction on the separate PluginActions service so the
-	// plugin_grpc.pb.go-generated Plugin_ServiceDesc is not modified.
-	ppb.RegisterPluginActionsServer(s, a.runtime)
 	if a.services.Files != nil {
 		ppb.RegisterFileServiceServer(s, &fileServer{impl: a.services.Files})
 	}
@@ -48,7 +44,7 @@ func (a *adapter) GRPCServer(_ *goplugin.GRPCBroker, s *grpc.Server) error {
 	return nil
 }
 func (a *adapter) GRPCClient(ctx context.Context, _ *goplugin.GRPCBroker, c *grpc.ClientConn) (any, error) {
-	client := &lifecycleClient{client: ppb.NewPluginClient(c), actions: ppb.NewPluginActionsClient(c), done: ctx.Done()}
+	client := &lifecycleClient{client: ppb.NewPluginClient(c), done: ctx.Done()}
 	client.files = &fileClient{owner: client, stub: ppb.NewFileServiceClient(c)}
 	client.ports = &portClient{owner: client, stub: ppb.NewPortServiceClient(c)}
 	client.sync = &syncClient{owner: client, stub: ppb.NewSyncWorkerClient(c)}
@@ -99,7 +95,7 @@ func Serve(side string, impl Implementation, available ...Services) error {
 	}
 	workerMethods := map[string]bool{
 		// InvokeAction is always permitted on authenticated plugins.
-		ppb.PluginActions_InvokeAction_FullMethodName: true,
+		ppb.Plugin_InvokeAction_FullMethodName: true,
 	}
 	if services.Port != nil {
 		for _, method := range []string{ppb.PortWorker_DiscoverForwards_FullMethodName, ppb.PortWorker_StartForward_FullMethodName, ppb.PortWorker_StopForward_FullMethodName, ppb.PortWorker_ListForwards_FullMethodName} {
@@ -192,7 +188,6 @@ func Serve(side string, impl Implementation, available ...Services) error {
 
 type lifecycleClient struct {
 	client          ppb.PluginClient
-	actions         ppb.PluginActionsClient
 	done            <-chan struct{}
 	instance, token string
 	files           FileClient
@@ -234,14 +229,14 @@ func (c *lifecycleClient) InvokeAction(ctx context.Context, req *ActionRequest) 
 	if err != nil {
 		return nil, err
 	}
-	out, err := c.actions.InvokeAction(c.context(ctx), in)
+	out, err := c.client.InvokeAction(c.context(ctx), in)
 	if err != nil {
 		return nil, FromGRPC(err)
 	}
 	return UnmarshalActionResult(out)
 }
-func (c *lifecycleClient) Files() FileClient     { return c.files }
-func (c *lifecycleClient) Ports() PortClient     { return c.ports }
-func (c *lifecycleClient) Sync() SyncClient      { return c.sync }
+func (c *lifecycleClient) Files() FileClient { return c.files }
+func (c *lifecycleClient) Ports() PortClient { return c.ports }
+func (c *lifecycleClient) Sync() SyncClient  { return c.sync }
 
 func (c *lifecycleClient) Port() PortWorkerClient { return c.port }

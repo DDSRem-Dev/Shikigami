@@ -72,7 +72,7 @@ func (x ResolveConflictRequest_Choice) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ResolveConflictRequest_Choice.Descriptor instead.
 func (ResolveConflictRequest_Choice) EnumDescriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{28, 0}
+	return file_plugin_proto_rawDescGZIP(), []int{35, 0}
 }
 
 type ReadConflictFileRequest_Side int32
@@ -121,16 +121,21 @@ func (x ReadConflictFileRequest_Side) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ReadConflictFileRequest_Side.Descriptor instead.
 func (ReadConflictFileRequest_Side) EnumDescriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{29, 0}
+	return file_plugin_proto_rawDescGZIP(), []int{36, 0}
 }
 
 type PluginInfo struct {
-	state         protoimpl.MessageState  `protogen:"open.v1"`
-	Name          string                  `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Version       string                  `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
-	Description   string                  `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	Side          string                  `protobuf:"bytes,4,opt,name=side,proto3" json:"side,omitempty"` // client/server/both
-	Protocol      *protocol.ProtocolOffer `protobuf:"bytes,5,opt,name=protocol,proto3" json:"protocol,omitempty"`
+	state       protoimpl.MessageState  `protogen:"open.v1"`
+	Name        string                  `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Version     string                  `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	Description string                  `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	Side        string                  `protobuf:"bytes,4,opt,name=side,proto3" json:"side,omitempty"` // client/server/both
+	Protocol    *protocol.ProtocolOffer `protobuf:"bytes,5,opt,name=protocol,proto3" json:"protocol,omitempty"`
+	// config_schema is returned by GetInfo after Init and reflects the fields
+	// the plugin actively manages. The host pre-validates SetConfig calls.
+	ConfigSchema []*ConfigField `protobuf:"bytes,6,rep,name=config_schema,json=configSchema,proto3" json:"config_schema,omitempty"`
+	// ui describes the UI contributions this plugin instance provides.
+	Ui            *UIContribution `protobuf:"bytes,7,opt,name=ui,proto3" json:"ui,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -200,6 +205,547 @@ func (x *PluginInfo) GetProtocol() *protocol.ProtocolOffer {
 	return nil
 }
 
+func (x *PluginInfo) GetConfigSchema() []*ConfigField {
+	if x != nil {
+		return x.ConfigSchema
+	}
+	return nil
+}
+
+func (x *PluginInfo) GetUi() *UIContribution {
+	if x != nil {
+		return x.Ui
+	}
+	return nil
+}
+
+// ConfigField describes one typed configuration value.
+// Declared in manifest.json and confirmed at runtime via PluginInfo.config_schema.
+type ConfigField struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"` // string|int|bool|float|array|object
+	Label         string                 `protobuf:"bytes,3,opt,name=label,proto3" json:"label,omitempty"`
+	Description   string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	DefaultJson   string                 `protobuf:"bytes,5,opt,name=default_json,json=defaultJson,proto3" json:"default_json,omitempty"`
+	Required      bool                   `protobuf:"varint,6,opt,name=required,proto3" json:"required,omitempty"`
+	UiHint        string                 `protobuf:"bytes,7,opt,name=ui_hint,json=uiHint,proto3" json:"ui_hint,omitempty"` // text|number|checkbox|select|password|textarea
+	EnumValues    []string               `protobuf:"bytes,8,rep,name=enum_values,json=enumValues,proto3" json:"enum_values,omitempty"`
+	Constraints   *structpb.Struct       `protobuf:"bytes,9,opt,name=constraints,proto3" json:"constraints,omitempty"` // optional: min/max/pattern/min_len/max_len
+	Children      []*ConfigField         `protobuf:"bytes,10,rep,name=children,proto3" json:"children,omitempty"`      // nested object schema / array element schema
+	Group         string                 `protobuf:"bytes,11,opt,name=group,proto3" json:"group,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConfigField) Reset() {
+	*x = ConfigField{}
+	mi := &file_plugin_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConfigField) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConfigField) ProtoMessage() {}
+
+func (x *ConfigField) ProtoReflect() protoreflect.Message {
+	mi := &file_plugin_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConfigField.ProtoReflect.Descriptor instead.
+func (*ConfigField) Descriptor() ([]byte, []int) {
+	return file_plugin_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ConfigField) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *ConfigField) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *ConfigField) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *ConfigField) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *ConfigField) GetDefaultJson() string {
+	if x != nil {
+		return x.DefaultJson
+	}
+	return ""
+}
+
+func (x *ConfigField) GetRequired() bool {
+	if x != nil {
+		return x.Required
+	}
+	return false
+}
+
+func (x *ConfigField) GetUiHint() string {
+	if x != nil {
+		return x.UiHint
+	}
+	return ""
+}
+
+func (x *ConfigField) GetEnumValues() []string {
+	if x != nil {
+		return x.EnumValues
+	}
+	return nil
+}
+
+func (x *ConfigField) GetConstraints() *structpb.Struct {
+	if x != nil {
+		return x.Constraints
+	}
+	return nil
+}
+
+func (x *ConfigField) GetChildren() []*ConfigField {
+	if x != nil {
+		return x.Children
+	}
+	return nil
+}
+
+func (x *ConfigField) GetGroup() string {
+	if x != nil {
+		return x.Group
+	}
+	return ""
+}
+
+// UIContribution describes the host UI surfaces the plugin contributes to.
+type UIContribution struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	StatusSlots     []*UIStatusSlot        `protobuf:"bytes,1,rep,name=status_slots,json=statusSlots,proto3" json:"status_slots,omitempty"`
+	DashboardPanels []*UIDashboardPanel    `protobuf:"bytes,2,rep,name=dashboard_panels,json=dashboardPanels,proto3" json:"dashboard_panels,omitempty"`
+	Settings        *UISettingsSection     `protobuf:"bytes,3,opt,name=settings,proto3" json:"settings,omitempty"`
+	CliCommands     []*UICLICommand        `protobuf:"bytes,4,rep,name=cli_commands,json=cliCommands,proto3" json:"cli_commands,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *UIContribution) Reset() {
+	*x = UIContribution{}
+	mi := &file_plugin_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UIContribution) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UIContribution) ProtoMessage() {}
+
+func (x *UIContribution) ProtoReflect() protoreflect.Message {
+	mi := &file_plugin_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UIContribution.ProtoReflect.Descriptor instead.
+func (*UIContribution) Descriptor() ([]byte, []int) {
+	return file_plugin_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *UIContribution) GetStatusSlots() []*UIStatusSlot {
+	if x != nil {
+		return x.StatusSlots
+	}
+	return nil
+}
+
+func (x *UIContribution) GetDashboardPanels() []*UIDashboardPanel {
+	if x != nil {
+		return x.DashboardPanels
+	}
+	return nil
+}
+
+func (x *UIContribution) GetSettings() *UISettingsSection {
+	if x != nil {
+		return x.Settings
+	}
+	return nil
+}
+
+func (x *UIContribution) GetCliCommands() []*UICLICommand {
+	if x != nil {
+		return x.CliCommands
+	}
+	return nil
+}
+
+type UIStatusSlot struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SlotId        string                 `protobuf:"bytes,1,opt,name=slot_id,json=slotId,proto3" json:"slot_id,omitempty"` // primary|secondary|notifications
+	EventType     string                 `protobuf:"bytes,2,opt,name=event_type,json=eventType,proto3" json:"event_type,omitempty"`
+	Label         string                 `protobuf:"bytes,3,opt,name=label,proto3" json:"label,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UIStatusSlot) Reset() {
+	*x = UIStatusSlot{}
+	mi := &file_plugin_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UIStatusSlot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UIStatusSlot) ProtoMessage() {}
+
+func (x *UIStatusSlot) ProtoReflect() protoreflect.Message {
+	mi := &file_plugin_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UIStatusSlot.ProtoReflect.Descriptor instead.
+func (*UIStatusSlot) Descriptor() ([]byte, []int) {
+	return file_plugin_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *UIStatusSlot) GetSlotId() string {
+	if x != nil {
+		return x.SlotId
+	}
+	return ""
+}
+
+func (x *UIStatusSlot) GetEventType() string {
+	if x != nil {
+		return x.EventType
+	}
+	return ""
+}
+
+func (x *UIStatusSlot) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+type UIDashboardPanel struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PanelId       string                 `protobuf:"bytes,1,opt,name=panel_id,json=panelId,proto3" json:"panel_id,omitempty"`
+	Title         string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	EventType     string                 `protobuf:"bytes,3,opt,name=event_type,json=eventType,proto3" json:"event_type,omitempty"`
+	Priority      int32                  `protobuf:"varint,4,opt,name=priority,proto3" json:"priority,omitempty"`
+	Layout        string                 `protobuf:"bytes,5,opt,name=layout,proto3" json:"layout,omitempty"` // compact|full|wide
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UIDashboardPanel) Reset() {
+	*x = UIDashboardPanel{}
+	mi := &file_plugin_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UIDashboardPanel) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UIDashboardPanel) ProtoMessage() {}
+
+func (x *UIDashboardPanel) ProtoReflect() protoreflect.Message {
+	mi := &file_plugin_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UIDashboardPanel.ProtoReflect.Descriptor instead.
+func (*UIDashboardPanel) Descriptor() ([]byte, []int) {
+	return file_plugin_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *UIDashboardPanel) GetPanelId() string {
+	if x != nil {
+		return x.PanelId
+	}
+	return ""
+}
+
+func (x *UIDashboardPanel) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *UIDashboardPanel) GetEventType() string {
+	if x != nil {
+		return x.EventType
+	}
+	return ""
+}
+
+func (x *UIDashboardPanel) GetPriority() int32 {
+	if x != nil {
+		return x.Priority
+	}
+	return 0
+}
+
+func (x *UIDashboardPanel) GetLayout() string {
+	if x != nil {
+		return x.Layout
+	}
+	return ""
+}
+
+type UISettingsSection struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SectionId     string                 `protobuf:"bytes,1,opt,name=section_id,json=sectionId,proto3" json:"section_id,omitempty"`
+	Title         string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UISettingsSection) Reset() {
+	*x = UISettingsSection{}
+	mi := &file_plugin_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UISettingsSection) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UISettingsSection) ProtoMessage() {}
+
+func (x *UISettingsSection) ProtoReflect() protoreflect.Message {
+	mi := &file_plugin_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UISettingsSection.ProtoReflect.Descriptor instead.
+func (*UISettingsSection) Descriptor() ([]byte, []int) {
+	return file_plugin_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *UISettingsSection) GetSectionId() string {
+	if x != nil {
+		return x.SectionId
+	}
+	return ""
+}
+
+func (x *UISettingsSection) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+type UICLICommand struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Description   string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	ActionId      string                 `protobuf:"bytes,3,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`
+	Flags         []*UICLIFlag           `protobuf:"bytes,4,rep,name=flags,proto3" json:"flags,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UICLICommand) Reset() {
+	*x = UICLICommand{}
+	mi := &file_plugin_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UICLICommand) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UICLICommand) ProtoMessage() {}
+
+func (x *UICLICommand) ProtoReflect() protoreflect.Message {
+	mi := &file_plugin_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UICLICommand.ProtoReflect.Descriptor instead.
+func (*UICLICommand) Descriptor() ([]byte, []int) {
+	return file_plugin_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *UICLICommand) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UICLICommand) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *UICLICommand) GetActionId() string {
+	if x != nil {
+		return x.ActionId
+	}
+	return ""
+}
+
+func (x *UICLICommand) GetFlags() []*UICLIFlag {
+	if x != nil {
+		return x.Flags
+	}
+	return nil
+}
+
+type UICLIFlag struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Shorthand     string                 `protobuf:"bytes,2,opt,name=shorthand,proto3" json:"shorthand,omitempty"`
+	Type          string                 `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"` // string|bool|int
+	DefaultVal    string                 `protobuf:"bytes,4,opt,name=default_val,json=defaultVal,proto3" json:"default_val,omitempty"`
+	Description   string                 `protobuf:"bytes,5,opt,name=description,proto3" json:"description,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UICLIFlag) Reset() {
+	*x = UICLIFlag{}
+	mi := &file_plugin_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UICLIFlag) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UICLIFlag) ProtoMessage() {}
+
+func (x *UICLIFlag) ProtoReflect() protoreflect.Message {
+	mi := &file_plugin_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UICLIFlag.ProtoReflect.Descriptor instead.
+func (*UICLIFlag) Descriptor() ([]byte, []int) {
+	return file_plugin_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *UICLIFlag) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UICLIFlag) GetShorthand() string {
+	if x != nil {
+		return x.Shorthand
+	}
+	return ""
+}
+
+func (x *UICLIFlag) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *UICLIFlag) GetDefaultVal() string {
+	if x != nil {
+		return x.DefaultVal
+	}
+	return ""
+}
+
+func (x *UICLIFlag) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
 type CoreAPIEndpoint struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Address       string                 `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"` // 宿主独立 CoreAPI Unix socket 的绝对路径；Connect/h2c，非 URL/broker
@@ -210,7 +756,7 @@ type CoreAPIEndpoint struct {
 
 func (x *CoreAPIEndpoint) Reset() {
 	*x = CoreAPIEndpoint{}
-	mi := &file_plugin_proto_msgTypes[1]
+	mi := &file_plugin_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -222,7 +768,7 @@ func (x *CoreAPIEndpoint) String() string {
 func (*CoreAPIEndpoint) ProtoMessage() {}
 
 func (x *CoreAPIEndpoint) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[1]
+	mi := &file_plugin_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -235,7 +781,7 @@ func (x *CoreAPIEndpoint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CoreAPIEndpoint.ProtoReflect.Descriptor instead.
 func (*CoreAPIEndpoint) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{1}
+	return file_plugin_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *CoreAPIEndpoint) GetAddress() string {
@@ -267,7 +813,7 @@ type InitRequest struct {
 
 func (x *InitRequest) Reset() {
 	*x = InitRequest{}
-	mi := &file_plugin_proto_msgTypes[2]
+	mi := &file_plugin_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -279,7 +825,7 @@ func (x *InitRequest) String() string {
 func (*InitRequest) ProtoMessage() {}
 
 func (x *InitRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[2]
+	mi := &file_plugin_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -292,7 +838,7 @@ func (x *InitRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InitRequest.ProtoReflect.Descriptor instead.
 func (*InitRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{2}
+	return file_plugin_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *InitRequest) GetConfig() *structpb.Struct {
@@ -356,7 +902,7 @@ type Scope struct {
 
 func (x *Scope) Reset() {
 	*x = Scope{}
-	mi := &file_plugin_proto_msgTypes[3]
+	mi := &file_plugin_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -368,7 +914,7 @@ func (x *Scope) String() string {
 func (*Scope) ProtoMessage() {}
 
 func (x *Scope) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[3]
+	mi := &file_plugin_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -381,7 +927,7 @@ func (x *Scope) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Scope.ProtoReflect.Descriptor instead.
 func (*Scope) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{3}
+	return file_plugin_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *Scope) GetServerId() string {
@@ -428,7 +974,7 @@ type Mapping struct {
 
 func (x *Mapping) Reset() {
 	*x = Mapping{}
-	mi := &file_plugin_proto_msgTypes[4]
+	mi := &file_plugin_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -440,7 +986,7 @@ func (x *Mapping) String() string {
 func (*Mapping) ProtoMessage() {}
 
 func (x *Mapping) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[4]
+	mi := &file_plugin_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -453,7 +999,7 @@ func (x *Mapping) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Mapping.ProtoReflect.Descriptor instead.
 func (*Mapping) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{4}
+	return file_plugin_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Mapping) GetId() string {
@@ -521,7 +1067,7 @@ type MappingList struct {
 
 func (x *MappingList) Reset() {
 	*x = MappingList{}
-	mi := &file_plugin_proto_msgTypes[5]
+	mi := &file_plugin_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -533,7 +1079,7 @@ func (x *MappingList) String() string {
 func (*MappingList) ProtoMessage() {}
 
 func (x *MappingList) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[5]
+	mi := &file_plugin_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -546,7 +1092,7 @@ func (x *MappingList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MappingList.ProtoReflect.Descriptor instead.
 func (*MappingList) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{5}
+	return file_plugin_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *MappingList) GetMappings() []*Mapping {
@@ -565,7 +1111,7 @@ type ConfigRequest struct {
 
 func (x *ConfigRequest) Reset() {
 	*x = ConfigRequest{}
-	mi := &file_plugin_proto_msgTypes[6]
+	mi := &file_plugin_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -577,7 +1123,7 @@ func (x *ConfigRequest) String() string {
 func (*ConfigRequest) ProtoMessage() {}
 
 func (x *ConfigRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[6]
+	mi := &file_plugin_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -590,7 +1136,7 @@ func (x *ConfigRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigRequest.ProtoReflect.Descriptor instead.
 func (*ConfigRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{6}
+	return file_plugin_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ConfigRequest) GetScope() *Scope {
@@ -610,7 +1156,7 @@ type PluginConfig struct {
 
 func (x *PluginConfig) Reset() {
 	*x = PluginConfig{}
-	mi := &file_plugin_proto_msgTypes[7]
+	mi := &file_plugin_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -622,7 +1168,7 @@ func (x *PluginConfig) String() string {
 func (*PluginConfig) ProtoMessage() {}
 
 func (x *PluginConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[7]
+	mi := &file_plugin_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -635,7 +1181,7 @@ func (x *PluginConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PluginConfig.ProtoReflect.Descriptor instead.
 func (*PluginConfig) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{7}
+	return file_plugin_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PluginConfig) GetValues() *structpb.Struct {
@@ -664,7 +1210,7 @@ type SetConfigRequest struct {
 
 func (x *SetConfigRequest) Reset() {
 	*x = SetConfigRequest{}
-	mi := &file_plugin_proto_msgTypes[8]
+	mi := &file_plugin_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -676,7 +1222,7 @@ func (x *SetConfigRequest) String() string {
 func (*SetConfigRequest) ProtoMessage() {}
 
 func (x *SetConfigRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[8]
+	mi := &file_plugin_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -689,7 +1235,7 @@ func (x *SetConfigRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetConfigRequest.ProtoReflect.Descriptor instead.
 func (*SetConfigRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{8}
+	return file_plugin_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SetConfigRequest) GetScope() *Scope {
@@ -730,7 +1276,7 @@ type SubscribeRequest struct {
 
 func (x *SubscribeRequest) Reset() {
 	*x = SubscribeRequest{}
-	mi := &file_plugin_proto_msgTypes[9]
+	mi := &file_plugin_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -742,7 +1288,7 @@ func (x *SubscribeRequest) String() string {
 func (*SubscribeRequest) ProtoMessage() {}
 
 func (x *SubscribeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[9]
+	mi := &file_plugin_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -755,7 +1301,7 @@ func (x *SubscribeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeRequest.ProtoReflect.Descriptor instead.
 func (*SubscribeRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{9}
+	return file_plugin_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *SubscribeRequest) GetScope() *Scope {
@@ -786,6 +1332,9 @@ type Event struct {
 	//	*Event_ForwardState
 	//	*Event_SessionEvent
 	//	*Event_RescanRequired
+	//	*Event_StatusPayload
+	//	*Event_NotifyPayload
+	//	*Event_PanelPayload
 	Payload       isEvent_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -793,7 +1342,7 @@ type Event struct {
 
 func (x *Event) Reset() {
 	*x = Event{}
-	mi := &file_plugin_proto_msgTypes[10]
+	mi := &file_plugin_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -805,7 +1354,7 @@ func (x *Event) String() string {
 func (*Event) ProtoMessage() {}
 
 func (x *Event) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[10]
+	mi := &file_plugin_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -818,7 +1367,7 @@ func (x *Event) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Event.ProtoReflect.Descriptor instead.
 func (*Event) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{10}
+	return file_plugin_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *Event) GetEventId() string {
@@ -908,6 +1457,33 @@ func (x *Event) GetRescanRequired() bool {
 	return false
 }
 
+func (x *Event) GetStatusPayload() *structpb.Struct {
+	if x != nil {
+		if x, ok := x.Payload.(*Event_StatusPayload); ok {
+			return x.StatusPayload
+		}
+	}
+	return nil
+}
+
+func (x *Event) GetNotifyPayload() *structpb.Struct {
+	if x != nil {
+		if x, ok := x.Payload.(*Event_NotifyPayload); ok {
+			return x.NotifyPayload
+		}
+	}
+	return nil
+}
+
+func (x *Event) GetPanelPayload() *structpb.Struct {
+	if x != nil {
+		if x, ok := x.Payload.(*Event_PanelPayload); ok {
+			return x.PanelPayload
+		}
+	}
+	return nil
+}
+
 type isEvent_Payload interface {
 	isEvent_Payload()
 }
@@ -932,6 +1508,21 @@ type Event_RescanRequired struct {
 	RescanRequired bool `protobuf:"varint,10,opt,name=rescan_required,json=rescanRequired,proto3,oneof"`
 }
 
+type Event_StatusPayload struct {
+	// plugin.status.v1 — standard slot status update (text/state/icon/detail)
+	StatusPayload *structpb.Struct `protobuf:"bytes,11,opt,name=status_payload,json=statusPayload,proto3,oneof"`
+}
+
+type Event_NotifyPayload struct {
+	// plugin.notify.v1 — in-app notification to the frontend
+	NotifyPayload *structpb.Struct `protobuf:"bytes,12,opt,name=notify_payload,json=notifyPayload,proto3,oneof"`
+}
+
+type Event_PanelPayload struct {
+	// plugin.panel.<id>.v1 — arbitrary panel data (plugin-defined shape)
+	PanelPayload *structpb.Struct `protobuf:"bytes,13,opt,name=panel_payload,json=panelPayload,proto3,oneof"`
+}
+
 func (*Event_SyncState) isEvent_Payload() {}
 
 func (*Event_Conflict) isEvent_Payload() {}
@@ -941,6 +1532,12 @@ func (*Event_ForwardState) isEvent_Payload() {}
 func (*Event_SessionEvent) isEvent_Payload() {}
 
 func (*Event_RescanRequired) isEvent_Payload() {}
+
+func (*Event_StatusPayload) isEvent_Payload() {}
+
+func (*Event_NotifyPayload) isEvent_Payload() {}
+
+func (*Event_PanelPayload) isEvent_Payload() {}
 
 type PublishEventRequest struct {
 	state                  protoimpl.MessageState `protogen:"open.v1"`
@@ -952,7 +1549,7 @@ type PublishEventRequest struct {
 
 func (x *PublishEventRequest) Reset() {
 	*x = PublishEventRequest{}
-	mi := &file_plugin_proto_msgTypes[11]
+	mi := &file_plugin_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -964,7 +1561,7 @@ func (x *PublishEventRequest) String() string {
 func (*PublishEventRequest) ProtoMessage() {}
 
 func (x *PublishEventRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[11]
+	mi := &file_plugin_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -977,7 +1574,7 @@ func (x *PublishEventRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublishEventRequest.ProtoReflect.Descriptor instead.
 func (*PublishEventRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{11}
+	return file_plugin_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *PublishEventRequest) GetEvent() *Event {
@@ -1004,7 +1601,7 @@ type RemoteListFilesRequest struct {
 
 func (x *RemoteListFilesRequest) Reset() {
 	*x = RemoteListFilesRequest{}
-	mi := &file_plugin_proto_msgTypes[12]
+	mi := &file_plugin_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1016,7 +1613,7 @@ func (x *RemoteListFilesRequest) String() string {
 func (*RemoteListFilesRequest) ProtoMessage() {}
 
 func (x *RemoteListFilesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[12]
+	mi := &file_plugin_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1029,7 +1626,7 @@ func (x *RemoteListFilesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoteListFilesRequest.ProtoReflect.Descriptor instead.
 func (*RemoteListFilesRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{12}
+	return file_plugin_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *RemoteListFilesRequest) GetScope() *Scope {
@@ -1056,7 +1653,7 @@ type RemoteStatFileRequest struct {
 
 func (x *RemoteStatFileRequest) Reset() {
 	*x = RemoteStatFileRequest{}
-	mi := &file_plugin_proto_msgTypes[13]
+	mi := &file_plugin_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1068,7 +1665,7 @@ func (x *RemoteStatFileRequest) String() string {
 func (*RemoteStatFileRequest) ProtoMessage() {}
 
 func (x *RemoteStatFileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[13]
+	mi := &file_plugin_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1081,7 +1678,7 @@ func (x *RemoteStatFileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoteStatFileRequest.ProtoReflect.Descriptor instead.
 func (*RemoteStatFileRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{13}
+	return file_plugin_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *RemoteStatFileRequest) GetScope() *Scope {
@@ -1108,7 +1705,7 @@ type RemoteReadFileRequest struct {
 
 func (x *RemoteReadFileRequest) Reset() {
 	*x = RemoteReadFileRequest{}
-	mi := &file_plugin_proto_msgTypes[14]
+	mi := &file_plugin_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1120,7 +1717,7 @@ func (x *RemoteReadFileRequest) String() string {
 func (*RemoteReadFileRequest) ProtoMessage() {}
 
 func (x *RemoteReadFileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[14]
+	mi := &file_plugin_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1133,7 +1730,7 @@ func (x *RemoteReadFileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoteReadFileRequest.ProtoReflect.Descriptor instead.
 func (*RemoteReadFileRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{14}
+	return file_plugin_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *RemoteReadFileRequest) GetScope() *Scope {
@@ -1160,7 +1757,7 @@ type RemoteDeleteFileRequest struct {
 
 func (x *RemoteDeleteFileRequest) Reset() {
 	*x = RemoteDeleteFileRequest{}
-	mi := &file_plugin_proto_msgTypes[15]
+	mi := &file_plugin_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1172,7 +1769,7 @@ func (x *RemoteDeleteFileRequest) String() string {
 func (*RemoteDeleteFileRequest) ProtoMessage() {}
 
 func (x *RemoteDeleteFileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[15]
+	mi := &file_plugin_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1185,7 +1782,7 @@ func (x *RemoteDeleteFileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoteDeleteFileRequest.ProtoReflect.Descriptor instead.
 func (*RemoteDeleteFileRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{15}
+	return file_plugin_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *RemoteDeleteFileRequest) GetScope() *Scope {
@@ -1212,7 +1809,7 @@ type RemoteWatchFilesRequest struct {
 
 func (x *RemoteWatchFilesRequest) Reset() {
 	*x = RemoteWatchFilesRequest{}
-	mi := &file_plugin_proto_msgTypes[16]
+	mi := &file_plugin_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1224,7 +1821,7 @@ func (x *RemoteWatchFilesRequest) String() string {
 func (*RemoteWatchFilesRequest) ProtoMessage() {}
 
 func (x *RemoteWatchFilesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[16]
+	mi := &file_plugin_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1237,7 +1834,7 @@ func (x *RemoteWatchFilesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoteWatchFilesRequest.ProtoReflect.Descriptor instead.
 func (*RemoteWatchFilesRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{16}
+	return file_plugin_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *RemoteWatchFilesRequest) GetScope() *Scope {
@@ -1264,7 +1861,7 @@ type RemoteCheckPortRequest struct {
 
 func (x *RemoteCheckPortRequest) Reset() {
 	*x = RemoteCheckPortRequest{}
-	mi := &file_plugin_proto_msgTypes[17]
+	mi := &file_plugin_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1276,7 +1873,7 @@ func (x *RemoteCheckPortRequest) String() string {
 func (*RemoteCheckPortRequest) ProtoMessage() {}
 
 func (x *RemoteCheckPortRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[17]
+	mi := &file_plugin_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1289,7 +1886,7 @@ func (x *RemoteCheckPortRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoteCheckPortRequest.ProtoReflect.Descriptor instead.
 func (*RemoteCheckPortRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{17}
+	return file_plugin_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *RemoteCheckPortRequest) GetScope() *Scope {
@@ -1316,7 +1913,7 @@ type RemoteListPortsRequest struct {
 
 func (x *RemoteListPortsRequest) Reset() {
 	*x = RemoteListPortsRequest{}
-	mi := &file_plugin_proto_msgTypes[18]
+	mi := &file_plugin_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1328,7 +1925,7 @@ func (x *RemoteListPortsRequest) String() string {
 func (*RemoteListPortsRequest) ProtoMessage() {}
 
 func (x *RemoteListPortsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[18]
+	mi := &file_plugin_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1341,7 +1938,7 @@ func (x *RemoteListPortsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoteListPortsRequest.ProtoReflect.Descriptor instead.
 func (*RemoteListPortsRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{18}
+	return file_plugin_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *RemoteListPortsRequest) GetScope() *Scope {
@@ -1368,7 +1965,7 @@ type RemoteWatchPortsRequest struct {
 
 func (x *RemoteWatchPortsRequest) Reset() {
 	*x = RemoteWatchPortsRequest{}
-	mi := &file_plugin_proto_msgTypes[19]
+	mi := &file_plugin_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1380,7 +1977,7 @@ func (x *RemoteWatchPortsRequest) String() string {
 func (*RemoteWatchPortsRequest) ProtoMessage() {}
 
 func (x *RemoteWatchPortsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[19]
+	mi := &file_plugin_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1393,7 +1990,7 @@ func (x *RemoteWatchPortsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoteWatchPortsRequest.ProtoReflect.Descriptor instead.
 func (*RemoteWatchPortsRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{19}
+	return file_plugin_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *RemoteWatchPortsRequest) GetScope() *Scope {
@@ -1420,7 +2017,7 @@ type RemoteWriteOpen struct {
 
 func (x *RemoteWriteOpen) Reset() {
 	*x = RemoteWriteOpen{}
-	mi := &file_plugin_proto_msgTypes[20]
+	mi := &file_plugin_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1432,7 +2029,7 @@ func (x *RemoteWriteOpen) String() string {
 func (*RemoteWriteOpen) ProtoMessage() {}
 
 func (x *RemoteWriteOpen) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[20]
+	mi := &file_plugin_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1445,7 +2042,7 @@ func (x *RemoteWriteOpen) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoteWriteOpen.ProtoReflect.Descriptor instead.
 func (*RemoteWriteOpen) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{20}
+	return file_plugin_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *RemoteWriteOpen) GetScope() *Scope {
@@ -1475,7 +2072,7 @@ type RemoteWriteFrame struct {
 
 func (x *RemoteWriteFrame) Reset() {
 	*x = RemoteWriteFrame{}
-	mi := &file_plugin_proto_msgTypes[21]
+	mi := &file_plugin_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1487,7 +2084,7 @@ func (x *RemoteWriteFrame) String() string {
 func (*RemoteWriteFrame) ProtoMessage() {}
 
 func (x *RemoteWriteFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[21]
+	mi := &file_plugin_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1500,7 +2097,7 @@ func (x *RemoteWriteFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoteWriteFrame.ProtoReflect.Descriptor instead.
 func (*RemoteWriteFrame) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{21}
+	return file_plugin_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *RemoteWriteFrame) GetPayload() isRemoteWriteFrame_Payload {
@@ -1554,7 +2151,7 @@ type RemotePortOpen struct {
 
 func (x *RemotePortOpen) Reset() {
 	*x = RemotePortOpen{}
-	mi := &file_plugin_proto_msgTypes[22]
+	mi := &file_plugin_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1566,7 +2163,7 @@ func (x *RemotePortOpen) String() string {
 func (*RemotePortOpen) ProtoMessage() {}
 
 func (x *RemotePortOpen) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[22]
+	mi := &file_plugin_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1579,7 +2176,7 @@ func (x *RemotePortOpen) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemotePortOpen.ProtoReflect.Descriptor instead.
 func (*RemotePortOpen) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{22}
+	return file_plugin_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *RemotePortOpen) GetScope() *Scope {
@@ -1609,7 +2206,7 @@ type RemotePortFrame struct {
 
 func (x *RemotePortFrame) Reset() {
 	*x = RemotePortFrame{}
-	mi := &file_plugin_proto_msgTypes[23]
+	mi := &file_plugin_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1621,7 +2218,7 @@ func (x *RemotePortFrame) String() string {
 func (*RemotePortFrame) ProtoMessage() {}
 
 func (x *RemotePortFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[23]
+	mi := &file_plugin_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1634,7 +2231,7 @@ func (x *RemotePortFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemotePortFrame.ProtoReflect.Descriptor instead.
 func (*RemotePortFrame) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{23}
+	return file_plugin_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *RemotePortFrame) GetPayload() isRemotePortFrame_Payload {
@@ -1692,7 +2289,7 @@ type SyncState struct {
 
 func (x *SyncState) Reset() {
 	*x = SyncState{}
-	mi := &file_plugin_proto_msgTypes[24]
+	mi := &file_plugin_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1704,7 +2301,7 @@ func (x *SyncState) String() string {
 func (*SyncState) ProtoMessage() {}
 
 func (x *SyncState) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[24]
+	mi := &file_plugin_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1717,7 +2314,7 @@ func (x *SyncState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncState.ProtoReflect.Descriptor instead.
 func (*SyncState) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{24}
+	return file_plugin_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *SyncState) GetMappingId() string {
@@ -1774,7 +2371,7 @@ type FileVersion struct {
 
 func (x *FileVersion) Reset() {
 	*x = FileVersion{}
-	mi := &file_plugin_proto_msgTypes[25]
+	mi := &file_plugin_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1786,7 +2383,7 @@ func (x *FileVersion) String() string {
 func (*FileVersion) ProtoMessage() {}
 
 func (x *FileVersion) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[25]
+	mi := &file_plugin_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1799,7 +2396,7 @@ func (x *FileVersion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileVersion.ProtoReflect.Descriptor instead.
 func (*FileVersion) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{25}
+	return file_plugin_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *FileVersion) GetExists() bool {
@@ -1845,7 +2442,7 @@ type Conflict struct {
 
 func (x *Conflict) Reset() {
 	*x = Conflict{}
-	mi := &file_plugin_proto_msgTypes[26]
+	mi := &file_plugin_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1857,7 +2454,7 @@ func (x *Conflict) String() string {
 func (*Conflict) ProtoMessage() {}
 
 func (x *Conflict) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[26]
+	mi := &file_plugin_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1870,7 +2467,7 @@ func (x *Conflict) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Conflict.ProtoReflect.Descriptor instead.
 func (*Conflict) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{26}
+	return file_plugin_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *Conflict) GetId() string {
@@ -1931,7 +2528,7 @@ type ConflictList struct {
 
 func (x *ConflictList) Reset() {
 	*x = ConflictList{}
-	mi := &file_plugin_proto_msgTypes[27]
+	mi := &file_plugin_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1943,7 +2540,7 @@ func (x *ConflictList) String() string {
 func (*ConflictList) ProtoMessage() {}
 
 func (x *ConflictList) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[27]
+	mi := &file_plugin_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1956,7 +2553,7 @@ func (x *ConflictList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConflictList.ProtoReflect.Descriptor instead.
 func (*ConflictList) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{27}
+	return file_plugin_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ConflictList) GetConflicts() []*Conflict {
@@ -1979,7 +2576,7 @@ type ResolveConflictRequest struct {
 
 func (x *ResolveConflictRequest) Reset() {
 	*x = ResolveConflictRequest{}
-	mi := &file_plugin_proto_msgTypes[28]
+	mi := &file_plugin_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1991,7 +2588,7 @@ func (x *ResolveConflictRequest) String() string {
 func (*ResolveConflictRequest) ProtoMessage() {}
 
 func (x *ResolveConflictRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[28]
+	mi := &file_plugin_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2004,7 +2601,7 @@ func (x *ResolveConflictRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveConflictRequest.ProtoReflect.Descriptor instead.
 func (*ResolveConflictRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{28}
+	return file_plugin_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ResolveConflictRequest) GetMappingId() string {
@@ -2054,7 +2651,7 @@ type ReadConflictFileRequest struct {
 
 func (x *ReadConflictFileRequest) Reset() {
 	*x = ReadConflictFileRequest{}
-	mi := &file_plugin_proto_msgTypes[29]
+	mi := &file_plugin_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2066,7 +2663,7 @@ func (x *ReadConflictFileRequest) String() string {
 func (*ReadConflictFileRequest) ProtoMessage() {}
 
 func (x *ReadConflictFileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[29]
+	mi := &file_plugin_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2079,7 +2676,7 @@ func (x *ReadConflictFileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadConflictFileRequest.ProtoReflect.Descriptor instead.
 func (*ReadConflictFileRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{29}
+	return file_plugin_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ReadConflictFileRequest) GetMappingId() string {
@@ -2129,7 +2726,7 @@ type ForwardSpec struct {
 
 func (x *ForwardSpec) Reset() {
 	*x = ForwardSpec{}
-	mi := &file_plugin_proto_msgTypes[30]
+	mi := &file_plugin_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2141,7 +2738,7 @@ func (x *ForwardSpec) String() string {
 func (*ForwardSpec) ProtoMessage() {}
 
 func (x *ForwardSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[30]
+	mi := &file_plugin_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2154,7 +2751,7 @@ func (x *ForwardSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardSpec.ProtoReflect.Descriptor instead.
 func (*ForwardSpec) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{30}
+	return file_plugin_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ForwardSpec) GetId() string {
@@ -2243,7 +2840,7 @@ type ForwardCandidates struct {
 
 func (x *ForwardCandidates) Reset() {
 	*x = ForwardCandidates{}
-	mi := &file_plugin_proto_msgTypes[31]
+	mi := &file_plugin_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2255,7 +2852,7 @@ func (x *ForwardCandidates) String() string {
 func (*ForwardCandidates) ProtoMessage() {}
 
 func (x *ForwardCandidates) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[31]
+	mi := &file_plugin_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2268,7 +2865,7 @@ func (x *ForwardCandidates) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardCandidates.ProtoReflect.Descriptor instead.
 func (*ForwardCandidates) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{31}
+	return file_plugin_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ForwardCandidates) GetSpecs() []*ForwardSpec {
@@ -2287,7 +2884,7 @@ type ForwardID struct {
 
 func (x *ForwardID) Reset() {
 	*x = ForwardID{}
-	mi := &file_plugin_proto_msgTypes[32]
+	mi := &file_plugin_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2299,7 +2896,7 @@ func (x *ForwardID) String() string {
 func (*ForwardID) ProtoMessage() {}
 
 func (x *ForwardID) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[32]
+	mi := &file_plugin_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2312,7 +2909,7 @@ func (x *ForwardID) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardID.ProtoReflect.Descriptor instead.
 func (*ForwardID) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{32}
+	return file_plugin_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *ForwardID) GetId() string {
@@ -2336,7 +2933,7 @@ type ForwardState struct {
 
 func (x *ForwardState) Reset() {
 	*x = ForwardState{}
-	mi := &file_plugin_proto_msgTypes[33]
+	mi := &file_plugin_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2348,7 +2945,7 @@ func (x *ForwardState) String() string {
 func (*ForwardState) ProtoMessage() {}
 
 func (x *ForwardState) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[33]
+	mi := &file_plugin_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2361,7 +2958,7 @@ func (x *ForwardState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardState.ProtoReflect.Descriptor instead.
 func (*ForwardState) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{33}
+	return file_plugin_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *ForwardState) GetSpec() *ForwardSpec {
@@ -2415,7 +3012,7 @@ type ForwardList struct {
 
 func (x *ForwardList) Reset() {
 	*x = ForwardList{}
-	mi := &file_plugin_proto_msgTypes[34]
+	mi := &file_plugin_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2427,7 +3024,7 @@ func (x *ForwardList) String() string {
 func (*ForwardList) ProtoMessage() {}
 
 func (x *ForwardList) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[34]
+	mi := &file_plugin_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2440,7 +3037,7 @@ func (x *ForwardList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardList.ProtoReflect.Descriptor instead.
 func (*ForwardList) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{34}
+	return file_plugin_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *ForwardList) GetForwards() []*ForwardState {
@@ -2454,14 +3051,63 @@ var File_plugin_proto protoreflect.FileDescriptor
 
 const file_plugin_proto_rawDesc = "" +
 	"\n" +
-	"\fplugin.proto\x12\x0fshiki.plugin.v1\x1a\vtypes.proto\x1a\x1cgoogle/protobuf/struct.proto\"\xa5\x01\n" +
+	"\fplugin.proto\x12\x0fshiki.plugin.v1\x1a\vtypes.proto\x1a\x1cgoogle/protobuf/struct.proto\"\x99\x02\n" +
 	"\n" +
 	"PluginInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12 \n" +
 	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x12\n" +
 	"\x04side\x18\x04 \x01(\tR\x04side\x123\n" +
-	"\bprotocol\x18\x05 \x01(\v2\x17.shiki.v1.ProtocolOfferR\bprotocol\"A\n" +
+	"\bprotocol\x18\x05 \x01(\v2\x17.shiki.v1.ProtocolOfferR\bprotocol\x12A\n" +
+	"\rconfig_schema\x18\x06 \x03(\v2\x1c.shiki.plugin.v1.ConfigFieldR\fconfigSchema\x12/\n" +
+	"\x02ui\x18\a \x01(\v2\x1f.shiki.plugin.v1.UIContributionR\x02ui\"\xef\x02\n" +
+	"\vConfigField\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12\x14\n" +
+	"\x05label\x18\x03 \x01(\tR\x05label\x12 \n" +
+	"\vdescription\x18\x04 \x01(\tR\vdescription\x12!\n" +
+	"\fdefault_json\x18\x05 \x01(\tR\vdefaultJson\x12\x1a\n" +
+	"\brequired\x18\x06 \x01(\bR\brequired\x12\x17\n" +
+	"\aui_hint\x18\a \x01(\tR\x06uiHint\x12\x1f\n" +
+	"\venum_values\x18\b \x03(\tR\n" +
+	"enumValues\x129\n" +
+	"\vconstraints\x18\t \x01(\v2\x17.google.protobuf.StructR\vconstraints\x128\n" +
+	"\bchildren\x18\n" +
+	" \x03(\v2\x1c.shiki.plugin.v1.ConfigFieldR\bchildren\x12\x14\n" +
+	"\x05group\x18\v \x01(\tR\x05group\"\xa2\x02\n" +
+	"\x0eUIContribution\x12@\n" +
+	"\fstatus_slots\x18\x01 \x03(\v2\x1d.shiki.plugin.v1.UIStatusSlotR\vstatusSlots\x12L\n" +
+	"\x10dashboard_panels\x18\x02 \x03(\v2!.shiki.plugin.v1.UIDashboardPanelR\x0fdashboardPanels\x12>\n" +
+	"\bsettings\x18\x03 \x01(\v2\".shiki.plugin.v1.UISettingsSectionR\bsettings\x12@\n" +
+	"\fcli_commands\x18\x04 \x03(\v2\x1d.shiki.plugin.v1.UICLICommandR\vcliCommands\"\\\n" +
+	"\fUIStatusSlot\x12\x17\n" +
+	"\aslot_id\x18\x01 \x01(\tR\x06slotId\x12\x1d\n" +
+	"\n" +
+	"event_type\x18\x02 \x01(\tR\teventType\x12\x14\n" +
+	"\x05label\x18\x03 \x01(\tR\x05label\"\x96\x01\n" +
+	"\x10UIDashboardPanel\x12\x19\n" +
+	"\bpanel_id\x18\x01 \x01(\tR\apanelId\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\x12\x1d\n" +
+	"\n" +
+	"event_type\x18\x03 \x01(\tR\teventType\x12\x1a\n" +
+	"\bpriority\x18\x04 \x01(\x05R\bpriority\x12\x16\n" +
+	"\x06layout\x18\x05 \x01(\tR\x06layout\"H\n" +
+	"\x11UISettingsSection\x12\x1d\n" +
+	"\n" +
+	"section_id\x18\x01 \x01(\tR\tsectionId\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\"\x93\x01\n" +
+	"\fUICLICommand\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x02 \x01(\tR\vdescription\x12\x1b\n" +
+	"\taction_id\x18\x03 \x01(\tR\bactionId\x120\n" +
+	"\x05flags\x18\x04 \x03(\v2\x1a.shiki.plugin.v1.UICLIFlagR\x05flags\"\x94\x01\n" +
+	"\tUICLIFlag\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
+	"\tshorthand\x18\x02 \x01(\tR\tshorthand\x12\x12\n" +
+	"\x04type\x18\x03 \x01(\tR\x04type\x12\x1f\n" +
+	"\vdefault_val\x18\x04 \x01(\tR\n" +
+	"defaultVal\x12 \n" +
+	"\vdescription\x18\x05 \x01(\tR\vdescription\"A\n" +
 	"\x0fCoreAPIEndpoint\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\tR\aaddress\x12\x14\n" +
 	"\x05token\x18\x02 \x01(\tR\x05token\"\xbd\x02\n" +
@@ -2511,7 +3157,7 @@ const file_plugin_proto_rawDesc = "" +
 	"\x10SubscribeRequest\x12,\n" +
 	"\x05scope\x18\x01 \x01(\v2\x16.shiki.plugin.v1.ScopeR\x05scope\x12\x1f\n" +
 	"\vevent_types\x18\x02 \x03(\tR\n" +
-	"eventTypes\"\xe1\x03\n" +
+	"eventTypes\"\xa5\x05\n" +
 	"\x05Event\x12\x19\n" +
 	"\bevent_id\x18\x01 \x01(\tR\aeventId\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12,\n" +
@@ -2524,7 +3170,10 @@ const file_plugin_proto_rawDesc = "" +
 	"\rforward_state\x18\b \x01(\v2\x1d.shiki.plugin.v1.ForwardStateH\x00R\fforwardState\x12=\n" +
 	"\rsession_event\x18\t \x01(\v2\x16.shiki.v1.SessionEventH\x00R\fsessionEvent\x12)\n" +
 	"\x0frescan_required\x18\n" +
-	" \x01(\bH\x00R\x0erescanRequiredB\t\n" +
+	" \x01(\bH\x00R\x0erescanRequired\x12@\n" +
+	"\x0estatus_payload\x18\v \x01(\v2\x17.google.protobuf.StructH\x00R\rstatusPayload\x12@\n" +
+	"\x0enotify_payload\x18\f \x01(\v2\x17.google.protobuf.StructH\x00R\rnotifyPayload\x12>\n" +
+	"\rpanel_payload\x18\r \x01(\v2\x17.google.protobuf.StructH\x00R\fpanelPayloadB\t\n" +
 	"\apayload\"~\n" +
 	"\x13PublishEventRequest\x12,\n" +
 	"\x05event\x18\x01 \x01(\v2\x16.shiki.plugin.v1.EventR\x05event\x129\n" +
@@ -2651,13 +3300,14 @@ const file_plugin_proto_rawDesc = "" +
 	"\vreason_code\x18\x06 \x01(\tR\n" +
 	"reasonCode\"H\n" +
 	"\vForwardList\x129\n" +
-	"\bforwards\x18\x01 \x03(\v2\x1d.shiki.plugin.v1.ForwardStateR\bforwards2\x80\x02\n" +
+	"\bforwards\x18\x01 \x03(\v2\x1d.shiki.plugin.v1.ForwardStateR\bforwards2\xc2\x02\n" +
 	"\x06Plugin\x127\n" +
 	"\aGetInfo\x12\x0f.shiki.v1.Empty\x1a\x1b.shiki.plugin.v1.PluginInfo\x125\n" +
 	"\x04Init\x12\x1c.shiki.plugin.v1.InitRequest\x1a\x0f.shiki.v1.Empty\x12)\n" +
 	"\x05Start\x12\x0f.shiki.v1.Empty\x1a\x0f.shiki.v1.Empty\x12(\n" +
 	"\x04Stop\x12\x0f.shiki.v1.Empty\x1a\x0f.shiki.v1.Empty\x121\n" +
-	"\x06Health\x12\x0f.shiki.v1.Empty\x1a\x16.shiki.v1.HealthStatus2\xad\f\n" +
+	"\x06Health\x12\x0f.shiki.v1.Empty\x1a\x16.shiki.v1.HealthStatus\x12@\n" +
+	"\fInvokeAction\x12\x17.google.protobuf.Struct\x1a\x17.google.protobuf.Struct2\xad\f\n" +
 	"\aCoreAPI\x127\n" +
 	"\n" +
 	"GetProject\x12\x16.shiki.plugin.v1.Scope\x1a\x11.shiki.v1.Project\x12F\n" +
@@ -2725,221 +3375,242 @@ func file_plugin_proto_rawDescGZIP() []byte {
 }
 
 var file_plugin_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 36)
+var file_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 43)
 var file_plugin_proto_goTypes = []any{
 	(ResolveConflictRequest_Choice)(0),    // 0: shiki.plugin.v1.ResolveConflictRequest.Choice
 	(ReadConflictFileRequest_Side)(0),     // 1: shiki.plugin.v1.ReadConflictFileRequest.Side
 	(*PluginInfo)(nil),                    // 2: shiki.plugin.v1.PluginInfo
-	(*CoreAPIEndpoint)(nil),               // 3: shiki.plugin.v1.CoreAPIEndpoint
-	(*InitRequest)(nil),                   // 4: shiki.plugin.v1.InitRequest
-	(*Scope)(nil),                         // 5: shiki.plugin.v1.Scope
-	(*Mapping)(nil),                       // 6: shiki.plugin.v1.Mapping
-	(*MappingList)(nil),                   // 7: shiki.plugin.v1.MappingList
-	(*ConfigRequest)(nil),                 // 8: shiki.plugin.v1.ConfigRequest
-	(*PluginConfig)(nil),                  // 9: shiki.plugin.v1.PluginConfig
-	(*SetConfigRequest)(nil),              // 10: shiki.plugin.v1.SetConfigRequest
-	(*SubscribeRequest)(nil),              // 11: shiki.plugin.v1.SubscribeRequest
-	(*Event)(nil),                         // 12: shiki.plugin.v1.Event
-	(*PublishEventRequest)(nil),           // 13: shiki.plugin.v1.PublishEventRequest
-	(*RemoteListFilesRequest)(nil),        // 14: shiki.plugin.v1.RemoteListFilesRequest
-	(*RemoteStatFileRequest)(nil),         // 15: shiki.plugin.v1.RemoteStatFileRequest
-	(*RemoteReadFileRequest)(nil),         // 16: shiki.plugin.v1.RemoteReadFileRequest
-	(*RemoteDeleteFileRequest)(nil),       // 17: shiki.plugin.v1.RemoteDeleteFileRequest
-	(*RemoteWatchFilesRequest)(nil),       // 18: shiki.plugin.v1.RemoteWatchFilesRequest
-	(*RemoteCheckPortRequest)(nil),        // 19: shiki.plugin.v1.RemoteCheckPortRequest
-	(*RemoteListPortsRequest)(nil),        // 20: shiki.plugin.v1.RemoteListPortsRequest
-	(*RemoteWatchPortsRequest)(nil),       // 21: shiki.plugin.v1.RemoteWatchPortsRequest
-	(*RemoteWriteOpen)(nil),               // 22: shiki.plugin.v1.RemoteWriteOpen
-	(*RemoteWriteFrame)(nil),              // 23: shiki.plugin.v1.RemoteWriteFrame
-	(*RemotePortOpen)(nil),                // 24: shiki.plugin.v1.RemotePortOpen
-	(*RemotePortFrame)(nil),               // 25: shiki.plugin.v1.RemotePortFrame
-	(*SyncState)(nil),                     // 26: shiki.plugin.v1.SyncState
-	(*FileVersion)(nil),                   // 27: shiki.plugin.v1.FileVersion
-	(*Conflict)(nil),                      // 28: shiki.plugin.v1.Conflict
-	(*ConflictList)(nil),                  // 29: shiki.plugin.v1.ConflictList
-	(*ResolveConflictRequest)(nil),        // 30: shiki.plugin.v1.ResolveConflictRequest
-	(*ReadConflictFileRequest)(nil),       // 31: shiki.plugin.v1.ReadConflictFileRequest
-	(*ForwardSpec)(nil),                   // 32: shiki.plugin.v1.ForwardSpec
-	(*ForwardCandidates)(nil),             // 33: shiki.plugin.v1.ForwardCandidates
-	(*ForwardID)(nil),                     // 34: shiki.plugin.v1.ForwardID
-	(*ForwardState)(nil),                  // 35: shiki.plugin.v1.ForwardState
-	(*ForwardList)(nil),                   // 36: shiki.plugin.v1.ForwardList
-	nil,                                   // 37: shiki.plugin.v1.Mapping.SessionHintsEntry
-	(*protocol.ProtocolOffer)(nil),        // 38: shiki.v1.ProtocolOffer
-	(*structpb.Struct)(nil),               // 39: google.protobuf.Struct
-	(*protocol.ProtocolAgreement)(nil),    // 40: shiki.v1.ProtocolAgreement
-	(*protocol.SessionEvent)(nil),         // 41: shiki.v1.SessionEvent
-	(*protocol.ListFilesRequest)(nil),     // 42: shiki.v1.ListFilesRequest
-	(*protocol.StatFileRequest)(nil),      // 43: shiki.v1.StatFileRequest
-	(*protocol.ReadFileRequest)(nil),      // 44: shiki.v1.ReadFileRequest
-	(*protocol.DeleteFileRequest)(nil),    // 45: shiki.v1.DeleteFileRequest
-	(*protocol.WatchFilesRequest)(nil),    // 46: shiki.v1.WatchFilesRequest
-	(*protocol.CheckPortRequest)(nil),     // 47: shiki.v1.CheckPortRequest
-	(*protocol.ListPortsRequest)(nil),     // 48: shiki.v1.ListPortsRequest
-	(*protocol.WatchPortsRequest)(nil),    // 49: shiki.v1.WatchPortsRequest
-	(*protocol.WriteFileHeader)(nil),      // 50: shiki.v1.WriteFileHeader
-	(*protocol.PortData)(nil),             // 51: shiki.v1.PortData
-	(*protocol.Empty)(nil),                // 52: shiki.v1.Empty
-	(*protocol.LogRecord)(nil),            // 53: shiki.v1.LogRecord
-	(*protocol.WriteFileRequest)(nil),     // 54: shiki.v1.WriteFileRequest
-	(*protocol.HealthStatus)(nil),         // 55: shiki.v1.HealthStatus
-	(*protocol.Project)(nil),              // 56: shiki.v1.Project
-	(*protocol.ListProjectsResponse)(nil), // 57: shiki.v1.ListProjectsResponse
-	(*protocol.Session)(nil),              // 58: shiki.v1.Session
-	(*protocol.ListSessionsResponse)(nil), // 59: shiki.v1.ListSessionsResponse
-	(*protocol.ListFilesResponse)(nil),    // 60: shiki.v1.ListFilesResponse
-	(*protocol.FileInfo)(nil),             // 61: shiki.v1.FileInfo
-	(*protocol.FileData)(nil),             // 62: shiki.v1.FileData
-	(*protocol.FileEvent)(nil),            // 63: shiki.v1.FileEvent
-	(*protocol.CheckPortResponse)(nil),    // 64: shiki.v1.CheckPortResponse
-	(*protocol.ListPortsResponse)(nil),    // 65: shiki.v1.ListPortsResponse
-	(*protocol.PortEvent)(nil),            // 66: shiki.v1.PortEvent
+	(*ConfigField)(nil),                   // 3: shiki.plugin.v1.ConfigField
+	(*UIContribution)(nil),                // 4: shiki.plugin.v1.UIContribution
+	(*UIStatusSlot)(nil),                  // 5: shiki.plugin.v1.UIStatusSlot
+	(*UIDashboardPanel)(nil),              // 6: shiki.plugin.v1.UIDashboardPanel
+	(*UISettingsSection)(nil),             // 7: shiki.plugin.v1.UISettingsSection
+	(*UICLICommand)(nil),                  // 8: shiki.plugin.v1.UICLICommand
+	(*UICLIFlag)(nil),                     // 9: shiki.plugin.v1.UICLIFlag
+	(*CoreAPIEndpoint)(nil),               // 10: shiki.plugin.v1.CoreAPIEndpoint
+	(*InitRequest)(nil),                   // 11: shiki.plugin.v1.InitRequest
+	(*Scope)(nil),                         // 12: shiki.plugin.v1.Scope
+	(*Mapping)(nil),                       // 13: shiki.plugin.v1.Mapping
+	(*MappingList)(nil),                   // 14: shiki.plugin.v1.MappingList
+	(*ConfigRequest)(nil),                 // 15: shiki.plugin.v1.ConfigRequest
+	(*PluginConfig)(nil),                  // 16: shiki.plugin.v1.PluginConfig
+	(*SetConfigRequest)(nil),              // 17: shiki.plugin.v1.SetConfigRequest
+	(*SubscribeRequest)(nil),              // 18: shiki.plugin.v1.SubscribeRequest
+	(*Event)(nil),                         // 19: shiki.plugin.v1.Event
+	(*PublishEventRequest)(nil),           // 20: shiki.plugin.v1.PublishEventRequest
+	(*RemoteListFilesRequest)(nil),        // 21: shiki.plugin.v1.RemoteListFilesRequest
+	(*RemoteStatFileRequest)(nil),         // 22: shiki.plugin.v1.RemoteStatFileRequest
+	(*RemoteReadFileRequest)(nil),         // 23: shiki.plugin.v1.RemoteReadFileRequest
+	(*RemoteDeleteFileRequest)(nil),       // 24: shiki.plugin.v1.RemoteDeleteFileRequest
+	(*RemoteWatchFilesRequest)(nil),       // 25: shiki.plugin.v1.RemoteWatchFilesRequest
+	(*RemoteCheckPortRequest)(nil),        // 26: shiki.plugin.v1.RemoteCheckPortRequest
+	(*RemoteListPortsRequest)(nil),        // 27: shiki.plugin.v1.RemoteListPortsRequest
+	(*RemoteWatchPortsRequest)(nil),       // 28: shiki.plugin.v1.RemoteWatchPortsRequest
+	(*RemoteWriteOpen)(nil),               // 29: shiki.plugin.v1.RemoteWriteOpen
+	(*RemoteWriteFrame)(nil),              // 30: shiki.plugin.v1.RemoteWriteFrame
+	(*RemotePortOpen)(nil),                // 31: shiki.plugin.v1.RemotePortOpen
+	(*RemotePortFrame)(nil),               // 32: shiki.plugin.v1.RemotePortFrame
+	(*SyncState)(nil),                     // 33: shiki.plugin.v1.SyncState
+	(*FileVersion)(nil),                   // 34: shiki.plugin.v1.FileVersion
+	(*Conflict)(nil),                      // 35: shiki.plugin.v1.Conflict
+	(*ConflictList)(nil),                  // 36: shiki.plugin.v1.ConflictList
+	(*ResolveConflictRequest)(nil),        // 37: shiki.plugin.v1.ResolveConflictRequest
+	(*ReadConflictFileRequest)(nil),       // 38: shiki.plugin.v1.ReadConflictFileRequest
+	(*ForwardSpec)(nil),                   // 39: shiki.plugin.v1.ForwardSpec
+	(*ForwardCandidates)(nil),             // 40: shiki.plugin.v1.ForwardCandidates
+	(*ForwardID)(nil),                     // 41: shiki.plugin.v1.ForwardID
+	(*ForwardState)(nil),                  // 42: shiki.plugin.v1.ForwardState
+	(*ForwardList)(nil),                   // 43: shiki.plugin.v1.ForwardList
+	nil,                                   // 44: shiki.plugin.v1.Mapping.SessionHintsEntry
+	(*protocol.ProtocolOffer)(nil),        // 45: shiki.v1.ProtocolOffer
+	(*structpb.Struct)(nil),               // 46: google.protobuf.Struct
+	(*protocol.ProtocolAgreement)(nil),    // 47: shiki.v1.ProtocolAgreement
+	(*protocol.SessionEvent)(nil),         // 48: shiki.v1.SessionEvent
+	(*protocol.ListFilesRequest)(nil),     // 49: shiki.v1.ListFilesRequest
+	(*protocol.StatFileRequest)(nil),      // 50: shiki.v1.StatFileRequest
+	(*protocol.ReadFileRequest)(nil),      // 51: shiki.v1.ReadFileRequest
+	(*protocol.DeleteFileRequest)(nil),    // 52: shiki.v1.DeleteFileRequest
+	(*protocol.WatchFilesRequest)(nil),    // 53: shiki.v1.WatchFilesRequest
+	(*protocol.CheckPortRequest)(nil),     // 54: shiki.v1.CheckPortRequest
+	(*protocol.ListPortsRequest)(nil),     // 55: shiki.v1.ListPortsRequest
+	(*protocol.WatchPortsRequest)(nil),    // 56: shiki.v1.WatchPortsRequest
+	(*protocol.WriteFileHeader)(nil),      // 57: shiki.v1.WriteFileHeader
+	(*protocol.PortData)(nil),             // 58: shiki.v1.PortData
+	(*protocol.Empty)(nil),                // 59: shiki.v1.Empty
+	(*protocol.LogRecord)(nil),            // 60: shiki.v1.LogRecord
+	(*protocol.WriteFileRequest)(nil),     // 61: shiki.v1.WriteFileRequest
+	(*protocol.HealthStatus)(nil),         // 62: shiki.v1.HealthStatus
+	(*protocol.Project)(nil),              // 63: shiki.v1.Project
+	(*protocol.ListProjectsResponse)(nil), // 64: shiki.v1.ListProjectsResponse
+	(*protocol.Session)(nil),              // 65: shiki.v1.Session
+	(*protocol.ListSessionsResponse)(nil), // 66: shiki.v1.ListSessionsResponse
+	(*protocol.ListFilesResponse)(nil),    // 67: shiki.v1.ListFilesResponse
+	(*protocol.FileInfo)(nil),             // 68: shiki.v1.FileInfo
+	(*protocol.FileData)(nil),             // 69: shiki.v1.FileData
+	(*protocol.FileEvent)(nil),            // 70: shiki.v1.FileEvent
+	(*protocol.CheckPortResponse)(nil),    // 71: shiki.v1.CheckPortResponse
+	(*protocol.ListPortsResponse)(nil),    // 72: shiki.v1.ListPortsResponse
+	(*protocol.PortEvent)(nil),            // 73: shiki.v1.PortEvent
 }
 var file_plugin_proto_depIdxs = []int32{
-	38, // 0: shiki.plugin.v1.PluginInfo.protocol:type_name -> shiki.v1.ProtocolOffer
-	39, // 1: shiki.plugin.v1.InitRequest.config:type_name -> google.protobuf.Struct
-	3,  // 2: shiki.plugin.v1.InitRequest.core_api:type_name -> shiki.plugin.v1.CoreAPIEndpoint
-	40, // 3: shiki.plugin.v1.InitRequest.protocol:type_name -> shiki.v1.ProtocolAgreement
-	37, // 4: shiki.plugin.v1.Mapping.session_hints:type_name -> shiki.plugin.v1.Mapping.SessionHintsEntry
-	6,  // 5: shiki.plugin.v1.MappingList.mappings:type_name -> shiki.plugin.v1.Mapping
-	5,  // 6: shiki.plugin.v1.ConfigRequest.scope:type_name -> shiki.plugin.v1.Scope
-	39, // 7: shiki.plugin.v1.PluginConfig.values:type_name -> google.protobuf.Struct
-	5,  // 8: shiki.plugin.v1.SetConfigRequest.scope:type_name -> shiki.plugin.v1.Scope
-	39, // 9: shiki.plugin.v1.SetConfigRequest.values:type_name -> google.protobuf.Struct
-	5,  // 10: shiki.plugin.v1.SubscribeRequest.scope:type_name -> shiki.plugin.v1.Scope
-	5,  // 11: shiki.plugin.v1.Event.scope:type_name -> shiki.plugin.v1.Scope
-	26, // 12: shiki.plugin.v1.Event.sync_state:type_name -> shiki.plugin.v1.SyncState
-	28, // 13: shiki.plugin.v1.Event.conflict:type_name -> shiki.plugin.v1.Conflict
-	35, // 14: shiki.plugin.v1.Event.forward_state:type_name -> shiki.plugin.v1.ForwardState
-	41, // 15: shiki.plugin.v1.Event.session_event:type_name -> shiki.v1.SessionEvent
-	12, // 16: shiki.plugin.v1.PublishEventRequest.event:type_name -> shiki.plugin.v1.Event
-	5,  // 17: shiki.plugin.v1.RemoteListFilesRequest.scope:type_name -> shiki.plugin.v1.Scope
-	42, // 18: shiki.plugin.v1.RemoteListFilesRequest.request:type_name -> shiki.v1.ListFilesRequest
-	5,  // 19: shiki.plugin.v1.RemoteStatFileRequest.scope:type_name -> shiki.plugin.v1.Scope
-	43, // 20: shiki.plugin.v1.RemoteStatFileRequest.request:type_name -> shiki.v1.StatFileRequest
-	5,  // 21: shiki.plugin.v1.RemoteReadFileRequest.scope:type_name -> shiki.plugin.v1.Scope
-	44, // 22: shiki.plugin.v1.RemoteReadFileRequest.request:type_name -> shiki.v1.ReadFileRequest
-	5,  // 23: shiki.plugin.v1.RemoteDeleteFileRequest.scope:type_name -> shiki.plugin.v1.Scope
-	45, // 24: shiki.plugin.v1.RemoteDeleteFileRequest.request:type_name -> shiki.v1.DeleteFileRequest
-	5,  // 25: shiki.plugin.v1.RemoteWatchFilesRequest.scope:type_name -> shiki.plugin.v1.Scope
-	46, // 26: shiki.plugin.v1.RemoteWatchFilesRequest.request:type_name -> shiki.v1.WatchFilesRequest
-	5,  // 27: shiki.plugin.v1.RemoteCheckPortRequest.scope:type_name -> shiki.plugin.v1.Scope
-	47, // 28: shiki.plugin.v1.RemoteCheckPortRequest.request:type_name -> shiki.v1.CheckPortRequest
-	5,  // 29: shiki.plugin.v1.RemoteListPortsRequest.scope:type_name -> shiki.plugin.v1.Scope
-	48, // 30: shiki.plugin.v1.RemoteListPortsRequest.request:type_name -> shiki.v1.ListPortsRequest
-	5,  // 31: shiki.plugin.v1.RemoteWatchPortsRequest.scope:type_name -> shiki.plugin.v1.Scope
-	49, // 32: shiki.plugin.v1.RemoteWatchPortsRequest.request:type_name -> shiki.v1.WatchPortsRequest
-	5,  // 33: shiki.plugin.v1.RemoteWriteOpen.scope:type_name -> shiki.plugin.v1.Scope
-	50, // 34: shiki.plugin.v1.RemoteWriteOpen.header:type_name -> shiki.v1.WriteFileHeader
-	22, // 35: shiki.plugin.v1.RemoteWriteFrame.open:type_name -> shiki.plugin.v1.RemoteWriteOpen
-	5,  // 36: shiki.plugin.v1.RemotePortOpen.scope:type_name -> shiki.plugin.v1.Scope
-	51, // 37: shiki.plugin.v1.RemotePortOpen.connect:type_name -> shiki.v1.PortData
-	24, // 38: shiki.plugin.v1.RemotePortFrame.open:type_name -> shiki.plugin.v1.RemotePortOpen
-	51, // 39: shiki.plugin.v1.RemotePortFrame.data:type_name -> shiki.v1.PortData
-	27, // 40: shiki.plugin.v1.Conflict.base:type_name -> shiki.plugin.v1.FileVersion
-	27, // 41: shiki.plugin.v1.Conflict.local:type_name -> shiki.plugin.v1.FileVersion
-	27, // 42: shiki.plugin.v1.Conflict.remote:type_name -> shiki.plugin.v1.FileVersion
-	28, // 43: shiki.plugin.v1.ConflictList.conflicts:type_name -> shiki.plugin.v1.Conflict
-	0,  // 44: shiki.plugin.v1.ResolveConflictRequest.choice:type_name -> shiki.plugin.v1.ResolveConflictRequest.Choice
-	1,  // 45: shiki.plugin.v1.ReadConflictFileRequest.side:type_name -> shiki.plugin.v1.ReadConflictFileRequest.Side
-	32, // 46: shiki.plugin.v1.ForwardCandidates.specs:type_name -> shiki.plugin.v1.ForwardSpec
-	32, // 47: shiki.plugin.v1.ForwardState.spec:type_name -> shiki.plugin.v1.ForwardSpec
-	35, // 48: shiki.plugin.v1.ForwardList.forwards:type_name -> shiki.plugin.v1.ForwardState
-	52, // 49: shiki.plugin.v1.Plugin.GetInfo:input_type -> shiki.v1.Empty
-	4,  // 50: shiki.plugin.v1.Plugin.Init:input_type -> shiki.plugin.v1.InitRequest
-	52, // 51: shiki.plugin.v1.Plugin.Start:input_type -> shiki.v1.Empty
-	52, // 52: shiki.plugin.v1.Plugin.Stop:input_type -> shiki.v1.Empty
-	52, // 53: shiki.plugin.v1.Plugin.Health:input_type -> shiki.v1.Empty
-	5,  // 54: shiki.plugin.v1.CoreAPI.GetProject:input_type -> shiki.plugin.v1.Scope
-	5,  // 55: shiki.plugin.v1.CoreAPI.ListProjects:input_type -> shiki.plugin.v1.Scope
-	5,  // 56: shiki.plugin.v1.CoreAPI.GetSession:input_type -> shiki.plugin.v1.Scope
-	5,  // 57: shiki.plugin.v1.CoreAPI.ListSessions:input_type -> shiki.plugin.v1.Scope
-	5,  // 58: shiki.plugin.v1.CoreAPI.GetMapping:input_type -> shiki.plugin.v1.Scope
-	5,  // 59: shiki.plugin.v1.CoreAPI.ListMappings:input_type -> shiki.plugin.v1.Scope
-	11, // 60: shiki.plugin.v1.CoreAPI.SubscribeEvents:input_type -> shiki.plugin.v1.SubscribeRequest
-	13, // 61: shiki.plugin.v1.CoreAPI.PublishEvent:input_type -> shiki.plugin.v1.PublishEventRequest
-	53, // 62: shiki.plugin.v1.CoreAPI.Log:input_type -> shiki.v1.LogRecord
-	8,  // 63: shiki.plugin.v1.CoreAPI.GetConfig:input_type -> shiki.plugin.v1.ConfigRequest
-	10, // 64: shiki.plugin.v1.CoreAPI.SetConfig:input_type -> shiki.plugin.v1.SetConfigRequest
-	14, // 65: shiki.plugin.v1.CoreAPI.RemoteListFiles:input_type -> shiki.plugin.v1.RemoteListFilesRequest
-	15, // 66: shiki.plugin.v1.CoreAPI.RemoteStatFile:input_type -> shiki.plugin.v1.RemoteStatFileRequest
-	16, // 67: shiki.plugin.v1.CoreAPI.RemoteReadFile:input_type -> shiki.plugin.v1.RemoteReadFileRequest
-	23, // 68: shiki.plugin.v1.CoreAPI.RemoteWriteFile:input_type -> shiki.plugin.v1.RemoteWriteFrame
-	17, // 69: shiki.plugin.v1.CoreAPI.RemoteDeleteFile:input_type -> shiki.plugin.v1.RemoteDeleteFileRequest
-	18, // 70: shiki.plugin.v1.CoreAPI.RemoteWatchFiles:input_type -> shiki.plugin.v1.RemoteWatchFilesRequest
-	19, // 71: shiki.plugin.v1.CoreAPI.RemoteCheckPort:input_type -> shiki.plugin.v1.RemoteCheckPortRequest
-	20, // 72: shiki.plugin.v1.CoreAPI.RemoteListPorts:input_type -> shiki.plugin.v1.RemoteListPortsRequest
-	21, // 73: shiki.plugin.v1.CoreAPI.RemoteWatchPorts:input_type -> shiki.plugin.v1.RemoteWatchPortsRequest
-	25, // 74: shiki.plugin.v1.CoreAPI.RemoteForwardPort:input_type -> shiki.plugin.v1.RemotePortFrame
-	42, // 75: shiki.plugin.v1.FileService.ListFiles:input_type -> shiki.v1.ListFilesRequest
-	43, // 76: shiki.plugin.v1.FileService.StatFile:input_type -> shiki.v1.StatFileRequest
-	44, // 77: shiki.plugin.v1.FileService.ReadFile:input_type -> shiki.v1.ReadFileRequest
-	54, // 78: shiki.plugin.v1.FileService.WriteFile:input_type -> shiki.v1.WriteFileRequest
-	45, // 79: shiki.plugin.v1.FileService.DeleteFile:input_type -> shiki.v1.DeleteFileRequest
-	46, // 80: shiki.plugin.v1.FileService.WatchFiles:input_type -> shiki.v1.WatchFilesRequest
-	47, // 81: shiki.plugin.v1.PortService.CheckPort:input_type -> shiki.v1.CheckPortRequest
-	48, // 82: shiki.plugin.v1.PortService.ListPorts:input_type -> shiki.v1.ListPortsRequest
-	49, // 83: shiki.plugin.v1.PortService.WatchPorts:input_type -> shiki.v1.WatchPortsRequest
-	51, // 84: shiki.plugin.v1.PortService.ForwardPort:input_type -> shiki.v1.PortData
-	6,  // 85: shiki.plugin.v1.SyncWorker.ConfigureMapping:input_type -> shiki.plugin.v1.Mapping
-	5,  // 86: shiki.plugin.v1.SyncWorker.GetSyncState:input_type -> shiki.plugin.v1.Scope
-	5,  // 87: shiki.plugin.v1.SyncWorker.ListConflicts:input_type -> shiki.plugin.v1.Scope
-	30, // 88: shiki.plugin.v1.SyncWorker.ResolveConflict:input_type -> shiki.plugin.v1.ResolveConflictRequest
-	31, // 89: shiki.plugin.v1.SyncWorker.ReadConflictFile:input_type -> shiki.plugin.v1.ReadConflictFileRequest
-	5,  // 90: shiki.plugin.v1.PortWorker.DiscoverForwards:input_type -> shiki.plugin.v1.Scope
-	32, // 91: shiki.plugin.v1.PortWorker.StartForward:input_type -> shiki.plugin.v1.ForwardSpec
-	34, // 92: shiki.plugin.v1.PortWorker.StopForward:input_type -> shiki.plugin.v1.ForwardID
-	52, // 93: shiki.plugin.v1.PortWorker.ListForwards:input_type -> shiki.v1.Empty
-	2,  // 94: shiki.plugin.v1.Plugin.GetInfo:output_type -> shiki.plugin.v1.PluginInfo
-	52, // 95: shiki.plugin.v1.Plugin.Init:output_type -> shiki.v1.Empty
-	52, // 96: shiki.plugin.v1.Plugin.Start:output_type -> shiki.v1.Empty
-	52, // 97: shiki.plugin.v1.Plugin.Stop:output_type -> shiki.v1.Empty
-	55, // 98: shiki.plugin.v1.Plugin.Health:output_type -> shiki.v1.HealthStatus
-	56, // 99: shiki.plugin.v1.CoreAPI.GetProject:output_type -> shiki.v1.Project
-	57, // 100: shiki.plugin.v1.CoreAPI.ListProjects:output_type -> shiki.v1.ListProjectsResponse
-	58, // 101: shiki.plugin.v1.CoreAPI.GetSession:output_type -> shiki.v1.Session
-	59, // 102: shiki.plugin.v1.CoreAPI.ListSessions:output_type -> shiki.v1.ListSessionsResponse
-	6,  // 103: shiki.plugin.v1.CoreAPI.GetMapping:output_type -> shiki.plugin.v1.Mapping
-	7,  // 104: shiki.plugin.v1.CoreAPI.ListMappings:output_type -> shiki.plugin.v1.MappingList
-	12, // 105: shiki.plugin.v1.CoreAPI.SubscribeEvents:output_type -> shiki.plugin.v1.Event
-	52, // 106: shiki.plugin.v1.CoreAPI.PublishEvent:output_type -> shiki.v1.Empty
-	52, // 107: shiki.plugin.v1.CoreAPI.Log:output_type -> shiki.v1.Empty
-	9,  // 108: shiki.plugin.v1.CoreAPI.GetConfig:output_type -> shiki.plugin.v1.PluginConfig
-	9,  // 109: shiki.plugin.v1.CoreAPI.SetConfig:output_type -> shiki.plugin.v1.PluginConfig
-	60, // 110: shiki.plugin.v1.CoreAPI.RemoteListFiles:output_type -> shiki.v1.ListFilesResponse
-	61, // 111: shiki.plugin.v1.CoreAPI.RemoteStatFile:output_type -> shiki.v1.FileInfo
-	62, // 112: shiki.plugin.v1.CoreAPI.RemoteReadFile:output_type -> shiki.v1.FileData
-	61, // 113: shiki.plugin.v1.CoreAPI.RemoteWriteFile:output_type -> shiki.v1.FileInfo
-	52, // 114: shiki.plugin.v1.CoreAPI.RemoteDeleteFile:output_type -> shiki.v1.Empty
-	63, // 115: shiki.plugin.v1.CoreAPI.RemoteWatchFiles:output_type -> shiki.v1.FileEvent
-	64, // 116: shiki.plugin.v1.CoreAPI.RemoteCheckPort:output_type -> shiki.v1.CheckPortResponse
-	65, // 117: shiki.plugin.v1.CoreAPI.RemoteListPorts:output_type -> shiki.v1.ListPortsResponse
-	66, // 118: shiki.plugin.v1.CoreAPI.RemoteWatchPorts:output_type -> shiki.v1.PortEvent
-	51, // 119: shiki.plugin.v1.CoreAPI.RemoteForwardPort:output_type -> shiki.v1.PortData
-	60, // 120: shiki.plugin.v1.FileService.ListFiles:output_type -> shiki.v1.ListFilesResponse
-	61, // 121: shiki.plugin.v1.FileService.StatFile:output_type -> shiki.v1.FileInfo
-	62, // 122: shiki.plugin.v1.FileService.ReadFile:output_type -> shiki.v1.FileData
-	61, // 123: shiki.plugin.v1.FileService.WriteFile:output_type -> shiki.v1.FileInfo
-	52, // 124: shiki.plugin.v1.FileService.DeleteFile:output_type -> shiki.v1.Empty
-	63, // 125: shiki.plugin.v1.FileService.WatchFiles:output_type -> shiki.v1.FileEvent
-	64, // 126: shiki.plugin.v1.PortService.CheckPort:output_type -> shiki.v1.CheckPortResponse
-	65, // 127: shiki.plugin.v1.PortService.ListPorts:output_type -> shiki.v1.ListPortsResponse
-	66, // 128: shiki.plugin.v1.PortService.WatchPorts:output_type -> shiki.v1.PortEvent
-	51, // 129: shiki.plugin.v1.PortService.ForwardPort:output_type -> shiki.v1.PortData
-	26, // 130: shiki.plugin.v1.SyncWorker.ConfigureMapping:output_type -> shiki.plugin.v1.SyncState
-	26, // 131: shiki.plugin.v1.SyncWorker.GetSyncState:output_type -> shiki.plugin.v1.SyncState
-	29, // 132: shiki.plugin.v1.SyncWorker.ListConflicts:output_type -> shiki.plugin.v1.ConflictList
-	26, // 133: shiki.plugin.v1.SyncWorker.ResolveConflict:output_type -> shiki.plugin.v1.SyncState
-	62, // 134: shiki.plugin.v1.SyncWorker.ReadConflictFile:output_type -> shiki.v1.FileData
-	33, // 135: shiki.plugin.v1.PortWorker.DiscoverForwards:output_type -> shiki.plugin.v1.ForwardCandidates
-	35, // 136: shiki.plugin.v1.PortWorker.StartForward:output_type -> shiki.plugin.v1.ForwardState
-	52, // 137: shiki.plugin.v1.PortWorker.StopForward:output_type -> shiki.v1.Empty
-	36, // 138: shiki.plugin.v1.PortWorker.ListForwards:output_type -> shiki.plugin.v1.ForwardList
-	94, // [94:139] is the sub-list for method output_type
-	49, // [49:94] is the sub-list for method input_type
-	49, // [49:49] is the sub-list for extension type_name
-	49, // [49:49] is the sub-list for extension extendee
-	0,  // [0:49] is the sub-list for field type_name
+	45,  // 0: shiki.plugin.v1.PluginInfo.protocol:type_name -> shiki.v1.ProtocolOffer
+	3,   // 1: shiki.plugin.v1.PluginInfo.config_schema:type_name -> shiki.plugin.v1.ConfigField
+	4,   // 2: shiki.plugin.v1.PluginInfo.ui:type_name -> shiki.plugin.v1.UIContribution
+	46,  // 3: shiki.plugin.v1.ConfigField.constraints:type_name -> google.protobuf.Struct
+	3,   // 4: shiki.plugin.v1.ConfigField.children:type_name -> shiki.plugin.v1.ConfigField
+	5,   // 5: shiki.plugin.v1.UIContribution.status_slots:type_name -> shiki.plugin.v1.UIStatusSlot
+	6,   // 6: shiki.plugin.v1.UIContribution.dashboard_panels:type_name -> shiki.plugin.v1.UIDashboardPanel
+	7,   // 7: shiki.plugin.v1.UIContribution.settings:type_name -> shiki.plugin.v1.UISettingsSection
+	8,   // 8: shiki.plugin.v1.UIContribution.cli_commands:type_name -> shiki.plugin.v1.UICLICommand
+	9,   // 9: shiki.plugin.v1.UICLICommand.flags:type_name -> shiki.plugin.v1.UICLIFlag
+	46,  // 10: shiki.plugin.v1.InitRequest.config:type_name -> google.protobuf.Struct
+	10,  // 11: shiki.plugin.v1.InitRequest.core_api:type_name -> shiki.plugin.v1.CoreAPIEndpoint
+	47,  // 12: shiki.plugin.v1.InitRequest.protocol:type_name -> shiki.v1.ProtocolAgreement
+	44,  // 13: shiki.plugin.v1.Mapping.session_hints:type_name -> shiki.plugin.v1.Mapping.SessionHintsEntry
+	13,  // 14: shiki.plugin.v1.MappingList.mappings:type_name -> shiki.plugin.v1.Mapping
+	12,  // 15: shiki.plugin.v1.ConfigRequest.scope:type_name -> shiki.plugin.v1.Scope
+	46,  // 16: shiki.plugin.v1.PluginConfig.values:type_name -> google.protobuf.Struct
+	12,  // 17: shiki.plugin.v1.SetConfigRequest.scope:type_name -> shiki.plugin.v1.Scope
+	46,  // 18: shiki.plugin.v1.SetConfigRequest.values:type_name -> google.protobuf.Struct
+	12,  // 19: shiki.plugin.v1.SubscribeRequest.scope:type_name -> shiki.plugin.v1.Scope
+	12,  // 20: shiki.plugin.v1.Event.scope:type_name -> shiki.plugin.v1.Scope
+	33,  // 21: shiki.plugin.v1.Event.sync_state:type_name -> shiki.plugin.v1.SyncState
+	35,  // 22: shiki.plugin.v1.Event.conflict:type_name -> shiki.plugin.v1.Conflict
+	42,  // 23: shiki.plugin.v1.Event.forward_state:type_name -> shiki.plugin.v1.ForwardState
+	48,  // 24: shiki.plugin.v1.Event.session_event:type_name -> shiki.v1.SessionEvent
+	46,  // 25: shiki.plugin.v1.Event.status_payload:type_name -> google.protobuf.Struct
+	46,  // 26: shiki.plugin.v1.Event.notify_payload:type_name -> google.protobuf.Struct
+	46,  // 27: shiki.plugin.v1.Event.panel_payload:type_name -> google.protobuf.Struct
+	19,  // 28: shiki.plugin.v1.PublishEventRequest.event:type_name -> shiki.plugin.v1.Event
+	12,  // 29: shiki.plugin.v1.RemoteListFilesRequest.scope:type_name -> shiki.plugin.v1.Scope
+	49,  // 30: shiki.plugin.v1.RemoteListFilesRequest.request:type_name -> shiki.v1.ListFilesRequest
+	12,  // 31: shiki.plugin.v1.RemoteStatFileRequest.scope:type_name -> shiki.plugin.v1.Scope
+	50,  // 32: shiki.plugin.v1.RemoteStatFileRequest.request:type_name -> shiki.v1.StatFileRequest
+	12,  // 33: shiki.plugin.v1.RemoteReadFileRequest.scope:type_name -> shiki.plugin.v1.Scope
+	51,  // 34: shiki.plugin.v1.RemoteReadFileRequest.request:type_name -> shiki.v1.ReadFileRequest
+	12,  // 35: shiki.plugin.v1.RemoteDeleteFileRequest.scope:type_name -> shiki.plugin.v1.Scope
+	52,  // 36: shiki.plugin.v1.RemoteDeleteFileRequest.request:type_name -> shiki.v1.DeleteFileRequest
+	12,  // 37: shiki.plugin.v1.RemoteWatchFilesRequest.scope:type_name -> shiki.plugin.v1.Scope
+	53,  // 38: shiki.plugin.v1.RemoteWatchFilesRequest.request:type_name -> shiki.v1.WatchFilesRequest
+	12,  // 39: shiki.plugin.v1.RemoteCheckPortRequest.scope:type_name -> shiki.plugin.v1.Scope
+	54,  // 40: shiki.plugin.v1.RemoteCheckPortRequest.request:type_name -> shiki.v1.CheckPortRequest
+	12,  // 41: shiki.plugin.v1.RemoteListPortsRequest.scope:type_name -> shiki.plugin.v1.Scope
+	55,  // 42: shiki.plugin.v1.RemoteListPortsRequest.request:type_name -> shiki.v1.ListPortsRequest
+	12,  // 43: shiki.plugin.v1.RemoteWatchPortsRequest.scope:type_name -> shiki.plugin.v1.Scope
+	56,  // 44: shiki.plugin.v1.RemoteWatchPortsRequest.request:type_name -> shiki.v1.WatchPortsRequest
+	12,  // 45: shiki.plugin.v1.RemoteWriteOpen.scope:type_name -> shiki.plugin.v1.Scope
+	57,  // 46: shiki.plugin.v1.RemoteWriteOpen.header:type_name -> shiki.v1.WriteFileHeader
+	29,  // 47: shiki.plugin.v1.RemoteWriteFrame.open:type_name -> shiki.plugin.v1.RemoteWriteOpen
+	12,  // 48: shiki.plugin.v1.RemotePortOpen.scope:type_name -> shiki.plugin.v1.Scope
+	58,  // 49: shiki.plugin.v1.RemotePortOpen.connect:type_name -> shiki.v1.PortData
+	31,  // 50: shiki.plugin.v1.RemotePortFrame.open:type_name -> shiki.plugin.v1.RemotePortOpen
+	58,  // 51: shiki.plugin.v1.RemotePortFrame.data:type_name -> shiki.v1.PortData
+	34,  // 52: shiki.plugin.v1.Conflict.base:type_name -> shiki.plugin.v1.FileVersion
+	34,  // 53: shiki.plugin.v1.Conflict.local:type_name -> shiki.plugin.v1.FileVersion
+	34,  // 54: shiki.plugin.v1.Conflict.remote:type_name -> shiki.plugin.v1.FileVersion
+	35,  // 55: shiki.plugin.v1.ConflictList.conflicts:type_name -> shiki.plugin.v1.Conflict
+	0,   // 56: shiki.plugin.v1.ResolveConflictRequest.choice:type_name -> shiki.plugin.v1.ResolveConflictRequest.Choice
+	1,   // 57: shiki.plugin.v1.ReadConflictFileRequest.side:type_name -> shiki.plugin.v1.ReadConflictFileRequest.Side
+	39,  // 58: shiki.plugin.v1.ForwardCandidates.specs:type_name -> shiki.plugin.v1.ForwardSpec
+	39,  // 59: shiki.plugin.v1.ForwardState.spec:type_name -> shiki.plugin.v1.ForwardSpec
+	42,  // 60: shiki.plugin.v1.ForwardList.forwards:type_name -> shiki.plugin.v1.ForwardState
+	59,  // 61: shiki.plugin.v1.Plugin.GetInfo:input_type -> shiki.v1.Empty
+	11,  // 62: shiki.plugin.v1.Plugin.Init:input_type -> shiki.plugin.v1.InitRequest
+	59,  // 63: shiki.plugin.v1.Plugin.Start:input_type -> shiki.v1.Empty
+	59,  // 64: shiki.plugin.v1.Plugin.Stop:input_type -> shiki.v1.Empty
+	59,  // 65: shiki.plugin.v1.Plugin.Health:input_type -> shiki.v1.Empty
+	46,  // 66: shiki.plugin.v1.Plugin.InvokeAction:input_type -> google.protobuf.Struct
+	12,  // 67: shiki.plugin.v1.CoreAPI.GetProject:input_type -> shiki.plugin.v1.Scope
+	12,  // 68: shiki.plugin.v1.CoreAPI.ListProjects:input_type -> shiki.plugin.v1.Scope
+	12,  // 69: shiki.plugin.v1.CoreAPI.GetSession:input_type -> shiki.plugin.v1.Scope
+	12,  // 70: shiki.plugin.v1.CoreAPI.ListSessions:input_type -> shiki.plugin.v1.Scope
+	12,  // 71: shiki.plugin.v1.CoreAPI.GetMapping:input_type -> shiki.plugin.v1.Scope
+	12,  // 72: shiki.plugin.v1.CoreAPI.ListMappings:input_type -> shiki.plugin.v1.Scope
+	18,  // 73: shiki.plugin.v1.CoreAPI.SubscribeEvents:input_type -> shiki.plugin.v1.SubscribeRequest
+	20,  // 74: shiki.plugin.v1.CoreAPI.PublishEvent:input_type -> shiki.plugin.v1.PublishEventRequest
+	60,  // 75: shiki.plugin.v1.CoreAPI.Log:input_type -> shiki.v1.LogRecord
+	15,  // 76: shiki.plugin.v1.CoreAPI.GetConfig:input_type -> shiki.plugin.v1.ConfigRequest
+	17,  // 77: shiki.plugin.v1.CoreAPI.SetConfig:input_type -> shiki.plugin.v1.SetConfigRequest
+	21,  // 78: shiki.plugin.v1.CoreAPI.RemoteListFiles:input_type -> shiki.plugin.v1.RemoteListFilesRequest
+	22,  // 79: shiki.plugin.v1.CoreAPI.RemoteStatFile:input_type -> shiki.plugin.v1.RemoteStatFileRequest
+	23,  // 80: shiki.plugin.v1.CoreAPI.RemoteReadFile:input_type -> shiki.plugin.v1.RemoteReadFileRequest
+	30,  // 81: shiki.plugin.v1.CoreAPI.RemoteWriteFile:input_type -> shiki.plugin.v1.RemoteWriteFrame
+	24,  // 82: shiki.plugin.v1.CoreAPI.RemoteDeleteFile:input_type -> shiki.plugin.v1.RemoteDeleteFileRequest
+	25,  // 83: shiki.plugin.v1.CoreAPI.RemoteWatchFiles:input_type -> shiki.plugin.v1.RemoteWatchFilesRequest
+	26,  // 84: shiki.plugin.v1.CoreAPI.RemoteCheckPort:input_type -> shiki.plugin.v1.RemoteCheckPortRequest
+	27,  // 85: shiki.plugin.v1.CoreAPI.RemoteListPorts:input_type -> shiki.plugin.v1.RemoteListPortsRequest
+	28,  // 86: shiki.plugin.v1.CoreAPI.RemoteWatchPorts:input_type -> shiki.plugin.v1.RemoteWatchPortsRequest
+	32,  // 87: shiki.plugin.v1.CoreAPI.RemoteForwardPort:input_type -> shiki.plugin.v1.RemotePortFrame
+	49,  // 88: shiki.plugin.v1.FileService.ListFiles:input_type -> shiki.v1.ListFilesRequest
+	50,  // 89: shiki.plugin.v1.FileService.StatFile:input_type -> shiki.v1.StatFileRequest
+	51,  // 90: shiki.plugin.v1.FileService.ReadFile:input_type -> shiki.v1.ReadFileRequest
+	61,  // 91: shiki.plugin.v1.FileService.WriteFile:input_type -> shiki.v1.WriteFileRequest
+	52,  // 92: shiki.plugin.v1.FileService.DeleteFile:input_type -> shiki.v1.DeleteFileRequest
+	53,  // 93: shiki.plugin.v1.FileService.WatchFiles:input_type -> shiki.v1.WatchFilesRequest
+	54,  // 94: shiki.plugin.v1.PortService.CheckPort:input_type -> shiki.v1.CheckPortRequest
+	55,  // 95: shiki.plugin.v1.PortService.ListPorts:input_type -> shiki.v1.ListPortsRequest
+	56,  // 96: shiki.plugin.v1.PortService.WatchPorts:input_type -> shiki.v1.WatchPortsRequest
+	58,  // 97: shiki.plugin.v1.PortService.ForwardPort:input_type -> shiki.v1.PortData
+	13,  // 98: shiki.plugin.v1.SyncWorker.ConfigureMapping:input_type -> shiki.plugin.v1.Mapping
+	12,  // 99: shiki.plugin.v1.SyncWorker.GetSyncState:input_type -> shiki.plugin.v1.Scope
+	12,  // 100: shiki.plugin.v1.SyncWorker.ListConflicts:input_type -> shiki.plugin.v1.Scope
+	37,  // 101: shiki.plugin.v1.SyncWorker.ResolveConflict:input_type -> shiki.plugin.v1.ResolveConflictRequest
+	38,  // 102: shiki.plugin.v1.SyncWorker.ReadConflictFile:input_type -> shiki.plugin.v1.ReadConflictFileRequest
+	12,  // 103: shiki.plugin.v1.PortWorker.DiscoverForwards:input_type -> shiki.plugin.v1.Scope
+	39,  // 104: shiki.plugin.v1.PortWorker.StartForward:input_type -> shiki.plugin.v1.ForwardSpec
+	41,  // 105: shiki.plugin.v1.PortWorker.StopForward:input_type -> shiki.plugin.v1.ForwardID
+	59,  // 106: shiki.plugin.v1.PortWorker.ListForwards:input_type -> shiki.v1.Empty
+	2,   // 107: shiki.plugin.v1.Plugin.GetInfo:output_type -> shiki.plugin.v1.PluginInfo
+	59,  // 108: shiki.plugin.v1.Plugin.Init:output_type -> shiki.v1.Empty
+	59,  // 109: shiki.plugin.v1.Plugin.Start:output_type -> shiki.v1.Empty
+	59,  // 110: shiki.plugin.v1.Plugin.Stop:output_type -> shiki.v1.Empty
+	62,  // 111: shiki.plugin.v1.Plugin.Health:output_type -> shiki.v1.HealthStatus
+	46,  // 112: shiki.plugin.v1.Plugin.InvokeAction:output_type -> google.protobuf.Struct
+	63,  // 113: shiki.plugin.v1.CoreAPI.GetProject:output_type -> shiki.v1.Project
+	64,  // 114: shiki.plugin.v1.CoreAPI.ListProjects:output_type -> shiki.v1.ListProjectsResponse
+	65,  // 115: shiki.plugin.v1.CoreAPI.GetSession:output_type -> shiki.v1.Session
+	66,  // 116: shiki.plugin.v1.CoreAPI.ListSessions:output_type -> shiki.v1.ListSessionsResponse
+	13,  // 117: shiki.plugin.v1.CoreAPI.GetMapping:output_type -> shiki.plugin.v1.Mapping
+	14,  // 118: shiki.plugin.v1.CoreAPI.ListMappings:output_type -> shiki.plugin.v1.MappingList
+	19,  // 119: shiki.plugin.v1.CoreAPI.SubscribeEvents:output_type -> shiki.plugin.v1.Event
+	59,  // 120: shiki.plugin.v1.CoreAPI.PublishEvent:output_type -> shiki.v1.Empty
+	59,  // 121: shiki.plugin.v1.CoreAPI.Log:output_type -> shiki.v1.Empty
+	16,  // 122: shiki.plugin.v1.CoreAPI.GetConfig:output_type -> shiki.plugin.v1.PluginConfig
+	16,  // 123: shiki.plugin.v1.CoreAPI.SetConfig:output_type -> shiki.plugin.v1.PluginConfig
+	67,  // 124: shiki.plugin.v1.CoreAPI.RemoteListFiles:output_type -> shiki.v1.ListFilesResponse
+	68,  // 125: shiki.plugin.v1.CoreAPI.RemoteStatFile:output_type -> shiki.v1.FileInfo
+	69,  // 126: shiki.plugin.v1.CoreAPI.RemoteReadFile:output_type -> shiki.v1.FileData
+	68,  // 127: shiki.plugin.v1.CoreAPI.RemoteWriteFile:output_type -> shiki.v1.FileInfo
+	59,  // 128: shiki.plugin.v1.CoreAPI.RemoteDeleteFile:output_type -> shiki.v1.Empty
+	70,  // 129: shiki.plugin.v1.CoreAPI.RemoteWatchFiles:output_type -> shiki.v1.FileEvent
+	71,  // 130: shiki.plugin.v1.CoreAPI.RemoteCheckPort:output_type -> shiki.v1.CheckPortResponse
+	72,  // 131: shiki.plugin.v1.CoreAPI.RemoteListPorts:output_type -> shiki.v1.ListPortsResponse
+	73,  // 132: shiki.plugin.v1.CoreAPI.RemoteWatchPorts:output_type -> shiki.v1.PortEvent
+	58,  // 133: shiki.plugin.v1.CoreAPI.RemoteForwardPort:output_type -> shiki.v1.PortData
+	67,  // 134: shiki.plugin.v1.FileService.ListFiles:output_type -> shiki.v1.ListFilesResponse
+	68,  // 135: shiki.plugin.v1.FileService.StatFile:output_type -> shiki.v1.FileInfo
+	69,  // 136: shiki.plugin.v1.FileService.ReadFile:output_type -> shiki.v1.FileData
+	68,  // 137: shiki.plugin.v1.FileService.WriteFile:output_type -> shiki.v1.FileInfo
+	59,  // 138: shiki.plugin.v1.FileService.DeleteFile:output_type -> shiki.v1.Empty
+	70,  // 139: shiki.plugin.v1.FileService.WatchFiles:output_type -> shiki.v1.FileEvent
+	71,  // 140: shiki.plugin.v1.PortService.CheckPort:output_type -> shiki.v1.CheckPortResponse
+	72,  // 141: shiki.plugin.v1.PortService.ListPorts:output_type -> shiki.v1.ListPortsResponse
+	73,  // 142: shiki.plugin.v1.PortService.WatchPorts:output_type -> shiki.v1.PortEvent
+	58,  // 143: shiki.plugin.v1.PortService.ForwardPort:output_type -> shiki.v1.PortData
+	33,  // 144: shiki.plugin.v1.SyncWorker.ConfigureMapping:output_type -> shiki.plugin.v1.SyncState
+	33,  // 145: shiki.plugin.v1.SyncWorker.GetSyncState:output_type -> shiki.plugin.v1.SyncState
+	36,  // 146: shiki.plugin.v1.SyncWorker.ListConflicts:output_type -> shiki.plugin.v1.ConflictList
+	33,  // 147: shiki.plugin.v1.SyncWorker.ResolveConflict:output_type -> shiki.plugin.v1.SyncState
+	69,  // 148: shiki.plugin.v1.SyncWorker.ReadConflictFile:output_type -> shiki.v1.FileData
+	40,  // 149: shiki.plugin.v1.PortWorker.DiscoverForwards:output_type -> shiki.plugin.v1.ForwardCandidates
+	42,  // 150: shiki.plugin.v1.PortWorker.StartForward:output_type -> shiki.plugin.v1.ForwardState
+	59,  // 151: shiki.plugin.v1.PortWorker.StopForward:output_type -> shiki.v1.Empty
+	43,  // 152: shiki.plugin.v1.PortWorker.ListForwards:output_type -> shiki.plugin.v1.ForwardList
+	107, // [107:153] is the sub-list for method output_type
+	61,  // [61:107] is the sub-list for method input_type
+	61,  // [61:61] is the sub-list for extension type_name
+	61,  // [61:61] is the sub-list for extension extendee
+	0,   // [0:61] is the sub-list for field type_name
 }
 
 func init() { file_plugin_proto_init() }
@@ -2947,18 +3618,21 @@ func file_plugin_proto_init() {
 	if File_plugin_proto != nil {
 		return
 	}
-	file_plugin_proto_msgTypes[10].OneofWrappers = []any{
+	file_plugin_proto_msgTypes[17].OneofWrappers = []any{
 		(*Event_SyncState)(nil),
 		(*Event_Conflict)(nil),
 		(*Event_ForwardState)(nil),
 		(*Event_SessionEvent)(nil),
 		(*Event_RescanRequired)(nil),
+		(*Event_StatusPayload)(nil),
+		(*Event_NotifyPayload)(nil),
+		(*Event_PanelPayload)(nil),
 	}
-	file_plugin_proto_msgTypes[21].OneofWrappers = []any{
+	file_plugin_proto_msgTypes[28].OneofWrappers = []any{
 		(*RemoteWriteFrame_Open)(nil),
 		(*RemoteWriteFrame_Chunk)(nil),
 	}
-	file_plugin_proto_msgTypes[23].OneofWrappers = []any{
+	file_plugin_proto_msgTypes[30].OneofWrappers = []any{
 		(*RemotePortFrame_Open)(nil),
 		(*RemotePortFrame_Data)(nil),
 	}
@@ -2968,7 +3642,7 @@ func file_plugin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_plugin_proto_rawDesc), len(file_plugin_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   36,
+			NumMessages:   43,
 			NumExtensions: 0,
 			NumServices:   6,
 		},

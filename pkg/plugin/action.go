@@ -1,6 +1,6 @@
 // Package plugin — ActionRequest/ActionResult are the typed Go wrappers for
-// the InvokeAction RPC which travels over gRPC as google.protobuf.Struct.
-// pkg/protocol/plugin/invoke_action.go carries the gRPC wire binding.
+// the generated Plugin.InvokeAction RPC, transported as google.protobuf.Struct.
+// The wire binding is generated in pkg/protocol/plugin/plugin_grpc.pb.go.
 package plugin
 
 import (

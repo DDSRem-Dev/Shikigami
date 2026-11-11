@@ -9,6 +9,7 @@ import (
 	context "context"
 	protocol "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
 	plugin "github.com/DDSRem-Dev/Shikigami/pkg/protocol/plugin"
+	structpb "google.golang.org/protobuf/types/known/structpb"
 	sync "sync"
 )
 
@@ -45,6 +46,8 @@ const (
 	PluginStopProcedure = "/shiki.plugin.v1.Plugin/Stop"
 	// PluginHealthProcedure is the procedure name of the Plugin's Health RPC.
 	PluginHealthProcedure = "/shiki.plugin.v1.Plugin/Health"
+	// PluginInvokeActionProcedure is the procedure name of the Plugin's InvokeAction RPC.
+	PluginInvokeActionProcedure = "/shiki.plugin.v1.Plugin/InvokeAction"
 	// CoreAPIGetProjectProcedure is the procedure name of the CoreAPI's GetProject RPC.
 	CoreAPIGetProjectProcedure = "/shiki.plugin.v1.CoreAPI/GetProject"
 	// CoreAPIListProjectsProcedure is the procedure name of the CoreAPI's ListProjects RPC.
@@ -166,6 +169,13 @@ var (
 			Procedure:  PluginHealthProcedure,
 		}
 	})
+	pluginInvokeActionSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     plugin.File_plugin_proto.Services().ByName("Plugin").Methods().ByName("InvokeAction"),
+			Procedure:  PluginInvokeActionProcedure,
+		}
+	})
 )
 
 // PluginClient is a client for the shiki.plugin.v1.Plugin service.
@@ -175,6 +185,10 @@ type PluginClient interface {
 	Start(context.Context, *protocol.Empty) (*protocol.Empty, error)
 	Stop(context.Context, *protocol.Empty) (*protocol.Empty, error)
 	Health(context.Context, *protocol.Empty) (*protocol.HealthStatus, error)
+	// InvokeAction dispatches a manifest-declared action to the plugin.
+	// Request and response are encoded as google.protobuf.Struct (JSON object).
+	// The host authorizes the invocation via the standard instance credential.
+	InvokeAction(context.Context, *structpb.Struct) (*structpb.Struct, error)
 }
 
 // NewPluginClient constructs a client for the shiki.plugin.v1.Plugin service. Multiple service
@@ -190,6 +204,10 @@ type PluginHandler interface {
 	Start(context.Context, *protocol.Empty) (*protocol.Empty, error)
 	Stop(context.Context, *protocol.Empty) (*protocol.Empty, error)
 	Health(context.Context, *protocol.Empty) (*protocol.HealthStatus, error)
+	// InvokeAction dispatches a manifest-declared action to the plugin.
+	// Request and response are encoded as google.protobuf.Struct (JSON object).
+	// The host authorizes the invocation via the standard instance credential.
+	InvokeAction(context.Context, *structpb.Struct) (*structpb.Struct, error)
 }
 
 // RegisterPluginHandler registers svc as the shiki.plugin.v1.Plugin implementation on server.
@@ -201,6 +219,7 @@ func RegisterPluginHandler(server *connect.Server, svc PluginHandler) {
 		connect.Method{Spec: pluginStartSpec(), Handler: adapter.start},
 		connect.Method{Spec: pluginStopSpec(), Handler: adapter.stop},
 		connect.Method{Spec: pluginHealthSpec(), Handler: adapter.health},
+		connect.Method{Spec: pluginInvokeActionSpec(), Handler: adapter.invokeAction},
 	)
 }
 
@@ -225,6 +244,10 @@ func (UnimplementedPluginHandler) Stop(context.Context, *protocol.Empty) (*proto
 
 func (UnimplementedPluginHandler) Health(context.Context, *protocol.Empty) (*protocol.HealthStatus, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, "shiki.plugin.v1.Plugin.Health is not implemented")
+}
+
+func (UnimplementedPluginHandler) InvokeAction(context.Context, *structpb.Struct) (*structpb.Struct, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "shiki.plugin.v1.Plugin.InvokeAction is not implemented")
 }
 
 type pluginClient struct {
@@ -266,6 +289,14 @@ func (c *pluginClient) Stop(ctx context.Context, req *protocol.Empty) (*protocol
 func (c *pluginClient) Health(ctx context.Context, req *protocol.Empty) (*protocol.HealthStatus, error) {
 	var res protocol.HealthStatus
 	if err := c.client.CallUnary(ctx, pluginHealthSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *pluginClient) InvokeAction(ctx context.Context, req *structpb.Struct) (*structpb.Struct, error) {
+	var res structpb.Struct
+	if err := c.client.CallUnary(ctx, pluginInvokeActionSpec(), req, &res); err != nil {
 		return nil, err
 	}
 	return &res, nil
@@ -327,6 +358,18 @@ func (h pluginHandler) health(ctx context.Context, _ connect.Spec, stream connec
 		return err
 	}
 	res, err := h.svc.Health(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h pluginHandler) invokeAction(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req structpb.Struct
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.InvokeAction(ctx, &req)
 	if err != nil {
 		return err
 	}

@@ -175,10 +175,10 @@ func (r *runtime) authorized(ctx context.Context) bool {
 	return r.instance != "" && ids[0] == r.instance && subtle.ConstantTimeCompare([]byte(tokens[0]), []byte("Bearer "+r.token)) == 1
 }
 
-// InvokeAction implements ppb.PluginActionsServer. If the plugin implementation
-// satisfies ActionImplementation, the action is dispatched to it; otherwise
-// CodeUnimplemented is returned. The request struct is unmarshaled to
-// ActionRequest, the result is marshaled back to structpb.Struct.
+// InvokeAction implements the generated PluginServer method. If the plugin
+// implementation satisfies ActionImplementation, the action is dispatched to
+// it; otherwise CodeUnimplemented is returned. The request struct is
+// unmarshaled to ActionRequest, and the result is marshaled back to Struct.
 func (r *runtime) InvokeAction(ctx context.Context, in *structpb.Struct) (*structpb.Struct, error) {
 	r.mu.Lock()
 	state := r.state

@@ -12,6 +12,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	structpb "google.golang.org/protobuf/types/known/structpb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -20,11 +21,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Plugin_GetInfo_FullMethodName = "/shiki.plugin.v1.Plugin/GetInfo"
-	Plugin_Init_FullMethodName    = "/shiki.plugin.v1.Plugin/Init"
-	Plugin_Start_FullMethodName   = "/shiki.plugin.v1.Plugin/Start"
-	Plugin_Stop_FullMethodName    = "/shiki.plugin.v1.Plugin/Stop"
-	Plugin_Health_FullMethodName  = "/shiki.plugin.v1.Plugin/Health"
+	Plugin_GetInfo_FullMethodName      = "/shiki.plugin.v1.Plugin/GetInfo"
+	Plugin_Init_FullMethodName         = "/shiki.plugin.v1.Plugin/Init"
+	Plugin_Start_FullMethodName        = "/shiki.plugin.v1.Plugin/Start"
+	Plugin_Stop_FullMethodName         = "/shiki.plugin.v1.Plugin/Stop"
+	Plugin_Health_FullMethodName       = "/shiki.plugin.v1.Plugin/Health"
+	Plugin_InvokeAction_FullMethodName = "/shiki.plugin.v1.Plugin/InvokeAction"
 )
 
 // PluginClient is the client API for Plugin service.
@@ -36,6 +38,10 @@ type PluginClient interface {
 	Start(ctx context.Context, in *protocol.Empty, opts ...grpc.CallOption) (*protocol.Empty, error)
 	Stop(ctx context.Context, in *protocol.Empty, opts ...grpc.CallOption) (*protocol.Empty, error)
 	Health(ctx context.Context, in *protocol.Empty, opts ...grpc.CallOption) (*protocol.HealthStatus, error)
+	// InvokeAction dispatches a manifest-declared action to the plugin.
+	// Request and response are encoded as google.protobuf.Struct (JSON object).
+	// The host authorizes the invocation via the standard instance credential.
+	InvokeAction(ctx context.Context, in *structpb.Struct, opts ...grpc.CallOption) (*structpb.Struct, error)
 }
 
 type pluginClient struct {
@@ -96,6 +102,16 @@ func (c *pluginClient) Health(ctx context.Context, in *protocol.Empty, opts ...g
 	return out, nil
 }
 
+func (c *pluginClient) InvokeAction(ctx context.Context, in *structpb.Struct, opts ...grpc.CallOption) (*structpb.Struct, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(structpb.Struct)
+	err := c.cc.Invoke(ctx, Plugin_InvokeAction_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PluginServer is the server API for Plugin service.
 // All implementations must embed UnimplementedPluginServer
 // for forward compatibility.
@@ -105,6 +121,10 @@ type PluginServer interface {
 	Start(context.Context, *protocol.Empty) (*protocol.Empty, error)
 	Stop(context.Context, *protocol.Empty) (*protocol.Empty, error)
 	Health(context.Context, *protocol.Empty) (*protocol.HealthStatus, error)
+	// InvokeAction dispatches a manifest-declared action to the plugin.
+	// Request and response are encoded as google.protobuf.Struct (JSON object).
+	// The host authorizes the invocation via the standard instance credential.
+	InvokeAction(context.Context, *structpb.Struct) (*structpb.Struct, error)
 	mustEmbedUnimplementedPluginServer()
 }
 
@@ -129,6 +149,9 @@ func (UnimplementedPluginServer) Stop(context.Context, *protocol.Empty) (*protoc
 }
 func (UnimplementedPluginServer) Health(context.Context, *protocol.Empty) (*protocol.HealthStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method Health not implemented")
+}
+func (UnimplementedPluginServer) InvokeAction(context.Context, *structpb.Struct) (*structpb.Struct, error) {
+	return nil, status.Error(codes.Unimplemented, "method InvokeAction not implemented")
 }
 func (UnimplementedPluginServer) mustEmbedUnimplementedPluginServer() {}
 func (UnimplementedPluginServer) testEmbeddedByValue()                {}
@@ -241,6 +264,24 @@ func _Plugin_Health_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Plugin_InvokeAction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(structpb.Struct)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PluginServer).InvokeAction(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Plugin_InvokeAction_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PluginServer).InvokeAction(ctx, req.(*structpb.Struct))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Plugin_ServiceDesc is the grpc.ServiceDesc for Plugin service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -267,6 +308,10 @@ var Plugin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Health",
 			Handler:    _Plugin_Health_Handler,
+		},
+		{
+			MethodName: "InvokeAction",
+			Handler:    _Plugin_InvokeAction_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
