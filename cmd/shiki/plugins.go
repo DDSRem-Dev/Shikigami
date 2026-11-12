@@ -148,8 +148,12 @@ func (a *app) pluginCommands() *cobra.Command {
 	actionCmd := a.pluginActionCommands()
 	actionCmd.PersistentPreRunE = func(*cobra.Command, []string) error { return nil }
 	root.AddCommand(actionCmd)
+	for _, c := range a.pluginInstallCommands() {
+		root.AddCommand(c)
+	}
 	return root
 }
+
 func (a *app) pluginLogsCommand(side *string) *cobra.Command {
 	var tail uint32
 	var follow bool

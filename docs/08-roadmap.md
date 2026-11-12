@@ -2,6 +2,8 @@
 
 **当前进度（2026-11-12）：42/42，原清单最后一项已关闭。** 当前源码的功能、平台、验收依据及未支持范围已统一到[支持声明](18-release-readiness.md#current-support)。Phase 0–5各阶段为11/11、7/7、6/6、6/6、6/6、6/6。认证生命周期和长稳/资源/性能沿用2026-11-01用户确认的关闭结论，历史实测/失败及源码范围保留；生产heap/object归因、真实Claude登录/推理及物理主机重启仍按未实测边界披露。42/42表示当前源码验收登记与声明核对完成，不表示新包或稳定版已发布；仓库公开安装入口仍为alpha.2，未包含后续master修复。
 
+**插件 marketplace 安装批次（2026-11-12）：** 新增 `internal/pluginmarket` 签名 envelope、Ed25519 trust store、严格 JSON/HTTPS/平台/归档身份校验和流式 SHA-256 验证；CLI 新增 `plugins trust`、`plugins market`、签名 marketplace 安装与更新路径。手工 URL/path 安装保持显式责任边界，不进入自动更新。Linux amd64 目标 CLI 编译和内部包测试编译通过；Windows 执行受 Unix-only 源码与 Application Control 限制，外部 marketplace/发布验证仍待，未新增路线图勾选或发布声明。
+
 
 **CI 重跑与验证（2026-11-12）：** 提交 `91fe5c7` 的 [CI 43093710222](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43093710222) 首次执行的 57 项矩阵中，WSL2 的 `actions/upload-artifact@v7.0.2` 因 artifact 服务返回 HTML（`Unexpected token '<'`）在五次重试后失败；WSL 产品与维护测试本身已完成，首轮最终 53/57，另有四个下游 terminal/maintenance 作业未调度，不将该基础设施失败计为源码回归。完整重跑 attempt 2 已 completed/success，57/57 作业通过，无失败、取消或跳过，包含 WSL2、四平台插件/E2E/集成、terminal、maintenance、embedded、release 与 Homebrew；本轮无源码变更，首次失败与重跑均按实际结果保留。
 **CI 修复批次（2026-11-12）：** 提交 `e4d660f` 的 [CI 43068229844](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43068229844) 因插件 manifest 扩展后未提交 protoc 生成绑定而失败：四个 native preflight 在 `git diff --exit-code -- pkg/protocol` 发现 `PluginInfo`、`InvokeAction` 及相关生成代码漂移；WSL2 job 同轮失败，公开产物未暴露其私有 Linux 细节。已按锁定工具版本补交生成文件，并将已被生成代码占用的手工重复 handler/PluginActions 服务迁移为生成 `Plugin.InvokeAction`，删除过时文件。协议包定向测试与固定工具重复生成通过；新远端 CI 结果待验证，本轮不计全绿。

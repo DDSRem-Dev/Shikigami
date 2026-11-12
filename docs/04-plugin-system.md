@@ -113,7 +113,7 @@ shiki plugins logs sync --tail 50
 shiki plugins restart sync
 ```
 
-插件管理始终明确 local/remote；远端管理需 plugin.manage。第三方分发、插件市场、自动更新签名信任根为后续工作，未具备前不提供“自动下载并执行任意插件”的承诺。
+第三方插件分发通过静态 HTTPS marketplace index 完成；index 和每个归档都使用相同格式的 Ed25519 signed envelope。客户端只信任本地 0600 trust store 中的 publisher key，按 `key_id` 选择根并校验 index、插件 ID、版本、OS/arch、归档文件名、大小和 SHA-256；任何签名、平台或清单不匹配都拒绝且不执行。`shiki plugins install <url-or-path>` 保留为明确的手工安装入口，不能冒充 marketplace 信任；`shiki plugins install <id> --market <index-url>` 与 `shiki plugins update` 只走签名 index/归档，更新沿用已记录的 market URL、版本和 key。market 不提供通用远程执行 RPC，插件仍是当前 OS 用户权限下的独立进程而非沙箱。
 
 
 ## Manifest 与 UI 注入
@@ -216,7 +216,7 @@ shiki plugins <id> <command> [flags]
 2. `/var/lib/shiki/plugins/<id>/manifest.json`（系统级安装的插件）
 3. 内嵌内置插件（`plugins/sync/manifest.json`、`plugins/port/manifest.json`）
 
-每个目录下必须同时存在合法 `manifest.json` 和对应二进制，才会被注册为可用插件。第三方插件的分发、市场与自动更新签名信任根为后续工作，当前不提供自动下载并执行任意第三方插件的承诺；用户需手动安装并确保二进制完整性。
+每个目录下必须同时存在合法 `manifest.json` 和对应二进制，且安装器必须先完成清单、归档完整性和 publisher trust-root 校验才可注册。第三方插件可以由静态 HTTPS marketplace index 分发；index 与归档签名均绑定 `id/version/os/arch/url-independent archive name/size/SHA-256`，trust root 由用户显式导入并保存在 0600 文件中。自动更新只接受已信任 key 签发的最新 index 和匹配归档；无来源、无签名、未知 key、降级版本、平台不匹配或校验失败均停止，不覆盖当前安装。手工 `plugins install <url-or-path>` 仍可用，但它是用户明确承担完整性责任的本地/URL路径，不获得 marketplace 自动更新资格。
 
 ## 完整 RPC 分工与双端路由
 

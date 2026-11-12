@@ -4,6 +4,20 @@
 
 `scripts/install.sh`、`install-client.sh`、`uninstall.sh` 与短时运维 helper `shiki-install` 已存在；已完成专用公钥的四目标签名及验签。[当前公开 Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.2) 来自提交 `fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2`、成功自动发布运行 `40912019720`，公开资产的下载验证结果见[发行证据](./15-implementation-status.md#evidence-public-alpha2-release-20261030)。安装只接受本地 bundle、固定版本及调用者从独立可信渠道取得的 checksum pin。可信源码工具 `scripts/release-trust.go fetch` 提供显式HTTPS归档/签名地址、独立可信公钥和固定版本/平台的下载验签入口，先认证签名再下载归档，成功后生成私有副本/pin/receipt；解包与安装仍是显式后续步骤，工具不指定正式来源或建立公钥信任。GitHub下载地址会重定向，现有 `fetch` 拒绝重定向；应使用 `gh release download v0.0.1-alpha.2 --repo DDSRem-Dev/Shikigami` 取回资产，再用可信源码 verifier 和独立可信公钥离线验签。命令与限制见发布认证，本批验收进度见16。下列完整就绪和运维要求不因预发布成功而降低。
 
+## 第三方插件签名 marketplace 安装（当前源码）
+
+`shiki plugins install <plugin-id>` 只接受已配置并通过签名验证的 marketplace index；`shiki plugins install <url-or-path>` 仍是用户明确承担完整性责任的手工入口，可选 `--sha256`，不获得自动更新资格。首次配置：
+
+```bash
+shiki plugins trust add <key-id> publisher-public-key.pem
+shiki plugins market add https://market.example/index.json
+shiki plugins market search <query>
+shiki plugins install example-plugin
+shiki plugins update [example-plugin]
+```
+
+trust store 位于 `~/.shiki/plugin-market/trust.json`，由安装器以 0600 文件、0700 目录原子保存；market 列表位于同目录。index、归档元数据和归档本体分别要求 Ed25519 signed envelope、已信任 `key_id`、ID/version/OS/arch/文件名/大小/SHA-256 一致，验签和流式 hash 完成前不会解包或替换当前插件。仅 Linux/macOS 的 amd64/arm64 条目可被选择；插件仍以当前用户权限独立运行，不是沙箱。当前验证覆盖 Linux 目标 CLI 编译与内部签名/信任包测试编译；Windows 本机 Unix-only 项目测试受平台和 Application Control 限制，尚无外部 marketplace/发布验收证据，不能宣称该门槛已关闭。
+
 ## 部署模型
 
 - 服务端首版：Linux + systemd，amd64/arm64；macOS/Linux/WSL 是客户端平台。原生 Windows 客户端/GUI 后续验收。
@@ -73,7 +87,61 @@
 
 没有 `--skip-tailscale` 自动明文降级，也不使用 `--tailscale-key=<secret>` 暴露凭据。自定义配置目录必须安全创建并保持所有权。
 
-## 交互方式
+## Bootstrap 一键入口
+
+`scripts/bootstrap.sh` 随 Release 分发，内嵌 Ed25519 公钥，封装了“下载→验签→解压→调用安装器”全流程，是公开安装入口。公钥指纹（SPKI DER SHA-256）：`e21f6dd671ea5042c43c492b759b933dda73985f89a823b43c651ff7c787c17d`，可对照 `configs/release-signing.pub` 独立核验。当前公开包为 `v0.0.1-alpha.2`；由于 GitHub 的 `releases/latest` 不包含预发布版本，预发布必须在下载 URL 中写明 tag。
+
+Bootstrap 运行前要求 `curl` 或 `wget`、`tar`、`base64`、`openssl`、`/usr/bin/perl` 和 SHA-256 工具（`sha256sum` 或 `shasum`）。它只接受签名验证成功的归档；同源 `.sha256` 不能替代 Ed25519 信任链，也不会在缺少 OpenSSL 时降级安装。
+
+**服务端（VPS）安装**：
+
+```bash
+VERSION=v0.0.1-alpha.2
+
+# 交互式（推荐：先下载可审查脚本）
+curl -fsSL "https://github.com/DDSRem-Dev/Shikigami/releases/download/${VERSION}/bootstrap.sh" \
+     -o bootstrap.sh && sudo bash bootstrap.sh --version="$VERSION" --user=rem
+
+# 管道安装（全程交互从 /dev/tty 读取）
+curl -fsSL "https://github.com/DDSRem-Dev/Shikigami/releases/download/${VERSION}/bootstrap.sh" \
+     | sudo bash -s -- --version="$VERSION" --user=rem
+
+# 无人值守 VPS / CI（auth key 和 Token 均写入 0600 文件）
+curl -fsSL "https://github.com/DDSRem-Dev/Shikigami/releases/download/${VERSION}/bootstrap.sh" \
+     | sudo bash -s -- --version="$VERSION" --user=rem \
+         --tailscale-key-file=/run/secrets/ts-authkey \
+         --non-interactive \
+         --token-output=/run/secrets/shiki-token
+```
+
+**客户端安装**：
+
+```bash
+VERSION=v0.0.1-alpha.2
+# macOS / Linux with Homebrew（推荐）
+brew tap ddsrem-dev/shikigami https://github.com/DDSRem-Dev/Shikigami \
+  && brew install ddsrem-dev/shikigami/shikigami \
+  && shiki-install install --role=client
+
+# 任意受支持平台（显式预发布 tag）
+curl -fsSL "https://github.com/DDSRem-Dev/Shikigami/releases/download/${VERSION}/bootstrap.sh" \
+     | bash -s -- --version="$VERSION" --role=client
+```
+
+**升级**（已安装版本）：
+
+```bash
+VERSION=v0.0.1-alpha.2
+# 重新执行已审查版本的 bootstrap，自动走升级路径
+curl -fsSL "https://github.com/DDSRem-Dev/Shikigami/releases/download/${VERSION}/bootstrap.sh" \
+     | sudo bash -s -- --version="$VERSION" --user=rem
+# 或通过 Homebrew
+brew upgrade ddsrem-dev/shikigami/shikigami && shiki-install install --role=client
+```
+
+Bootstrap 先验证归档对应平台、版本、文件名、大小和归档 SHA-256，再使用内嵌公钥验证签名，并把签名 payload 中的 `SHA256SUMS` pin 交给 bundle 内部的 `shiki-install` 再次核验。验证失败、签名工具缺失或归档布局不符均停止，不执行任何 bundle 脚本。
+
+## 低级交互方式
 
 先下载并验证安装器，再从文件执行 Bash；不要把需要 read 的脚本通过 stdin 管道执行，避免把后续脚本正文读成回答。
 
