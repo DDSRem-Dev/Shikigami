@@ -129,13 +129,14 @@ exit "${SHIKI_TEST_STATUS:-0}"
                         self.send_header("Transfer-Encoding", "chunked")
                         self.end_headers()
                         block = b"x" * (4096 if owner.behavior == "oversized" else 1)
+                        downloading = owner.downloading
                         try:
                             for _ in range(64 if owner.behavior == "oversized" else 300):
                                 if owner.stop_download.is_set():
                                     break
                                 self.wfile.write(f"{len(block):x}\r\n".encode() + block + b"\r\n")
                                 self.wfile.flush()
-                                owner.downloading.set()
+                                downloading.set()
                                 if owner.behavior == "slow":
                                     time.sleep(0.05)
                             self.wfile.write(b"0\r\n\r\n")
@@ -229,8 +230,8 @@ exit "${SHIKI_TEST_STATUS:-0}"
                 process.kill()
                 process.communicate(timeout=5)
 
-    def finish(self, process, expected):
-        stdout, stderr = process.communicate(timeout=20)
+    def finish(self, process, expected, *, timeout=20):
+        stdout, stderr = process.communicate(timeout=timeout)
         self.assertEqual(process.returncode, expected, stdout + stderr)
         self.assertEqual(list(self.workspaces.iterdir()), [], "private bootstrap workspace leaked")
         return stdout, stderr
@@ -347,11 +348,14 @@ exit "${SHIKI_TEST_STATUS:-0}"
 
     def test_cancellation_during_download_retains_signal_status_and_cleans_up(self):
         self.behavior = "slow"
-        process = self.start()
-        self.assertTrue(self.downloading.wait(5), "download did not start")
-        process.send_signal(signal.SIGTERM)
-        self.finish(process, 143)
-        self.assertFalse(self.args_file.exists())
+        for number, status in ((signal.SIGHUP, 129), (signal.SIGINT, 130), (signal.SIGTERM, 143)):
+            with self.subTest(signal=number):
+                self.downloading = threading.Event()
+                process = self.start()
+                self.assertTrue(self.downloading.wait(5), "download did not start")
+                process.send_signal(number)
+                self.finish(process, status, timeout=5)
+                self.assertFalse(self.args_file.exists())
 
     def test_cancellation_is_forwarded_to_installer_before_workspace_cleanup(self):
         for number, status in ((signal.SIGHUP, 129), (signal.SIGINT, 130), (signal.SIGTERM, 143)):

@@ -155,21 +155,28 @@ shiki_capture() {
   # Own and reap the producer instead of leaving a pipeline alive on cancellation.
   local _dest="$1" _max="$2"
   shift 2
-  shiki_run /usr/bin/perl -MFcntl=:DEFAULT -e '
+  shiki_run /usr/bin/perl -MFcntl=:DEFAULT -MIO::Select -e '
     my ($target, $limit, @command) = @ARGV;
     sysopen(my $out, $target, O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW, 0600)
       or die "Cannot create bounded download: $!\n";
     my $pid = open(my $in, "-|", @command);
     defined($pid) or die "Cannot start download: $!\n";
-    END {
+    sub stop_producer {
       if (defined($pid) && $pid > 0) {
         kill "TERM", $pid;
         waitpid($pid, 0);
+        undef($pid);
       }
     }
-    $SIG{TERM} = $SIG{HUP} = $SIG{INT} = sub { exit 143 };
+    END { stop_producer() }
+    # Reap before exit unwinds the pipe handle, whose close can itself wait.
+    $SIG{TERM} = $SIG{HUP} = $SIG{INT} = sub { stop_producer(); exit 143 };
+    my $ready = IO::Select->new($in);
     my $total = 0;
     while (1) {
+      # Bound the wait so deferred Perl signal handlers can run even when the
+      # producer buffers stdout; cancellation must not depend on another byte.
+      next unless $ready->can_read(1);
       my $remaining = $limit - $total + 1;
       my $n = sysread($in, my $buffer, $remaining < 65536 ? $remaining : 65536);
       if (!defined($n) || $total + $n > $limit) {

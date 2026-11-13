@@ -3,21 +3,27 @@
 **当前进度（2026-11-12）：42/42，原清单最后一项已关闭。** 当前源码的功能、平台、验收依据及未支持范围已统一到[支持声明](18-release-readiness.md#current-support)。Phase 0–5各阶段为11/11、7/7、6/6、6/6、6/6、6/6。认证生命周期和长稳/资源/性能沿用2026-11-01用户确认的关闭结论，历史实测/失败及源码范围保留；生产heap/object归因、真实Claude登录/推理及物理主机重启仍按未实测边界披露。42/42表示当前源码验收登记与声明核对完成，不表示新包或稳定版已发布；仓库公开安装入口仍为alpha.2，未包含后续master修复。
 
 <a id="evidence-first-beta-candidate"></a>
-## 首个 beta 候选修复与验证（2026-11-13，进行中）
+## 首个 beta 候选修复与验证（2026-11-13—14，CI进行中）
 
 基线 `f4a28dd` 的 [CI 43258490322 attempt 2](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43258490322) 已完成57/57；后续代码审计和离线真实签名复现发现新增安装/插件路径未被该矩阵充分覆盖，不能直接发布。修复范围为 bootstrap 认证与清理、发布/重跑/Homebrew 资产一致性、插件发现与启用/动作、原始 manifest 完整性、发行者/版本绑定、有界下载/解包和可恢复更新/卸载。新增真实签名 HTTPS → CLI → agent → 独立 SDK 插件进程验收，以及内置 sync/port 动作和失败报告回归。
 
 已完成的独立 Linux amd64/Go1.26.11 检查：最终 bootstrap 私有 HTTPS + 真实 Go Ed25519 签名夹具10项、发布工具32项、Homebrew公式7项全部通过（bootstrap 安装器子进程为受控返回码夹具；删除的源码文本断言不计行为证据）；`actionlint v1.7.7` 与 bootstrap shell 语法通过。SDK、插件存储/传输、host supervisor 和 sync client 定向 race 检查通过；后续 `cmd/shiki-install`、`pkg/plugin`、`internal/agent`、`internal/server` race 检查亦通过。源码分别冻结于独立验证目录，不追认为后续变化自动通过。
 
-本地发现 Windows checkout 将 LICENSE 转为 CRLF，导致严格许可证摘要检查失败；已将 LICENSE 固定为 LF，恢复官方文本的35,149字节与 SHA-256 `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`，相关公式检查随后通过，未放宽 verifier。另发现受管安装将整个 plugins_dir 链接到不可变 release，与第三方包写入冲突；正迁移为独立私有目录和受保护 `.builtin` 指针，保留旧版回滚/再升级及用户插件数据，待专项验证。
+本地发现 Windows checkout 将 LICENSE 转为 CRLF，导致严格许可证摘要检查失败；已将 LICENSE 固定为 LF，恢复官方文本的35,149字节与 SHA-256 `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`，未放宽 verifier。受管安装已由整目录 release symlink 迁移为独立私有 plugins_dir 和受保护 `.builtin` 指针；目录迁移/旧版回滚保留用户插件数据，包目录、停放目录及硬链接所有权标记不混入普通状态备份。
 
 后续进程回归发现并修复：SDK 将 worker 的 Go 结构体/映射切片直接交给 `structpb.NewStruct`，导致内置 JSON 动作返回内部错误；现经 JSON 编码构造 protobuf 对象，空 sync 结果保留数组类型。真实第三方插件发现/启停/重启/损坏拒绝，以及 sync、port 的动作发现、原始动作和直接 CLI JSON 命令 race 回归通过（61.763秒）。首次容器输入从 Windows 挂载继承 mode0777，导致源 manifest 被严格权限检查拒绝；只修正冻结快照权限为0644，未放宽产品校验。进程测试的取消先于 cleanup 导致 SIGKILL，已修正测试生命周期，让 SIGTERM 正常回收先于取消兜底。
 
-真实公开 Linux amd64 alpha.1、alpha.2 归档均经仓库 Ed25519 公钥独立验签：SHA-256 分别为 `ccaeedcdc6e802f29fd1125304813eb2be2af0fd604f5f6e06da914707a957ba`、`f8a56c3cc15ce4a8a05c472fb1db7ca2a5fa319f83eea2b381b627e1b9cefd15`。下载超时后采用断点续传，只有最终验签后的私有副本进入旧 helper 迁移验收；验签本身不计为升级/回滚通过。
+真实公开 Linux amd64 alpha.1、alpha.2 归档均经仓库 Ed25519 公钥独立验签：SHA-256 分别为 `ccaeedcdc6e802f29fd1125304813eb2be2af0fd604f5f6e06da914707a957ba`、`f8a56c3cc15ce4a8a05c472fb1db7ca2a5fa319f83eea2b381b627e1b9cefd15`。两个真实旧 helper 均完成：stage/config → 新版私有目录迁移 → 新 helper 的 legacy-config 委托旧 helper → 旧版卸载 → 新版再升级/卸载；第三方包、恢复 journal、原目录和锁 inode 全部保留。此项验证真实 helper/文件布局，不冒充物理重启或旧版服务带业务全链路验收。
 
-真实 HTTPS 签名 marketplace 的 CLI → agent → 独立插件安装、启用、命令、更新、接受后的激活失败回滚、宿主重启与卸载已通过（225.32秒）。最终审查补获接受前 schema 拒绝的事务死锁，修复与更强回归仍在验证，不以此前结果覆盖。受管布局测试另因长测试目录触发100字节 Unix socket 限制，改用独立短路径，不放宽生产限制；Git archive 受 Windows checkout 配置影响产生 CRLF 脚本，构建快照改用 `core.autocrlf=false`，保持正式 Git blob 的 LF 内容。
+最终接受前拒绝回归通过：宿主已接受后失败、schema 直接拒绝、拒绝响应丢失后重放恢复三类均恢复旧包/启用状态、清除已完成 journal，并允许后续有效更新（race 1.867秒）。最终真实 HTTPS 签名 marketplace CLI/agent/SDK 进程回归亦通过（103.90秒），覆盖 schema 拒绝、错误运行版本、降级/发行者替换拒绝、启停、JSON 命令、宿主重启与卸载。受管布局/脚本 race 回归通过（3.931秒）；测试长目录改为短路径，不放宽100字节 socket 限制。Git archive 的 CRLF/0664 输入问题通过 `core.autocrlf=false` 和 `tar.umask=0022` 修正；中断丢失的检查结果不记通过。
 
-本批新源码本地验证与候选 CI 尚待完成；不声称当前 beta 已通过或已发布。真实公开 marketplace、发行密钥/tag/新 Release、真实 Claude 登录/推理、物理重启和生产 heap/object 归因均不由隔离夹具替代。原42/42保留其历史范围；[08](08-roadmap.md)、[16](16-architecture-conformance.md)和[发布门槛](18-release-readiness.md#beta-readiness)同步记录。
+候选 Linux 包构建通过，SHA256SUMS pin 为 `d59a410eab66b3ab09949a3cc987b81e412d9f6bbffb6abead3e4316c0cb07a8`，安装器 SHA-256 为 `7ca25af94b63d6ce8894a65748734ba719567e52d53eb2444ee447a588771c60`。真实 Go 签名/私有 HTTPS bootstrap 首先完成实际安装器 stage-only，并确认未激活和临时目录清理；随后在独立、无外网、私有 cgroup 的真实 systemd PID1 容器中完成完整用户服务安装，返回 `local_application_ready`，CLI 实测 agent `ready`，systemd MainPID=217。真实卸载后该 PID 已退出，用户配置/状态保留，服务文件与 bootstrap 工作目录移除。Tailscale 显式禁用，`external_peer_acceptance=pending`；临时签名密钥不代表公开发行签名。
+
+候选源码 `058ea5d9dd526d059b4946f5d7d52cf2a261d3a4` 的 [CI 43464849797](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43464849797) 已失败：两 macOS preflight 的下载取消测试发送 TERM 后，输出管道20秒内未关闭；其他96项工具测试通过。两 Linux preflight、四平台编译/Homebrew 与 WSL2 通过，下游依赖矩阵未展开，不记为通过。此前本地验收冻结树为 `c2cbf9bbd31b20f4e86efc541d85f3da90c9ba9f`，不追认为后续修复自动通过。
+
+本次 CI 修复将 Perl 下载监督器的无界阻塞读取改为有界 readiness 等待，取消时先终止并 waitpid 回收生产子进程，再退出/清理管道；不依赖 curl 刷新 stdout 或下载期限才处理取消。现有下载取消回归扩为 HUP/INT/TERM，要求5秒内返回129/130/143并清空工作目录，不延长原20秒上限、不跳过 macOS。Linux bootstrap 10项通过（9.620秒）；请求级事件隔离后，三种信号定向回归通过（1.379秒）。保留下载大小/HTTPS/签名校验及安装器回滚等待约束；macOS 与新完整 CI 尚待。
+
+真实公开 marketplace、发行密钥/tag/新 Release、真实 Claude 登录/推理、物理重启和生产 heap/object 归因不由隔离夹具替代。原42/42保留历史范围；[08](08-roadmap.md)、[16](16-architecture-conformance.md)和[发布门槛](18-release-readiness.md#beta-readiness)同步记录。
 
 
 **插件 marketplace 安装批次（2026-11-12）：** `internal/pluginmarket` 现提供签名 envelope、Ed25519 trust store、严格 JSON/HTTPS/平台/归档身份校验和流式 SHA-256 验证；`cmd/shiki` 现提供 `plugins trust add/list`、`plugins market add/remove/list/search`、签名 marketplace 安装和更新。安装前完成 index、签名归档元数据、归档名称/大小/hash 与 manifest 的验证，手工 URL/path 安装不进入自动更新。已验证 Linux amd64 CLI 目标编译及 `internal/pluginmarket` 测试编译；Windows 执行被 Unix-only 源码和 Application Control 阻断，未将其记为通过。外部 marketplace/发行资产验证未执行，未关闭既有路线图或发布门槛。

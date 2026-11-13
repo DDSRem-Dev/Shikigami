@@ -8,9 +8,11 @@
 
 修复保持 CLI → `internal/client` → host 的依赖方向；业务插件仍为独立 SDK 进程，不导入 host `internal/`，不提供进程内回退。签名仅认证来源，不是沙箱；host 在启动和握手前校验静态 manifest/二进制与 side/capability。安装事务和宿主持久 desired state 分离，运行 PID/连接不持久化；更新必须先确认停止，发布后恢复既有启用意图，失败保留可恢复证据。动作 RPC 保持实例凭据与 scope 准入，未增加远端动作能力。文件/终端/网络既有认证、原子替换、冲突、半关闭与取消约束不因市场入口放宽。
 
-独立冻结的 SDK/host/sync-client、真实第三方生命周期及 sync/port CLI 动作 race 检查，bootstrap 真实签名夹具、发布/公式工具与 actionlint 已通过。真实进程验收补获并修复 typed JSON 切片无法进入 protobuf Struct 的缺陷；空集合保持数组，查询错误不伪装成功。受管安装布局迁移仍在验证：整目录 release symlink 正拆分为私有用户插件目录与 `.builtin` 发行引用，不得用叶子 symlink 绕过 O_NOFOLLOW；真实已验签 alpha.1/alpha.2 helper 将用于旧版回滚/卸载/再升级。嵌套 StateDir 的包目录、停放目录和硬链接所有权标记不得混入普通状态备份。其余七类复核与全平台结果同步[15](15-implementation-status.md#evidence-first-beta-candidate)。原42项不增加勾选，外部账号、物理重启、生产资源归因和新公开发行仍单列门槛。
+独立冻结的 SDK/host/sync-client、真实第三方生命周期及 sync/port CLI 动作 race，bootstrap 真实签名夹具、发布/公式工具与 actionlint 均通过。typed JSON 切片经 JSON 构造 protobuf Struct，空集合保持数组，查询错误不伪装成功。受管目录迁移及真实已验签 alpha.1/alpha.2 helper 回滚/卸载/再升级通过，保留包/恢复数据及锁 inode；嵌套 StateDir 的包目录、停放目录和硬链接所有权标记排除普通备份。真实 systemd 用户服务 bootstrap 安装/就绪/卸载通过；未放宽 O_NOFOLLOW/所有权校验。详见[15](15-implementation-status.md#evidence-first-beta-candidate)；原42项不增加勾选，外部账号、物理重启、生产资源归因和新公开发行仍单列门槛。
 
-本批最终源码复核覆盖七类契约：目录与 SDK/host 依赖、RPC/实例凭据与 capability、持久状态/修订/去重、进程所有权与退出、文件/终端/网络语义、CLI/安装与资产布局、行为证据与支持声明。独立布局复核未发现确定性新增偏差；插件事务复核另发现“启用在接受前被配置 schema 拒绝”会遗留 pending enable、阻断回滚和后续修改，现仅对宿主确定性拒绝持久清除请求；传输/存储不确定错误仍保留原 request_id 重放。补充立即拒绝、拒绝响应丢失后恢复、后续有效更新及真实签名 CLI schema 拒绝回归，结果待专项检查。静态复核不替代 Linux/macOS 原生执行、真实旧 helper 或断电验证。
+最终源码复核覆盖七类契约：目录与 SDK/host 依赖、RPC/实例凭据与 capability、持久状态/修订/去重、进程所有权与退出、文件/终端/网络语义、CLI/安装与资产布局、行为证据与支持声明。独立布局复核无确定性新增偏差；插件事务复核发现的接受前 schema 拒绝死锁已修复，仅对宿主确定性拒绝持久清除请求，不确定错误仍保留 request_id 重放。立即拒绝、丢失响应恢复、后续更新及真实签名进程回归均通过；复核方已确认该发现关闭。静态复核、构造中断状态测试和真实 helper 执行均不冒充物理断电验证。
+
+候选 `058ea5d` 的 [CI 43464849797](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43464849797) 已暴露 macOS 两架构下载取消超时，未通过完整矩阵。后续下载监督器修复仅改变取消/子进程回收：有界 readiness 等待、退出前终止及回收生产者；不改变签名/HTTPS/大小/所有权/发行资产契约，不扩大支持范围。Linux 10项签名安装回归及三种信号5秒内退出/清理通过，macOS 和完整 CI 尚待；静态七类契约复核无新增边界变化。原本地证据保留源码范围，LF/0644 输入修正不改变生产权限准入，中断/跳过任务不记通过。
 
 
 **插件 marketplace 安装批次（2026-11-12）：** 新增实现保持插件边界：签名/信任和归档验证位于宿主侧 `internal/pluginmarket`，CLI 编排位于 `cmd/shiki`，插件业务进程未导入 host `internal/`。准入前严格校验 signed index、已信任 key、固定平台、归档文件名/大小/SHA-256 和 manifest；手工 URL/path 入口不获得自动更新资格。Linux amd64 CLI 目标编译及内部包测试编译通过；Windows Unix-only 编译和测试受平台/Application Control 限制，外部 marketplace 资源未验收。未改变 RPC、插件进程权限、状态/修订或能力声明，未新增路线图勾选。
