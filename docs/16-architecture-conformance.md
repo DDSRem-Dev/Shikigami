@@ -12,7 +12,7 @@
 
 最终源码复核覆盖七类契约：目录与 SDK/host 依赖、RPC/实例凭据与 capability、持久状态/修订/去重、进程所有权与退出、文件/终端/网络语义、CLI/安装与资产布局、行为证据与支持声明。独立布局复核无确定性新增偏差；插件事务复核发现的接受前 schema 拒绝死锁已修复，仅对宿主确定性拒绝持久清除请求，不确定错误仍保留 request_id 重放。立即拒绝、丢失响应恢复、后续更新及真实签名进程回归均通过；复核方已确认该发现关闭。静态复核、构造中断状态测试和真实 helper 执行均不冒充物理断电验证。
 
-候选 `058ea5d` 的 [CI 43464849797](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43464849797) 已暴露 macOS 两架构下载取消超时，未通过完整矩阵。后续下载监督器修复仅改变取消/子进程回收：有界 readiness 等待、退出前终止及回收生产者；不改变签名/HTTPS/大小/所有权/发行资产契约，不扩大支持范围。Linux 10项签名安装回归及三种信号5秒内退出/清理通过，macOS 和完整 CI 尚待；静态七类契约复核无新增边界变化。原本地证据保留源码范围，LF/0644 输入修正不改变生产权限准入，中断/跳过任务不记通过。
+候选 `058ea5d` 的 [CI 43464849797](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43464849797) 暴露 macOS 两架构下载取消超时，`87cfefb` 修复后的四平台 preflight 已通过，不改变签名/HTTPS/大小/所有权/资产契约。[CI 43470576055](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43470576055) 前两次55/57，两个 macOS arm64 作业未获 runner；第三次56/57，仅实际 launchd-lifecycle 失败。源码复核发现卸载测试仍要求删除 plugins_dir，现对齐保留目录/数据、仅移除 `.builtin` 的设计并补充原生用户数据保留断言，生产语义不变。原生结果尚待，不将静态发现冒充已取得私有失败行；目录依赖、RPC、持久状态、进程、文件网络、CLI/资产及证据七类契约无其他变更。
 
 
 **插件 marketplace 安装批次（2026-11-12）：** 新增实现保持插件边界：签名/信任和归档验证位于宿主侧 `internal/pluginmarket`，CLI 编排位于 `cmd/shiki`，插件业务进程未导入 host `internal/`。准入前严格校验 signed index、已信任 key、固定平台、归档文件名/大小/SHA-256 和 manifest；手工 URL/path 入口不获得自动更新资格。Linux amd64 CLI 目标编译及内部包测试编译通过；Windows Unix-only 编译和测试受平台/Application Control 限制，外部 marketplace 资源未验收。未改变 RPC、插件进程权限、状态/修订或能力声明，未新增路线图勾选。

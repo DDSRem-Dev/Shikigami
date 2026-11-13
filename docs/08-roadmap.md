@@ -8,6 +8,8 @@
 
 候选 `058ea5d` 的 [CI 43464849797](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43464849797) 已失败：macOS 两架构均在 bootstrap 下载取消测试中超时，后续依赖矩阵未展开；两 Linux preflight、四平台编译/Homebrew 与 WSL2 通过。下载监督器改用有界 readiness 等待，并在退出前显式终止/回收生产子进程；Linux bootstrap 10项及强化的 HUP/INT/TERM 取消回归通过，macOS 与完整矩阵仍待新提交验证。七类契约复核及此前其他本地验收保留实际源码范围，不创建 tag/Release。
 
+下载取消修复 `87cfefb` 的 [CI 43470576055](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43470576055) 前两次为55/57：两项 macOS arm64 作业未获 runner 即取消。第三次 unit-test-support 通过，达到56/57；真实 launchd-lifecycle 失败，公开证据只有阶段退出码，未包含私有日志。发现其测试仍要求卸载删除整个 plugins_dir，与已实现的保留用户插件目录契约冲突；现改为检查 `.builtin` 移除、0700 私有目录及用户数据保留，不修改生产卸载语义。新原生回归与完整矩阵仍待。
+
 **插件 marketplace 安装批次（2026-11-12）：** 新增 `internal/pluginmarket` 签名 envelope、Ed25519 trust store、严格 JSON/HTTPS/平台/归档身份校验和流式 SHA-256 验证；CLI 新增 `plugins trust`、`plugins market`、签名 marketplace 安装与更新路径。手工 URL/path 安装保持显式责任边界，不进入自动更新。Linux amd64 目标 CLI 编译和内部包测试编译通过；Windows 执行受 Unix-only 源码与 Application Control 限制，外部 marketplace/发布验证仍待，未新增路线图勾选或发布声明。
 
 

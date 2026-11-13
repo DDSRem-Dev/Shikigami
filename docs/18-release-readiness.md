@@ -59,7 +59,7 @@ GUI、插件状态槽/dashboard/设置表单渲染、WSS、文件级快照/workt
 
 **发布前（本轮推进，不创建 tag）：**
 
-- [ ] bootstrap 有效真实签名成功安装、错误签名拒绝、安装失败保留退出码且清理完成；发布/重跑/Homebrew 使用同一严格资产集合。Linux 私有 HTTPS + 实际 Go 安装器 + 真实 systemd 用户服务安装/卸载通过，外部 peer 仍 pending；候选 CI 暴露 macOS 下载取消超时，修复及原生回归仍待。
+- [x] bootstrap 有效真实签名成功安装、错误签名拒绝、安装失败保留退出码且清理完成；发布/重跑/Homebrew 使用同一严格资产集合。Linux 真实 systemd 安装/卸载通过；macOS 下载取消缺陷修复后，四平台 preflight 全部通过，外部 peer 仍 pending。
 - [x] 真实 CLI/agent/SDK 插件完成签名安装、显式启用、manifest 命令、更新/失败回滚、宿主重启恢复和卸载；降级、身份/发行者替换与不可信下载拒绝，不破坏当前可用版本。接受前 schema 拒绝和丢失响应恢复均已回归。
 - [ ] 固定候选源码的本地相关回归、架构依赖检查、发行工具检查及完整远端 CI 成功；原生 Linux/macOS 与 WSL2 结果分别可追溯。
 

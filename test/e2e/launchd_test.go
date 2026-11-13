@@ -164,6 +164,10 @@ func TestNativeLaunchAgentLifecycle(t *testing.T) {
 	if err = os.WriteFile(sentinel, []byte("preserve launchd test data"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	pluginSentinel := filepath.Join(cfg.PluginsDir, ".user-data")
+	if err = os.WriteFile(pluginSentinel, []byte("preserve third-party plugin data"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("native bootstrap ready: agent=%d instance=%s; enabled plugin PIDs=%v", pid, firstID, children)
 	if err = syscall.Kill(pid, syscall.SIGKILL); err != nil {
 		t.Fatal(err)
@@ -251,13 +255,19 @@ func TestNativeLaunchAgentLifecycle(t *testing.T) {
 	if err = exec.CommandContext(ctx, "/bin/launchctl", "print", target).Run(); err == nil {
 		t.Fatal("uninstall retained a registered service")
 	}
-	for _, removedPath := range []string{filepath.Join(prefix, "current"), cfg.PluginsDir, filepath.Join(fixture, "commands", "shiki"), filepath.Join(fixture, "commands", "shiki-agent")} {
+	for _, removedPath := range []string{filepath.Join(prefix, "current"), filepath.Join(cfg.PluginsDir, ".builtin"), filepath.Join(fixture, "commands", "shiki"), filepath.Join(fixture, "commands", "shiki-agent")} {
 		if _, err = os.Lstat(removedPath); !errors.Is(err, os.ErrNotExist) {
 			t.Fatal("uninstall retained managed link", removedPath, err)
 		}
 	}
 	if data, err := os.ReadFile(sentinel); err != nil || string(data) != "preserve launchd test data" {
 		t.Fatal("uninstall deleted private state", err)
+	}
+	if info, err := os.Lstat(cfg.PluginsDir); err != nil || !info.IsDir() || info.Mode().Perm() != 0700 {
+		t.Fatal("uninstall did not retain the private plugin directory", err)
+	}
+	if data, err := os.ReadFile(pluginSentinel); err != nil || string(data) != "preserve third-party plugin data" {
+		t.Fatal("uninstall deleted third-party plugin data", err)
 	}
 	if saved, err := config.LoadClient(configuration); err != nil || saved.Agent.Socket != cfg.Agent.Socket || saved.Tailscale.Enabled {
 		t.Fatal("uninstall changed retained private config", err)
