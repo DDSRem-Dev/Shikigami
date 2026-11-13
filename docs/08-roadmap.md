@@ -12,6 +12,10 @@
 
 最终 [CI 43484685340](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43484685340) 对固定提交 `a5032c112ffdace9b9ab6455f7280480223a8482` 首次执行即 completed/success，57/57，无失败、取消或跳过；覆盖四平台单元/集成/E2E/发行工具/Homebrew、WSL2、终端及原生维护。macOS 生命周期、活动上传升级、活动下载升级均通过。此前失败/取消保留历史记录，不以成功覆盖；本轮未创建 tag/Release。
 
+最终记录提交 `96961ab` 的 [CI 43495414864](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43495414864) 首轮在 Intel macOS 第三方生命周期测试的 RESTART RPC 超时，下游维护/终端未执行。测试启动连接设置的 `Options.Timeout=1s` 同时作用于后续 RPC，覆盖产品默认生命周期15秒预算；现改用默认客户端选项，启动探测仍由单次1秒 context 限制，生命周期/去重/失败关闭断言不变。此项为测试预算修正，生产代码不变；修正后验证另行记录，不将本轮失败记为通过。
+
+预算修正后的 Linux amd64 真实第三方完整生命周期定向 race 已通过（35.255秒）；新提交的完整远端 CI 待执行。原临时构建容器重启时入口脚本退出、验证进程被终止（137），未记为测试失败或通过；独立容器复用已冻结文件后正常完成上述验收。
+
 **插件 marketplace 安装批次（2026-11-12）：** 新增 `internal/pluginmarket` 签名 envelope、Ed25519 trust store、严格 JSON/HTTPS/平台/归档身份校验和流式 SHA-256 验证；CLI 新增 `plugins trust`、`plugins market`、签名 marketplace 安装与更新路径。手工 URL/path 安装保持显式责任边界，不进入自动更新。Linux amd64 目标 CLI 编译和内部包测试编译通过；Windows 执行受 Unix-only 源码与 Application Control 限制，外部 marketplace/发布验证仍待，未新增路线图勾选或发布声明。
 
 

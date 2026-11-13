@@ -16,6 +16,10 @@
 
 固定提交 `a5032c112ffdace9b9ab6455f7280480223a8482` 的 [CI 43484685340](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43484685340) attempt 1 已 completed/success，57/57，无失败、取消或跳过；macOS 原生生命周期/卸载、活动上传及下载升级均有公开 passed 证据。08/15/18 的本批发布前状态同步关闭；旧失败/取消和各本地检查源码范围保留，不扩大外部账号、物理重启、生产资源或公开发行声明。
 
+最终记录提交 `96961ab` 的 [CI 43495414864](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43495414864) 在 Intel macOS 插件 RESTART RPC 超时。测试误将启动探测的1秒预算设为客户端全生命周期预算；改用产品默认选项，仍由单次 context 限制启动探测。该修正不改变生产 RPC 超时、准入、持久修订/去重、进程清理或安装布局，不删减生命周期断言。七类架构契约沿用本批已完成复核；本次仅纠正行为验收的客户端配置，失败与待验证结果显式保留，未新增能力、平台或发行声明。
+
+修正后的 Linux amd64 真实第三方生命周期定向 race 通过（35.255秒）；启动探测边界与后续产品 RPC 默认预算分别保留，没有重试掩盖错误或放宽生产行为。旧临时容器重启终止的一次验证不计通过；远端原生复验待新提交 CI。
+
 
 **插件 marketplace 安装批次（2026-11-12）：** 新增实现保持插件边界：签名/信任和归档验证位于宿主侧 `internal/pluginmarket`，CLI 编排位于 `cmd/shiki`，插件业务进程未导入 host `internal/`。准入前严格校验 signed index、已信任 key、固定平台、归档文件名/大小/SHA-256 和 manifest；手工 URL/path 入口不获得自动更新资格。Linux amd64 CLI 目标编译及内部包测试编译通过；Windows Unix-only 编译和测试受平台/Application Control 限制，外部 marketplace 资源未验收。未改变 RPC、插件进程权限、状态/修订或能力声明，未新增路线图勾选。
 

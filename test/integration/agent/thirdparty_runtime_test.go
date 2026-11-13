@@ -62,7 +62,8 @@ func startRuntimeAgent(t *testing.T, ctx context.Context, binary, configuration 
 		default:
 		}
 		var err error
-		process.client, err = frontend.Open(call, configuration, frontend.Options{Timeout: time.Second})
+		// The probe context bounds startup; retain production budgets for later lifecycle RPCs.
+		process.client, err = frontend.Open(call, configuration, frontend.Options{})
 		return err
 	})
 	return process

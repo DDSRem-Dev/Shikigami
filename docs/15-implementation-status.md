@@ -29,6 +29,10 @@ LaunchAgent 生命周期测试仍在卸载后断言整个 plugins_dir 不存在�
 
 最终固定提交 `a5032c112ffdace9b9ab6455f7280480223a8482` 的 [CI 43484685340](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43484685340) attempt 1 为 completed/success，57/57作业通过，无失败、取消或跳过。四平台单元/集成/E2E、发行工具、embedded、Homebrew、WSL2、terminal 与原生 maintenance 均完成。公开 macOS 维护证据中，`TestNativeLaunchAgentLifecycle` 为261.426秒，活动上传/下载升级分别为134.563/122.721秒，均 exit_code=0、state=passed；旧卸载断言修正后的真实流程已闭环。macOS 排队容量告警保留，本地监视器超时只重新接续观察，没有取消或重启该轮远端验收。本批发布前门槛关闭，不代表 beta 已公开发布。
 
+最终记录提交 `96961ab` 的 [CI 43495414864](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43495414864) 首轮失败：`TestThirdPartyRuntimeDiscoveryPersistenceAndFailClosed` 在 Intel macOS 的 RESTART 调用返回 `deadline_exceeded`（测试65.46秒），下游维护/终端未执行。测试通过 `frontend.Options{Timeout: time.Second}` 建立的客户端将全部后续 RPC 限制为1秒；`internal/client` 默认普通 RPC 为5秒、生命周期 RPC 为15秒。改用默认选项，启动探测仍保持每次1秒、总计20秒，测试总期限及全部行为断言不变，不增加自动重试。生产代码不变；本地定向 race 与新提交远端 CI 尚待完成。
+
+预算修正后，Linux amd64 定向 `go test -race -count=1 -timeout=10m -run '^TestThirdPartyRuntimeDiscoveryPersistenceAndFailClosed$' ./test/integration/agent` 通过（35.255秒），覆盖真实 CLI/agent/插件子进程、重启去重、配置、恢复与失败关闭。首次重启旧临时构建容器因其入口脚本退出而终止验证进程（137），不计验收；随后独立容器使用保留文件执行成功。新提交的远端完整 CI 尚待执行。
+
 真实公开 marketplace、发行密钥/tag/新 Release、真实 Claude 登录/推理、物理重启和生产 heap/object 归因不由隔离夹具替代。原42/42保留历史范围；[08](08-roadmap.md)、[16](16-architecture-conformance.md)和[发布门槛](18-release-readiness.md#beta-readiness)同步记录。
 
 
