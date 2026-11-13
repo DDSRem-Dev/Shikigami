@@ -82,7 +82,7 @@ func TestVerifyIndexAndArchive(t *testing.T) {
 		t.Fatal(err)
 	}
 	signatureData := testEnvelope(t, private, "root-1", metadata)
-	if err := VerifyArchive(archivePath, signatureData, entry, store); err != nil {
+	if err := verifyTestArchive(t, archivePath, signatureData, entry, store); err != nil {
 		t.Fatalf("archive verification failed: %v", err)
 	}
 }
@@ -164,7 +164,7 @@ func TestVerifyArchiveRejectsIdentityDigestSizeAndName(t *testing.T) {
 			mutatedEntry := entry
 			tc.edit(&mutated, &mutatedEntry, name)
 			data := testEnvelope(t, private, "root-1", mutated)
-			if err := VerifyArchive(archivePath, data, mutatedEntry, store); err == nil {
+			if err := verifyTestArchive(t, archivePath, data, mutatedEntry, store); err == nil {
 				t.Fatal("mismatched archive accepted")
 			}
 		})
@@ -207,4 +207,14 @@ func TestTrustStorePermissionsAndAtomicSave(t *testing.T) {
 	if err != nil || len(matches) != 0 {
 		t.Fatalf("temporary trust-store files remain: %v, %v", matches, err)
 	}
+}
+
+func verifyTestArchive(t *testing.T, path string, data []byte, entry Entry, store TrustStore) error {
+	t.Helper()
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	return VerifyArchive(t.Context(), file, data, entry, store)
 }

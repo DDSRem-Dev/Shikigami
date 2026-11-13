@@ -20,17 +20,19 @@ import (
 )
 
 type Native struct {
-	startLock       *os.File
-	Prefix          string
-	AuthKey         []byte
-	Interactive     bool
-	TokenOutput     string
-	LoginURL        string
-	IssueToken      bool
-	TokenTTY        io.Writer
-	Report          *ProbeReport
-	TokenIssued     bool
-	ExpectedVersion string
+	startLock        *os.File
+	layoutHelper     *os.File
+	layoutHelperPath string
+	Prefix           string
+	AuthKey          []byte
+	Interactive      bool
+	TokenOutput      string
+	LoginURL         string
+	IssueToken       bool
+	TokenTTY         io.Writer
+	Report           *ProbeReport
+	TokenIssued      bool
+	ExpectedVersion  string
 }
 
 func accountFor(plan Plan) (*user.User, int, int, error) {
@@ -178,8 +180,14 @@ func (n *Native) Prepare(ctx context.Context, plan Plan, release string) error {
 		}
 	}
 	// Link and config creation run with the target UID, including when installed
-	// through sudo. User-owned paths cannot redirect a privileged write.
-	if _, err = n.userCall(ctx, plan, "config"); err != nil {
+	// through sudo. Old public helpers retain their original whole-root link
+	// contract while the new helper keeps third-party data parked and locked.
+	if legacyPluginLinks(manifest.Version) {
+		err = n.userLayoutCall(ctx, plan, "legacy-config")
+	} else {
+		_, err = n.userCall(ctx, plan, "config")
+	}
+	if err != nil {
 		return err
 	}
 	if plan.Role == "daemon" {
@@ -218,6 +226,27 @@ func (n *Native) Prepare(ctx context.Context, plan Plan, release string) error {
 	return nil
 }
 func (n *Native) Start(ctx context.Context, plan Plan) error {
+	// Install failure recovery switches current back without calling Prepare.
+	// Reconcile that selected helper's layout before restarting the old service.
+	metadata, err := readRegular(filepath.Join(n.Prefix, "current"), ManifestName, 64<<10)
+	if err != nil {
+		return err
+	}
+	var manifest Manifest
+	if strictjson.Decode(metadata, &manifest) != nil || !releaseVersion.MatchString(manifest.Version) {
+		return errors.New("invalid selected release metadata")
+	}
+	if n.ExpectedVersion != manifest.Version {
+		n.ExpectedVersion = manifest.Version
+		if legacyPluginLinks(manifest.Version) {
+			err = n.userLayoutCall(ctx, plan, "legacy-config")
+		} else {
+			_, err = n.userCall(ctx, plan, "config")
+		}
+		if err != nil {
+			return err
+		}
+	}
 	if plan.Role == "client" && runtime.GOOS == "darwin" {
 		_, uid, _, err := accountFor(plan)
 		if err != nil {
@@ -344,9 +373,9 @@ func (n *Native) RemoveService(ctx context.Context, plan Plan) error {
 			return err
 		}
 	}
-	// Cleanup must also work before bootstrap succeeded, without executing a
-	// possibly inaccessible helper through the failed initial current link.
-	if err = removeUserLinks(plan, n.Prefix); err != nil {
+	// The current new helper performs layout cleanup as the ordinary UID, even
+	// after a failed first activation or while an old alpha helper is selected.
+	if err = n.userLayoutCall(ctx, plan, "unlink"); err != nil {
 		return err
 	}
 	if plan.Role == "daemon" {

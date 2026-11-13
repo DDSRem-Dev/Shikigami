@@ -18,6 +18,12 @@ shiki plugins update [example-plugin]
 
 trust store 位于 `~/.shiki/plugin-market/trust.json`，由安装器以 0600 文件、0700 目录原子保存；market 列表位于同目录。index、归档元数据和归档本体分别要求 Ed25519 signed envelope、已信任 `key_id`、ID/version/OS/arch/文件名/大小/SHA-256 一致，验签和流式 hash 完成前不会解包或替换当前插件。仅 Linux/macOS 的 amd64/arm64 条目可被选择；插件仍以当前用户权限独立运行，不是沙箱。当前验证覆盖 Linux 目标 CLI 编译与内部签名/信任包测试编译；Windows 本机 Unix-only 项目测试受平台和 Application Control 限制，尚无外部 marketplace/发布验收证据，不能宣称该门槛已关闭。
 
+更新只有显式 `shiki plugins update [plugin-id]`，没有周期后台 updater。新 `.install-meta.json` 使用 `format=1` 和明确的 `source_kind=manual|market`；安装记录保留原始 ID、version、目标平台和发布者身份。legacy/unversioned、损坏或未知格式的安装元数据在 update 时明确报错，不静默当作手工来源跳过。市场更新同时固定原 `key_id` 和 SPKI DER 的 SHA-256；`--market` 只显式切换 index 来源，不授权替换发布者公钥。手工 URL/path 安装仍是当前用户、本地操作，不隐式变成远端安装。
+
+HTTPS 限制覆盖每次重定向，下载/解包有大小、数量、时间和取消边界。第三方包仅接受 `manifest.json` 与 `shiki-plugin-<id>` 两个普通文件，可共用一个顶层目录；拒绝链接、PAX/GNU 扩展元数据、额外成员、重复/歧义路径及 gzip 尾随流。第三方插件落入当前本地配置的 `plugins_dir`，私有 staging/transaction 目录不参加宿主发现；发布操作串行且可恢复。
+
+更新/卸载前通过现有 ManagePlugin IPC 停止旧进程；每个 DISABLE/ENABLE 在发送前记录 action、expected revision 和稳定 request_id，恢复时重放同一幂等请求，并记录接受/完成后的 revision。通常更新成功后恢复原 enabled 意图；若恢复时已经观察到用户更新的显式 revision，则采用最新 enabled/config 意图，不把旧 enabled=true 覆盖回去。正常操作中途 revision 漂移则明确失败并保留旧包/backup。激活失败回滚原包并向调用者报错，不能只因磁盘替换成功就报告运行成功。恢复只在下一次显式 install/update/uninstall 时重试，不增加后台恢复/updater。
+
 ## 部署模型
 
 - 服务端首版：Linux + systemd，amd64/arm64；macOS/Linux/WSL 是客户端平台。原生 Windows 客户端/GUI 后续验收。
@@ -89,57 +95,57 @@ trust store 位于 `~/.shiki/plugin-market/trust.json`，由安装器以 0600 �
 
 ## Bootstrap 一键入口
 
-`scripts/bootstrap.sh` 随 Release 分发，内嵌 Ed25519 公钥，封装了“下载→验签→解压→调用安装器”全流程，是公开安装入口。公钥指纹（SPKI DER SHA-256）：`e21f6dd671ea5042c43c492b759b933dda73985f89a823b43c651ff7c787c17d`，可对照 `configs/release-signing.pub` 独立核验。当前公开包为 `v0.0.1-alpha.2`；由于 GitHub 的 `releases/latest` 不包含预发布版本，预发布必须在下载 URL 中写明 tag。
+`scripts/bootstrap.sh` 是**当前源码**中的下载、Ed25519 验签、解包和安装 helper 入口。必须从可信且已审查的 checkout 取得脚本；内嵌公钥的 SPKI DER SHA-256 为 `e21f6dd671ea5042c43c492b759b933dda73985f89a823b43c651ff7c787c17d`，可对照 `configs/release-signing.pub` 独立核验。脚本本身不是独立签名的信任根。
 
-Bootstrap 运行前要求 `curl` 或 `wget`、`tar`、`base64`、`openssl`、`/usr/bin/perl` 和 SHA-256 工具（`sha256sum` 或 `shasum`）。它只接受签名验证成功的归档；同源 `.sha256` 不能替代 Ed25519 信任链，也不会在缺少 OpenSSL 时降级安装。
+**当前公开 `v0.0.1-alpha.2`（及 alpha.1）只有原来的22个资产，没有 `bootstrap.sh`。** 不得请求这些 tag 下不存在的 bootstrap 下载 URL，也不为旧公开 Release 补传或覆盖资产。下列命令从包含本次修复的已审查源码 checkout 运行 bootstrap，目标归档仍固定为真实公开的 alpha.2。后续新 tag 将在公开前把固定源码的 bootstrap 纳入完整23资产集，并逐一核对远端大小/摘要；只有实际公开且包含脚本的 tag 才可使用它的 `/releases/download/<tag>/bootstrap.sh` URL。alpha/beta/rc 必须显式指定 tag；GitHub 的 `releases/latest` 不代表预发布。未传 `--version` 时，脚本查询最近公开 Release（可为预发布），不把它冒充稳定渠道。
 
-**服务端（VPS）安装**：
+运行前要求 Bash、`curl`、`gzip`、`tar`、`base64`、`/usr/bin/perl`、SHA-256 工具（`sha256sum` 或 `shasum`）及支持 Ed25519 `pkeyutl -rawin` 的 **OpenSSL 3+** CLI。macOS 自带的 LibreSSL 不足以验签；可先 `brew install openssl@3`，脚本会检查标准 Homebrew keg 路径。缺少工具时停止，不以同源 `.sha256` 替代签名，也不回退到无法保证 HTTPS 重定向约束的 wget 路径。
+
+每次下载只允许 HTTPS，最多5次 HTTPS 重定向，连接超时15秒、单次总时限300秒，持续30秒低于1 KiB/s 即失败。流式写入器在没有 Content-Length 时仍限制归档为1 GiB、签名/API元数据为64 KiB；认证后的解压 tar 流另限4 GiB，解包前要求固定14成员（兼容单个顶层目录），并以单文件1 GiB限制约束稀疏成员，避免无限临时字节或 inode 增长。API响应、签名工作文件、归档、解压内容与 helper 私有副本均位于同一个0700临时目录，正常退出、失败和取消均回收。取消先通知受管 helper 并有界等待，必要时终止；正常 helper 退出码（包括 pending 的3）原样返回，HUP/INT/TERM 分别返回129/130/143。
+
+**服务端（VPS）安装**（从已审查源码 checkout 的仓库根目录执行）：
 
 ```bash
 VERSION=v0.0.1-alpha.2
 
-# 交互式（推荐：先下载可审查脚本）
-curl -fsSL "https://github.com/DDSRem-Dev/Shikigami/releases/download/${VERSION}/bootstrap.sh" \
-     -o bootstrap.sh && sudo bash bootstrap.sh --version="$VERSION" --user=rem
+# 交互式；rem 必须是已存在的普通运行用户
+sudo bash scripts/bootstrap.sh --version="$VERSION" --user=rem
 
-# 管道安装（全程交互从 /dev/tty 读取）
-curl -fsSL "https://github.com/DDSRem-Dev/Shikigami/releases/download/${VERSION}/bootstrap.sh" \
-     | sudo bash -s -- --version="$VERSION" --user=rem
-
-# 无人值守 VPS / CI（auth key 和 Token 均写入 0600 文件）
-curl -fsSL "https://github.com/DDSRem-Dev/Shikigami/releases/download/${VERSION}/bootstrap.sh" \
-     | sudo bash -s -- --version="$VERSION" --user=rem \
-         --tailscale-key-file=/run/secrets/ts-authkey \
-         --non-interactive \
-         --token-output=/run/secrets/shiki-token
+# 无人值守 VPS / CI（auth key 和 Token 均写入私有文件）
+sudo bash scripts/bootstrap.sh --version="$VERSION" --user=rem \
+  --tailscale-key-file=/run/secrets/ts-authkey \
+  --non-interactive --token-output=/run/secrets/shiki-token
 ```
 
 **客户端安装**：
 
 ```bash
-VERSION=v0.0.1-alpha.2
-# macOS / Linux with Homebrew（推荐）
-brew tap ddsrem-dev/shikigami https://github.com/DDSRem-Dev/Shikigami \
-  && brew install ddsrem-dev/shikigami/shikigami \
-  && shiki-install install --role=client
+# macOS / Linux with Homebrew：这里只下载完整 bundle，不激活服务
+brew tap ddsrem-dev/shikigami https://github.com/DDSRem-Dev/Shikigami
+brew install ddsrem-dev/shikigami/shikigami
+shiki-install help install
+brew info ddsrem-dev/shikigami/shikigami
+# 复制实际 caveats 中的完整 --stage-only 命令（含 bundle/version/checksum pin）。
+# 检查 service review 后，显式移除 --stage-only 才会激活本地受管服务。
 
-# 任意受支持平台（显式预发布 tag）
-curl -fsSL "https://github.com/DDSRem-Dev/Shikigami/releases/download/${VERSION}/bootstrap.sh" \
-     | bash -s -- --version="$VERSION" --role=client
+# 或从已审查源码 checkout 执行，仍固定到真实公开包
+bash scripts/bootstrap.sh --version=v0.0.1-alpha.2 --role=client
 ```
 
-**升级**（已安装版本）：
+**升级或重复安装**：
 
 ```bash
+# 将 VERSION 显式设为选择的已公开版本；同版本是重复安装，不是假称跨版本升级
 VERSION=v0.0.1-alpha.2
-# 重新执行已审查版本的 bootstrap，自动走升级路径
-curl -fsSL "https://github.com/DDSRem-Dev/Shikigami/releases/download/${VERSION}/bootstrap.sh" \
-     | sudo bash -s -- --version="$VERSION" --user=rem
-# 或通过 Homebrew
-brew upgrade ddsrem-dev/shikigami/shikigami && shiki-install install --role=client
+sudo bash scripts/bootstrap.sh --version="$VERSION" --user=rem
+
+# Homebrew 先更新下载的 bundle，再按新 caveats 显式升级受管服务
+brew upgrade ddsrem-dev/shikigami/shikigami
+brew info ddsrem-dev/shikigami/shikigami
+# 完整复用 caveats 的 --bundle、--version、--checksums-sha256；先 review，再激活。
 ```
 
-Bootstrap 先验证归档对应平台、版本、文件名、大小和归档 SHA-256，再使用内嵌公钥验证签名，并把签名 payload 中的 `SHA256SUMS` pin 交给 bundle 内部的 `shiki-install` 再次核验。验证失败、签名工具缺失或归档布局不符均停止，不执行任何 bundle 脚本。
+Bootstrap 使用受信公钥先认证签名 payload，再检查对应平台、版本、文件名、归档大小和 SHA-256；认证成功才解压并运行归档中 `shiki-install` 的私有副本。签名 payload 中的 `SHA256SUMS` pin 连同本地 bundle 路径和固定版本交给 helper 再次核验，不嵌套运行另一个有独立临时资源的 shell wrapper。验签、身份、归档摘要、大小限制或布局检查失败均停止，不执行 bundle 内任何代码。
 
 ## 低级交互方式
 
@@ -254,7 +260,11 @@ Claude 版本通过受限 `--version` 查询；登录使用运行用户 HOME/PAT
 
 `scripts/test-systemd.sh` 在 Docker Desktop 的独立 Linux arm64 容器内运行真实 systemd 252.39 PID1/cgroup v2，而不是 mock systemctl 或直接拉起进程。运行时无外网、私有 PID/cgroup namespace，只额外增加 `SYS_ADMIN` 以重挂容器自己的 cgroup 子树；不使用 privileged、宿主 cgroup/Docker socket 挂载或可写源码。只读源码快照在容器内独立构建，实际安装器注册生成 unit，daemon 和 Linux user-agent、tmux、双端 sync worker 均以 UID1000 运行。真实 stop/start/restart、daemon SIGKILL 自动恢复、升级/回滚保留原 Token/daemon_id/同一 pane PID、卸载保留配置/状态/项目/Token/tmux、重装和最终 systemd shutdown 已通过。user-agent 同样验证了 SIGKILL 自动恢复、升级/回滚、卸载/重装以及原远端凭据和配置/状态保留；另有激活后受控 SIGTERM 取消时真实 systemd 正常退出、所属容器已删除的清理证据。完整命令、证据和限制见 [SYSTEMD-VALIDATION](15-implementation-status.md#evidence-systemd-validation)。
 
-systemd 的 `WorkingDirectory` 使用规范 `~`（按 `User=` 或用户 manager 解析真实 home），不能套用 ExecStart 的 shell 风格引号。`HOME` 与 `PATH` 仍显式设置。插件目录属于安装器管理的可执行产物，允许指向 root-owned 不可变 release；daemon 初始化不再把它创建/强制改成 0700 本用户状态目录。manifest/二进制 owner、mode、摘要与协议校验保持，插件可写状态和 socket 仍在独立私有目录。
+systemd 的 `WorkingDirectory` 使用规范 `~`（按 `User=` 或用户 manager 解析真实 home），不能套用 ExecStart 的 shell 风格引号。`HOME` 与 `PATH` 仍显式设置。当前安装器把 `plugins_dir` 创建为运行用户所有的真实0700私有目录，第三方 `<id>/` 包不写入不可变 release；只保留受管 `.builtin -> <prefix>/current` 指针选择匹配内置插件，manifest/二进制叶子仍必须是经过 owner、mode、摘要与协议验证的普通文件，不创建叶子 symlink。插件可写状态和 socket 继续使用独立私有目录。
+
+历史 alpha.1/alpha.2 的整个 `plugins_dir -> <prefix>/current` 旧布局仍可只读运行，但 marketplace 拒绝往这个 symlink 写入；新安装器在现有启动锁和普通 UID 下将其迁移为上述真实私有目录。私有所有权 marker 绑定 prefix/plugins_dir；未受管目录、外来链接或冲突的保留路径一律拒绝，不自动接管。回滚到这两个冻结的旧 helper 前，安装器持有 marketplace 同一个 `.install.lock`，将完整插件目录原 inode 保留在同级 `.<目录名>.shiki-store`，并通过原子目录/链接交换恢复旧 helper 所要求的整根链接；不会把第三方内容写入 release。下一次新版本安装恢复原目录及 lock inode，保留第三方包、journal、stage 和 backup。新卸载只移除 `.builtin` 和受管命令链接；旧 helper 卸载只移除旧根链接，两者都不删除保留的第三方目录。中断后的显式重试依据有界 marker 与两侧目录/链接状态恢复，不猜测删除未知对象。
+
+当插件包目录位于 `StateDir` 内（包括 daemon 默认布局）时，宿主状态备份仅精确排除配置的 `plugins_dir`、对应的保留目录和同级所有权 marker；这些包/安装元数据原位保留，不作为宿主状态恢复，否则会破坏所有权 hard-link 身份。包目录之外的第三方可写状态、宿主状态和无关 dotfile 继续正常备份，不用名称前缀或通配符跳过任意私有数据。
 
 `scripts/test-launchd.sh` 已在 macOS 27.0.1 arm64、真实 UID501/HOME 和当前 GUI domain 验证原生 LaunchAgent bootstrap、SIGKILL 自动重启/新实例与旧 frontend 拒绝/旧插件回收、正常 agent stop 后 15 秒不重生、升级/回滚与卸载数据保留；另有受控 SIGTERM 取消后的 job/plist 清理证据。使用独立临时配置/产物且预检拒绝已有标准 job/plist。完整命令与证据见 [LAUNCHD-VALIDATION](15-implementation-status.md#evidence-launchd-validation)。这些结果不证明 reboot/login 持久化、已有用户安装迁移、其他 OS/arch、外部认证或生产长稳。两类流程均显式关闭 tsnet；systemd 场景的 Claude 是明确测试替身，`external_peer_acceptance` 仍为 pending。
 

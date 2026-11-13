@@ -533,7 +533,7 @@ func (w *Worker) InvokeAction(ctx context.Context, req *sdk.ActionRequest) (*sdk
 			Generation string `json:"generation"`
 			IsInitial  bool   `json:"is_initial_sync"`
 		}
-		var entries []conflictEntry
+		entries := make([]conflictEntry, 0)
 		for _, t := range tasks {
 			t.op.Lock()
 			scope := scopeFor(t.data.Mapping)
@@ -543,7 +543,7 @@ func (w *Worker) InvokeAction(ctx context.Context, req *sdk.ActionRequest) (*sdk
 			}
 			conflicts, err := w.ListConflicts(ctx, scope)
 			if err != nil {
-				continue
+				return nil, fmt.Errorf("list conflicts for mapping %s: %w", scope.MappingId, err)
 			}
 			for _, c := range conflicts.Conflicts {
 				entries = append(entries, conflictEntry{
@@ -582,7 +582,7 @@ func (w *Worker) InvokeAction(ctx context.Context, req *sdk.ActionRequest) (*sdk
 			Conflicts    uint64 `json:"conflicts"`
 			ReasonCode   string `json:"reason_code,omitempty"`
 		}
-		var statuses []statusEntry
+		statuses := make([]statusEntry, 0, len(tasks))
 		for _, t := range tasks {
 			t.op.Lock()
 			scope := scopeFor(t.data.Mapping)
@@ -592,7 +592,7 @@ func (w *Worker) InvokeAction(ctx context.Context, req *sdk.ActionRequest) (*sdk
 			}
 			state, err := w.GetSyncState(ctx, scope)
 			if err != nil {
-				continue
+				return nil, fmt.Errorf("get sync state for mapping %s: %w", scope.MappingId, err)
 			}
 			statuses = append(statuses, statusEntry{
 				MappingID: state.MappingId, State: state.State,

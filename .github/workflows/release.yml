@@ -160,6 +160,8 @@ jobs:
             --arg tag "$RELEASE_VERSION" --arg release_run "$GITHUB_RUN_ID" \
             '{version:$version, source_commit:$commit, signing_workflow_commit:$signer, repository:$repository, tag:$tag, release_run_id:$release_run}' \
             > signed/PROVENANCE.json
+      - name: Include fixed-source bootstrap before publication without the signing key
+        run: cp scripts/bootstrap.sh signed/bootstrap.sh
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: signed-${{ needs.source.outputs.version }}
@@ -225,15 +227,3 @@ jobs:
             --commit "$SOURCE_COMMIT" --run-id "$GITHUB_RUN_ID" \
             --directory signed --verifier "$RUNNER_TEMP/release-trust" \
             --public-key configs/release-signing.pub
-      - name: Upload bootstrap.sh to the published release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ needs.source.outputs.version }}
-        run: |
-          set -euo pipefail
-          # bootstrap.sh is a plain distribution script, not a signed payload.
-          # Upload it after the main signed release has been successfully published.
-          gh release upload "$RELEASE_VERSION" \
-            scripts/bootstrap.sh \
-            --repo "$GITHUB_REPOSITORY" \
-            --clobber

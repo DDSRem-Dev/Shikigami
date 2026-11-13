@@ -2,6 +2,10 @@
 
 **当前进度（2026-11-12）：42/42，原清单最后一项已关闭。** 当前源码的功能、平台、验收依据及未支持范围已统一到[支持声明](18-release-readiness.md#current-support)。Phase 0–5各阶段为11/11、7/7、6/6、6/6、6/6、6/6。认证生命周期和长稳/资源/性能沿用2026-11-01用户确认的关闭结论，历史实测/失败及源码范围保留；生产heap/object归因、真实Claude登录/推理及物理主机重启仍按未实测边界披露。42/42表示当前源码验收登记与声明核对完成，不表示新包或稳定版已发布；仓库公开安装入口仍为alpha.2，未包含后续master修复。
 
+**首个 beta 候选修复与验收（2026-11-13，进行中）：** 基线 `f4a28dd` 的 [CI 43258490322 attempt 2](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43258490322) 已完成57/57，但后续审计确认 bootstrap 有效签名解析、发布资产集合、第三方插件运行时接入、更新身份/版本绑定及动作输出仍有缺陷，不能用旧 CI 全绿证明 beta 就绪。本批修复这些端到端路径，并补充真实 CLI/agent/独立插件及 HTTPS 签名安装验收；当前新源码验证与远端 CI 尚待完成。原42项保持原证据范围，不新增勾选；发布前门槛与发布时门槛见[18](18-release-readiness.md#beta-readiness)。
+
+本批部分证据已完成：隔离 bootstrap 真实签名、发布/公式工具、actionlint，SDK/host/sync-client 与真实第三方插件生命周期、sync/port 原始和直接 CLI JSON 动作 race 检查通过。已独立验签真实 alpha.1/alpha.2 Linux归档；受管安装默认 plugins_dir 的 `.builtin` 布局迁移、真实旧 helper 回滚、最终签名安装进程链与候选 CI 仍待；不会让 marketplace 写入不可变发行目录，详见[15 本批记录](15-implementation-status.md#evidence-first-beta-candidate)。
+
 **插件 marketplace 安装批次（2026-11-12）：** 新增 `internal/pluginmarket` 签名 envelope、Ed25519 trust store、严格 JSON/HTTPS/平台/归档身份校验和流式 SHA-256 验证；CLI 新增 `plugins trust`、`plugins market`、签名 marketplace 安装与更新路径。手工 URL/path 安装保持显式责任边界，不进入自动更新。Linux amd64 目标 CLI 编译和内部包测试编译通过；Windows 执行受 Unix-only 源码与 Application Control 限制，外部 marketplace/发布验证仍待，未新增路线图勾选或发布声明。
 
 

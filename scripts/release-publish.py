@@ -14,17 +14,31 @@ release = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(release)
 
 
-def verify_inputs(directory, version, repository, commit, run_id, verifier, public_key):
+# These already-public releases predate the bootstrap asset. Their exact frozen
+# inventory stays valid; no other version may omit the fixed-source script.
+LEGACY_RELEASES = {"v0.0.1-alpha.1", "v0.0.1-alpha.2"}
+
+
+def asset_names(version):
     release.validate_version(version)
     names = {"PROVENANCE.json", "release-signing.pub"}
+    if version not in LEGACY_RELEASES:
+        names.add("bootstrap.sh")
     for system, arch in release.TARGETS:
         base = f"shikigami-{version}-{system}-{arch}.tar.gz"
         names.update(base + suffix for suffix in ("", ".sha256", ".checksums-pin", ".sig.json", ".verification.json"))
+    return names
+
+
+def verify_inputs(directory, version, repository, commit, run_id, verifier, public_key):
+    names = asset_names(version)
     if {p.name for p in directory.iterdir()} != names:
-        raise ValueError("exactly 22 signed release files are required")
+        raise ValueError(f"exactly {len(names)} release files are required")
     if any((directory / name).stat().st_size > 65536 for name in names if not name.endswith(".tar.gz")):
         raise ValueError("release metadata exceeds its size limit")
     digests = {name: release.file_digest(directory / name) for name in names}
+    if "bootstrap.sh" in names and (directory / "bootstrap.sh").read_bytes() != Path(__file__).with_name("bootstrap.sh").read_bytes():
+        raise ValueError("bootstrap script differs from the trusted fixed-source checkout")
     provenance = {"version": version, "source_commit": commit, "signing_workflow_commit": commit,
                   "repository": repository, "tag": version, "release_run_id": run_id}
     if json.loads((directory / "PROVENANCE.json").read_text()) != provenance:

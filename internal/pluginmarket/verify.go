@@ -2,6 +2,7 @@ package pluginmarket
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -169,11 +170,14 @@ func archiveFileMatches(path string, metadata ArchiveMetadata, entry Entry) erro
 	return nil
 }
 
-// VerifyArchive authenticates signed archive metadata and hashes the archive
-// through an open file descriptor. The URL in entry is deliberately not used
-// to establish archive identity.
-func VerifyArchive(archivePath string, signatureData []byte, entry Entry, store TrustStore) error {
-	if archivePath == "" || len(signatureData) == 0 || len(signatureData) > MaxArchiveSignatureBytes {
+// VerifyArchive authenticates and hashes the same open file the installer will
+// subsequently extract. It rewinds on success; callers must keep the descriptor
+// and its private download directory alive until extraction finishes.
+func VerifyArchive(ctx context.Context, file *os.File, signatureData []byte, entry Entry, store TrustStore) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if file == nil || len(signatureData) == 0 || len(signatureData) > MaxArchiveSignatureBytes {
 		return errors.New("invalid archive signature")
 	}
 	if err := ValidateEntry(entry); err != nil {
@@ -194,28 +198,25 @@ func VerifyArchive(archivePath string, signatureData []byte, entry Entry, store 
 	if metadata.ID != entry.ID || metadata.Version != entry.Version || metadata.OS != entry.OS || metadata.Arch != entry.Arch {
 		return errors.New("archive identity mismatch")
 	}
-	if err := archiveFileMatches(archivePath, metadata, entry); err != nil {
+	if err := archiveFileMatches(file.Name(), metadata, entry); err != nil {
 		return err
 	}
 	if subtle.ConstantTimeCompare(mustDecodeDigest(metadata.ArchiveSHA256), mustDecodeDigest(entry.SHA256)) != 1 {
 		return errors.New("archive digest metadata mismatch")
 	}
-	info, err := os.Lstat(archivePath)
-	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
-		return errors.New("invalid archive file")
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return err
 	}
-	file, err := os.Open(archivePath)
-	if err != nil {
-		return errors.New("unable to open archive")
-	}
-	defer file.Close()
 	openedInfo, err := file.Stat()
 	if err != nil || !openedInfo.Mode().IsRegular() || openedInfo.Size() != metadata.ArchiveSize {
 		return errors.New("archive size mismatch")
 	}
 	hasher := sha256.New()
-	count, err := io.Copy(hasher, io.LimitReader(file, MaxArchiveBytes+1))
-	if err != nil || count != metadata.ArchiveSize {
+	count, err := io.Copy(hasher, io.LimitReader(contextReader{ctx: ctx, reader: file}, MaxArchiveBytes+1))
+	if err != nil {
+		return err
+	}
+	if count != metadata.ArchiveSize {
 		return errors.New("archive size mismatch")
 	}
 	digest := hasher.Sum(nil)
@@ -223,7 +224,8 @@ func VerifyArchive(archivePath string, signatureData []byte, entry Entry, store 
 	if len(expected) != len(digest) || subtle.ConstantTimeCompare(digest, expected) != 1 {
 		return errors.New("archive digest mismatch")
 	}
-	return nil
+	_, err = file.Seek(0, io.SeekStart)
+	return err
 }
 
 func mustDecodeDigest(text string) []byte {
@@ -232,4 +234,16 @@ func mustDecodeDigest(text string) []byte {
 		return nil
 	}
 	return decoded
+}
+
+type contextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r contextReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.reader.Read(p)
 }

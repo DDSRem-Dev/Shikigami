@@ -1,6 +1,7 @@
 """Release publication never exposes a partial or conflicting asset set."""
 
 import copy
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -154,6 +155,48 @@ class PublicationTests(unittest.TestCase):
                 publish.missing_assets(assets, self.expected)
         self.assertEqual(publish.missing_assets([asset], self.expected), ["second"])
 
+    def test_beta_bootstrap_is_private_before_publication_and_immutable_on_retry(self):
+        self.version = "v0.0.1-beta.1"
+        names = publish.asset_names(self.version)
+        self.assertEqual(len(names), 23)
+        self.assertIn("bootstrap.sh", names)
+        self.expected = {name: {"size": len(name), "digest": "sha256:" + hashlib.sha256(name.encode()).hexdigest()}
+                         for name in names}
+        self.fail_upload = sorted(names)[-1]
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.run_publish()
+        self.assertTrue(self.current["draft"])
+        self.assertIn("bootstrap.sh", {asset["name"] for asset in self.assets})
+        self.assertFalse(any(method == "PATCH" for _, method, _ in self.calls))
+        self.fail_upload = None
+        self.uploads = []
+        self.run_publish()
+        self.assertEqual(self.uploads, [sorted(names)[-1]])
+        self.assertTrue(self.current["prerelease"])
+        self.assertEqual(self.current["make_latest"], "false")
+        complete = copy.deepcopy(self.assets)
+        self.calls, self.uploads = [], []
+        self.run_publish()
+        self.assertEqual(self.uploads, [])
+        self.assertFalse(any(method in ("POST", "PATCH") for _, method, _ in self.calls))
+        for mutation in ("missing", "digest", "size", "duplicate"):
+            with self.subTest(mutation=mutation):
+                self.assets = copy.deepcopy(complete)
+                script = next(asset for asset in self.assets if asset["name"] == "bootstrap.sh")
+                if mutation == "missing":
+                    self.assets.remove(script)
+                elif mutation == "duplicate":
+                    self.assets.append(copy.deepcopy(script))
+                elif mutation == "digest":
+                    script["digest"] = "sha256:" + "0" * 64
+                else:
+                    script["size"] += 1
+                self.calls, self.uploads = [], []
+                with self.assertRaises(ValueError):
+                    self.run_publish()
+                self.assertEqual(self.uploads, [])
+                self.assertFalse(any(method in ("POST", "PATCH") for _, method, _ in self.calls))
+
     def test_verifier_is_not_run_for_missing_signed_file_set(self):
         with patch.object(publish.subprocess, "check_output") as verify:
             with self.assertRaisesRegex(ValueError, "22"):
@@ -178,6 +221,67 @@ class PublicationTests(unittest.TestCase):
                 publish.verify_inputs(self.directory, VERSION, "owner/repo", COMMIT, "123",
                                       Path("unused"), Path("unused"))
             verify.assert_not_called()
+
+    def prepared_inputs(self, version):
+        directory = self.directory / version
+        directory.mkdir()
+        for name in publish.asset_names(version):
+            (directory / name).write_text("{}")
+        if version not in publish.LEGACY_RELEASES:
+            (directory / "bootstrap.sh").write_bytes((ROOT / "scripts/bootstrap.sh").read_bytes())
+        provenance = {"version": version, "source_commit": COMMIT, "signing_workflow_commit": COMMIT,
+                      "repository": "owner/repo", "tag": version, "release_run_id": "123"}
+        (directory / "PROVENANCE.json").write_text(json.dumps(provenance))
+        key = directory / "release-signing.pub"
+        key.write_text("trusted public key")
+        for path in directory.glob("*.verification.json"):
+            path.write_text(json.dumps({"key_fingerprint_sha256": "c" * 64}))
+        return directory, key
+
+    def verify_prepared(self, directory, version, key):
+        def bundle(folder, tag, system, arch):
+            return {"archive": f"shikigami-{tag}-{system}-{arch}.tar.gz"}
+
+        receipt = json.dumps({"archive": "private authenticated copy", "key_fingerprint_sha256": "c" * 64})
+        with patch.object(publish.release, "validate_bundle", side_effect=bundle), \
+                patch.object(publish.subprocess, "check_output", return_value=receipt):
+            return publish.verify_inputs(directory, version, "owner/repo", COMMIT, "123",
+                                         Path("trusted-verifier"), key)
+
+    def test_current_inventory_requires_exact_fixed_source_bootstrap_bytes(self):
+        version = "v0.0.1-beta.1"
+        directory, key = self.prepared_inputs(version)
+        assets, fingerprint = self.verify_prepared(directory, version, key)
+        script = directory / "bootstrap.sh"
+        self.assertEqual(len(assets), 23)
+        self.assertEqual(fingerprint, "c" * 64)
+        self.assertEqual(assets["bootstrap.sh"], {
+            "size": script.stat().st_size,
+            "digest": "sha256:" + hashlib.sha256(script.read_bytes()).hexdigest()})
+        script.write_bytes(script.read_bytes() + b"\n")
+        with patch.object(publish.subprocess, "check_output") as verify:
+            with self.assertRaisesRegex(ValueError, "fixed-source"):
+                publish.verify_inputs(directory, version, "owner/repo", COMMIT, "123", Path("unused"), key)
+            verify.assert_not_called()
+            script.unlink()
+            with self.assertRaisesRegex(ValueError, "23"):
+                publish.verify_inputs(directory, version, "owner/repo", COMMIT, "123", Path("unused"), key)
+            verify.assert_not_called()
+            script.symlink_to(ROOT / "scripts/bootstrap.sh")
+            with self.assertRaisesRegex(ValueError, "regular"):
+                publish.verify_inputs(directory, version, "owner/repo", COMMIT, "123", Path("unused"), key)
+            verify.assert_not_called()
+
+    def test_only_frozen_public_alphas_keep_the_exact_22_asset_inventory(self):
+        for version in ("v0.0.1-alpha.1", "v0.0.1-alpha.2"):
+            with self.subTest(version=version):
+                directory, key = self.prepared_inputs(version)
+                assets, _ = self.verify_prepared(directory, version, key)
+                self.assertEqual(len(assets), 22)
+                self.assertNotIn("bootstrap.sh", assets)
+                (directory / "bootstrap.sh").write_text("not a historical asset")
+                with self.assertRaisesRegex(ValueError, "22"):
+                    self.verify_prepared(directory, version, key)
 
 
 if __name__ == "__main__":

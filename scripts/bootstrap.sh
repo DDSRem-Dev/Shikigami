@@ -1,19 +1,19 @@
 #!/bin/bash
 # Shikigami one-line installer / upgrader.
 #
-# For a stable release, GitHub's latest/download alias may be used. For a
-# prerelease, fetch this script from the explicit /releases/download/<tag> URL.
+# Obtain and review this script from a trusted checkout. The public alpha.1 and
+# alpha.2 releases do not contain bootstrap.sh; do not request that missing asset.
+# New releases include it in their immutable asset set. For a prerelease, always
+# pin the explicit tag rather than GitHub's stable-only latest/download alias.
 #
-# Server (daemon) — run on the VPS as root or with sudo:
-#   curl -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.2/bootstrap.sh \
-#        | sudo bash -s -- --version=v0.0.1-alpha.2 --user=rem
+# Server (daemon) — from the reviewed checkout, run on the VPS:
+#   sudo bash scripts/bootstrap.sh --version=v0.0.1-alpha.2 --user=rem
 #
-# Client (agent + CLI) — run on the local machine as your own user:
-#   curl -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.2/bootstrap.sh \
-#        | bash -s -- --version=v0.0.1-alpha.2 --role=client
+# Client (agent + CLI) — run as your own ordinary user:
+#   bash scripts/bootstrap.sh --version=v0.0.1-alpha.2 --role=client
 #
 # Non-interactive VPS (CI / automation):
-#   curl -fsSL .../bootstrap.sh | sudo bash -s -- \
+#   sudo bash scripts/bootstrap.sh --version=v0.0.1-alpha.2 \
 #       --user=rem --tailscale-key-file=/run/secrets/ts-key \
 #       --non-interactive --token-output=/run/secrets/shiki-token
 #
@@ -44,6 +44,7 @@ SHIKI_API="https://api.github.com/repos/${SHIKI_REPO}"
 SHIKI_RELEASES="https://github.com/${SHIKI_REPO}/releases"
 SHIKI_MAX_META=65536      # bytes; for sig/checksums sidecar files
 SHIKI_MAX_ARCHIVE=1073741824  # 1 GiB hard cap
+SHIKI_MAX_BUNDLE=4294967296   # 4 GiB cap on the decompressed tar stream
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -138,55 +139,92 @@ shiki_hash() {
   fi
 }
 
+shiki_run() {
+  # Keep the supervisor alive to forward cancellation and retain the child's
+  # exact exit status. Explicit stdin inheritance also works with /dev/tty.
+  local _status=0
+  "$@" <&0 &
+  shiki_child=$!
+  wait "$shiki_child" || _status=$?
+  shiki_child=""
+  return "$_status"
+}
+
+shiki_capture() {
+  # Bounded stdout capture, including when a server omits Content-Length.
+  # Own and reap the producer instead of leaving a pipeline alive on cancellation.
+  local _dest="$1" _max="$2"
+  shift 2
+  shiki_run /usr/bin/perl -MFcntl=:DEFAULT -e '
+    my ($target, $limit, @command) = @ARGV;
+    sysopen(my $out, $target, O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW, 0600)
+      or die "Cannot create bounded download: $!\n";
+    my $pid = open(my $in, "-|", @command);
+    defined($pid) or die "Cannot start download: $!\n";
+    END {
+      if (defined($pid) && $pid > 0) {
+        kill "TERM", $pid;
+        waitpid($pid, 0);
+      }
+    }
+    $SIG{TERM} = $SIG{HUP} = $SIG{INT} = sub { exit 143 };
+    my $total = 0;
+    while (1) {
+      my $remaining = $limit - $total + 1;
+      my $n = sysread($in, my $buffer, $remaining < 65536 ? $remaining : 65536);
+      if (!defined($n) || $total + $n > $limit) {
+        die "Download failed or exceeded its $limit byte limit\n";
+      }
+      last if $n == 0;
+      $total += $n;
+      my $offset = 0;
+      while ($offset < $n) {
+        my $written = syswrite($out, $buffer, $n - $offset, $offset);
+        defined($written) && $written > 0 or die "Cannot write download: $!\n";
+        $offset += $written;
+      }
+    }
+    my $ok = close($in);
+    undef($pid);
+    $ok or die "Download command failed\n";
+    close($out) or die "Cannot close download: $!\n";
+  ' "$_dest" "$_max" "$@"
+}
+
 shiki_download() {
-  # shiki_download <url> <dest> <max_bytes>
   local _url="$1" _dest="$2" _max="$3"
-  if command -v curl >/dev/null 2>&1; then
-    curl --fail --silent --show-error --location \
-         --max-filesize "$_max" \
-         --retry 3 --retry-delay 2 \
-         --output "$_dest" "$_url"
-  elif command -v wget >/dev/null 2>&1; then
-    wget --quiet --max-redirect=5 \
-         --output-document="$_dest" "$_url"
-  else
-    shiki_die "Neither curl nor wget is available."
-  fi
-  # Enforce the limit even for chunked responses without Content-Length.
-  local _size
-  _size=$(wc -c < "$_dest" 2>/dev/null || echo 0)
-  if [[ "$_size" -gt "$_max" ]]; then
-    rm -f "$_dest"
-    shiki_die "Downloaded file exceeds size limit ($_max bytes)."
-  fi
+  [[ "$_url" == https://* ]] || shiki_die "Downloads require HTTPS."
+  # Ignore curlrc; restrict every redirect, not just the initial URL. The Perl
+  # writer enforces the byte bound even with older Linux/macOS curl versions.
+  shiki_capture "$_dest" "$_max" curl --disable --fail --silent --show-error \
+    --proto '=https' --proto-redir '=https' --location --max-redirs 5 \
+    --connect-timeout 15 --max-time 300 --speed-limit 1024 --speed-time 30 \
+    --max-filesize "$_max" --output - "$_url"
 }
 
 # ---------------------------------------------------------------------------
 # Version resolution
 # ---------------------------------------------------------------------------
 shiki_validate_version() {
-  [[ "$1" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.[1-9][0-9]*)?$ ]]
+  [[ "${#1}" -le 80 && "$1" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.[1-9][0-9]*)?$ ]]
 }
 
 shiki_resolve_version() {
-  local _ver _tmp
+  local _ver=""
   if [[ -n "$shiki_version" ]]; then
     shiki_validate_version "$shiki_version" ||
       shiki_die "Invalid release version; use vMAJOR.MINOR.PATCH or a prerelease tag."
-    printf '%s\n' "$shiki_version"
     return
   fi
-  # /releases/latest excludes prereleases. The public project currently ships
-  # prereleases, so query the newest published release instead.
-  _tmp="$(mktemp)"
-  if shiki_download "${SHIKI_API}/releases?per_page=1" "$_tmp" 65536 2>/dev/null; then
-    _ver="$(grep -o '"tag_name"[[:space:]]*:[[:space:]]*"v[^"]*"' "$_tmp" |
-      head -n 1 | sed -E 's/.*"([^"]+)"/\1/' || true)"
-  fi
-  rm -f "$_tmp"
+  # /releases/latest excludes prereleases. Query the newest published release,
+  # using the same private workspace and download limits as all other inputs.
+  shiki_download "${SHIKI_API}/releases?per_page=1" "$shiki_tmp/latest.json" "$SHIKI_MAX_META"
+  _ver="$(/usr/bin/perl -0777 -ne '
+    if (/"tag_name"\s*:\s*"(v[^"]*)"/) { print $1 }
+  ' "$shiki_tmp/latest.json")"
   [[ -n "$_ver" ]] && shiki_validate_version "$_ver" ||
     shiki_die "Cannot determine latest published version. Use --version=<tag> to pin a release."
-  printf '%s\n' "$_ver"
+  shiki_version="$_ver"
 }
 
 # A release bootstrap MUST authenticate the Ed25519 envelope. A same-origin
@@ -223,9 +261,7 @@ shiki_verify_sig() {
   printf '%b' 'Shikigami release archive signature\0format=1\0' > "$_work/message"
   cat "$_work/payload" >> "$_work/message"
   printf '%s' "$_pub" > "$_work/public.pem"
-  command -v openssl >/dev/null 2>&1 ||
-    shiki_die "OpenSSL is required to verify release signatures."
-  openssl pkeyutl -verify -pubin -inkey "$_work/public.pem" -rawin \
+  shiki_run "$shiki_openssl" pkeyutl -verify -pubin -inkey "$_work/public.pem" -rawin \
     -in "$_work/message" -sigfile "$_work/signature" >/dev/null 2>&1 ||
     shiki_die "Ed25519 release signature verification failed."
   _payload="$(cat "$_work/payload")"
@@ -236,7 +272,7 @@ shiki_verify_sig() {
   _rest="${_rest#*\",\"archive_size\":}"
   _archive_size="${_rest%%,\"checksums_sha256\":\"*}"
   _pin="${_rest#*,\"checksums_sha256\":\"}"
-  _pin="${_pin%\"}"
+  _pin="${_pin%\"\}}"
   [[ "$_rest" == "${_archive_size},\"checksums_sha256\":\"${_pin}\"}" ]] ||
     shiki_die "Invalid signed release metadata."
   [[ "$_archive_hash" =~ ^[0-9a-f]{64}$ && "$_pin" =~ ^[0-9a-f]{64}$ &&
@@ -246,7 +282,7 @@ shiki_verify_sig() {
   _actual_hash="$(shiki_hash "$_archive")"
   [[ "$_actual_size" == "$_archive_size" && "$_actual_hash" == "$_archive_hash" ]] ||
     shiki_die "Signed archive size or SHA-256 mismatch."
-  printf '%s' "$_pin"
+  shiki_checksums_pin="$_pin"
 }
 # ---------------------------------------------------------------------------
 # Bounded, safe copy (Perl, same as install.sh)
@@ -281,15 +317,75 @@ shiki_safe_copy() {
   ' "$1" "$2" "$3"
 }
 
+shiki_need_tools() {
+  local _tool _candidate _version
+  for _tool in curl tar gzip base64; do
+    command -v "$_tool" >/dev/null 2>&1 || shiki_die "$_tool is required."
+  done
+  # macOS /usr/bin/openssl is normally LibreSSL, whose pkeyutl cannot verify
+  # Ed25519 raw messages. Prefer an OpenSSL 3+ CLI, including Homebrew's keg.
+  shiki_openssl=""
+  for _candidate in "$(command -v openssl || true)" \
+      /opt/homebrew/opt/openssl@3/bin/openssl /usr/local/opt/openssl@3/bin/openssl; do
+    [[ -x "$_candidate" ]] || continue
+    _version="$("$_candidate" version 2>/dev/null)" || continue
+    if [[ "$_version" =~ ^OpenSSL[[:space:]]([0-9]+)\. ]] && (( BASH_REMATCH[1] >= 3 )); then
+      shiki_openssl="$_candidate"
+      break
+    fi
+  done
+  [[ -n "$shiki_openssl" ]] ||
+    shiki_die "OpenSSL 3+ with Ed25519 pkeyutl -rawin support is required (on macOS: brew install openssl@3; system LibreSSL is not sufficient)."
+}
+
+shiki_stop_child() {
+  local _attempt
+  [[ -n "$shiki_child" ]] || return 0
+  kill -TERM "$shiki_child" 2>/dev/null || true
+  # Give the installer time to cancel and roll back before forcing termination.
+  for ((_attempt=0; _attempt<100; _attempt++)); do
+    kill -0 "$shiki_child" 2>/dev/null || break
+    sleep 0.1
+  done
+  kill -KILL "$shiki_child" 2>/dev/null || true
+  wait "$shiki_child" 2>/dev/null || true
+  shiki_child=""
+}
+
+shiki_cleanup() {
+  local _status=$?
+  trap - EXIT
+  trap '' HUP INT TERM
+  shiki_stop_child
+  [[ -z "$shiki_tmp" ]] || rm -rf -- "$shiki_tmp" || true
+  exit "$_status"
+}
+
+shiki_cancel() {
+  trap '' HUP INT TERM
+  shiki_stop_child
+  exit "$1"
+}
+
 # ---------------------------------------------------------------------------
 # Main install flow
 # ---------------------------------------------------------------------------
 shiki_need_perl
+shiki_need_tools
+shiki_tmp=""
+shiki_child=""
+trap shiki_cleanup EXIT
+trap 'shiki_cancel 129' HUP
+trap 'shiki_cancel 130' INT
+trap 'shiki_cancel 143' TERM
+umask 077
+shiki_tmp="$(mktemp -d /tmp/shiki-bootstrap.XXXXXXXX)"
+chmod 700 "$shiki_tmp"
 
 shiki_say "Detecting platform: ${shiki_os}/${shiki_arch}"
 shiki_say "Role: ${shiki_role}"
 
-shiki_version="$(shiki_resolve_version)"
+shiki_resolve_version
 shiki_say "Version: ${shiki_version}"
 
 # Confirmation prompt
@@ -308,10 +404,6 @@ if [[ "$shiki_yes" -eq 0 && "$shiki_noninteractive" -eq 0 && -t 0 ]]; then
   esac
 fi
 
-# Temp workspace
-shiki_tmp="$(mktemp -d /tmp/shiki-bootstrap.XXXXXXXX)"
-trap 'rm -rf "$shiki_tmp"' EXIT HUP INT TERM
-chmod 700 "$shiki_tmp"
 
 # Archive name and URLs
 shiki_archive_name="shikigami-${shiki_version}-${shiki_os}-${shiki_arch}.tar.gz"
@@ -330,19 +422,53 @@ shiki_ok "Download complete."
 # checksum pin consumed by the bundle installer; sidecars are not trust roots.
 shiki_say "Downloading and verifying Ed25519 signature..."
 shiki_download "$shiki_sig_url" "$shiki_sig" "$SHIKI_MAX_META"
-shiki_checksums_pin="$(shiki_verify_sig "$shiki_archive" "$shiki_sig" \
-  "$SHIKI_EMBEDDED_PUB" "$shiki_version" "$shiki_os" "$shiki_arch")"
+shiki_verify_sig "$shiki_archive" "$shiki_sig" \
+  "$SHIKI_EMBEDDED_PUB" "$shiki_version" "$shiki_os" "$shiki_arch"
 shiki_ok "Ed25519 signature verified. Key fingerprint: e21f6dd671ea5042c43c492b759b933dda73985f89a823b43c651ff7c787c17d"
 
 # Verify pin format
 [[ "$shiki_checksums_pin" =~ ^[0-9a-f]{64}$ ]] || \
   shiki_die "Invalid checksums pin extracted from signature."
 
-# Extract bundle
+# Bound the expanded tar before extraction, too. Both it and the archive remain
+# private and are removed on success, failure or cancellation.
+shiki_say "Extracting bundle..."
+shiki_tar="${shiki_tmp}/bundle.tar"
+shiki_capture "$shiki_tar" "$SHIKI_MAX_BUNDLE" gzip -dc "$shiki_archive"
+rm -f -- "$shiki_archive"
+# Also bound inode growth and reject paths outside the release's fixed payload
+# set before extracting. A single legacy top-level directory is still accepted.
+shiki_members="${shiki_tmp}/members"
+shiki_capture "$shiki_members" "$SHIKI_MAX_META" tar -tf "$shiki_tar"
+/usr/bin/perl -e '
+  my %expected = map { $_ => 1 } qw(shiki shiki-agent shiki-daemon shiki-install
+    shiki-plugin-sync shiki-plugin-port sync.manifest.json port.manifest.json
+    install.sh install-client.sh uninstall.sh LICENSE release.json SHA256SUMS);
+  my ($prefix, $directory);
+  while (<>) {
+    chomp;
+    if (m{\A([A-Za-z0-9][A-Za-z0-9._-]*)/\z}) {
+      !defined($directory) or die "Duplicate bundle directory\n";
+      $directory = $1;
+      next;
+    }
+    m{\A(?:([A-Za-z0-9][A-Za-z0-9._-]*)/)?([A-Za-z0-9._-]+)\z}
+      or die "Unsafe bundle path\n";
+    my ($root, $name) = ($1 // "", $2);
+    $prefix = $root unless defined($prefix);
+    $prefix eq $root && delete($expected{$name})
+      or die "Unexpected or duplicate bundle member\n";
+  }
+  !keys(%expected) && (!defined($directory) || $directory eq $prefix)
+    or die "Incomplete or inconsistent bundle membership\n";
+' "$shiki_members"
 shiki_bundle="${shiki_tmp}/bundle"
 mkdir -p "$shiki_bundle"
-shiki_say "Extracting bundle..."
-tar -xzf "$shiki_archive" -C "$shiki_bundle"
+# The file limit also bounds logical sparse members on GNU/BSD tar.
+shiki_run bash -c 'ulimit -f "$1"; shift; exec "$@"' bash \
+  "$((SHIKI_MAX_ARCHIVE / 1024))" \
+  tar -xf "$shiki_tar" -C "$shiki_bundle" --no-same-owner --no-same-permissions
+rm -f -- "$shiki_tar"
 
 # Locate extracted directory (the current release archive is flat, but retain
 # support for a single top-level directory in older verified archives).
@@ -358,19 +484,16 @@ if [[ -z "$shiki_bundle_dir" && -f "${shiki_bundle}/SHA256SUMS" ]]; then
 fi
 [[ -n "$shiki_bundle_dir" ]] || shiki_die "Cannot locate SHA256SUMS in extracted bundle."
 
-# Determine script and role. Release archives contain these files at the
-# bundle root; they are not under a scripts/ subdirectory.
-if [[ "$shiki_role" == "daemon" ]]; then
-  shiki_script="${shiki_bundle_dir}/install.sh"
-  [[ -f "$shiki_script" ]] || shiki_die "install.sh not found in bundle."
-else
-  shiki_script="${shiki_bundle_dir}/install-client.sh"
-  [[ -f "$shiki_script" ]] || shiki_die "install-client.sh not found in bundle."
-fi
+# The archive signature authenticates the helper itself. Execute a private copy
+# directly rather than nesting shell wrappers with independent temporary state.
+shiki_installer="${shiki_bundle_dir}/shiki-install"
+[[ -f "$shiki_installer" && ! -L "$shiki_installer" ]] ||
+  shiki_die "A regular shiki-install is required in the signed bundle."
 
 
 # Build shiki-install invocation args
 shiki_install_args=(
+  "install"
   "--bundle=${shiki_bundle_dir}"
   "--checksums-sha256=${shiki_checksums_pin}"
   "--role=${shiki_role}"
@@ -383,10 +506,11 @@ shiki_install_args=(
 # Forward any extra flags
 shiki_install_args+=("${shiki_pass_through[@]+"${shiki_pass_through[@]}"}")
 
-# Make a private copy of the bundle's install script and run it
-shiki_script_copy="${shiki_tmp}/install-runner.sh"
-shiki_safe_copy "$shiki_script" "$shiki_script_copy" 1048576
-chmod 700 "$shiki_script_copy"
+# Keep this supervisor alive until the installer exits, so EXIT cleanup is not
+# lost to exec and pending/error exit codes are returned unchanged.
+shiki_installer_copy="${shiki_tmp}/shiki-install"
+shiki_safe_copy "$shiki_installer" "$shiki_installer_copy" "$SHIKI_MAX_ARCHIVE"
+chmod 700 "$shiki_installer_copy"
 
 shiki_say "Running installer..."
-exec bash "$shiki_script_copy" "${shiki_install_args[@]}"
+shiki_run "$shiki_installer_copy" "${shiki_install_args[@]}"

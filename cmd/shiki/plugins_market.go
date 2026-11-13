@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,8 +15,11 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/DDSRem-Dev/Shikigami/internal/client"
+	sdk "github.com/DDSRem-Dev/Shikigami/pkg/plugin"
 	"github.com/spf13/cobra"
 )
 
@@ -187,13 +192,16 @@ func fetchPluginBytes(ctx context.Context, raw string, limit int64) ([]byte, err
 	if err != nil {
 		return nil, err
 	}
-	resp, err := (&http.Client{Timeout: pluginHTTPTimeout}).Do(req)
+	resp, err := pluginHTTPClient().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("download %s: %w", raw, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("download %s: HTTP %s", raw, resp.Status)
+	}
+	if resp.ContentLength > limit {
+		return nil, fmt.Errorf("download %s exceeds size limit", raw)
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
@@ -218,119 +226,61 @@ func fetchPluginIndex(ctx context.Context, raw string, store client.PluginMarket
 }
 
 func choosePluginEntry(index client.PluginMarketIndex, id, version string) (client.PluginMarketEntry, error) {
+	if version != "" {
+		if err := client.ValidatePluginVersion(version); err != nil {
+			return client.PluginMarketEntry{}, err
+		}
+	}
 	entries := make([]client.PluginMarketEntry, 0)
 	for _, entry := range index.Entries {
-		if entry.ID == id && entry.OS == runtime.GOOS && entry.Arch == runtime.GOARCH && (version == "" || entry.Version == version) {
+		if entry.ID != id || entry.OS != runtime.GOOS || entry.Arch != runtime.GOARCH {
+			continue
+		}
+		if err := client.ValidatePluginVersion(entry.Version); err != nil {
+			return client.PluginMarketEntry{}, err
+		}
+		if version == "" || entry.Version == version {
 			entries = append(entries, entry)
 		}
 	}
 	if len(entries) == 0 {
-		if version == "" {
-			return client.PluginMarketEntry{}, fmt.Errorf("no signed %s plugin for %s/%s", id, runtime.GOOS, runtime.GOARCH)
-		}
 		return client.PluginMarketEntry{}, fmt.Errorf("no signed %s plugin version %q for %s/%s", id, version, runtime.GOOS, runtime.GOARCH)
 	}
 	sort.Slice(entries, func(i, j int) bool { return comparePluginVersions(entries[i].Version, entries[j].Version) > 0 })
+	if len(entries) > 1 && comparePluginVersions(entries[0].Version, entries[1].Version) == 0 {
+		return client.PluginMarketEntry{}, errors.New("ambiguous marketplace versions with equal SemVer precedence; request an exact unique version")
+	}
 	return entries[0], nil
 }
 
-func comparePluginVersions(a, b string) int {
-	if a == b {
-		return 0
-	}
-	ac, ap := splitPluginVersion(a)
-	bc, bp := splitPluginVersion(b)
-	for i := 0; i < len(ac) || i < len(bc); i++ {
-		av, bv := "0", "0"
-		if i < len(ac) {
-			av = ac[i]
-		}
-		if i < len(bc) {
-			bv = bc[i]
-		}
-		if av != bv {
-			if isDigits(av) && isDigits(bv) {
-				av = strings.TrimLeft(av, "0")
-				bv = strings.TrimLeft(bv, "0")
-				if av == "" {
-					av = "0"
-				}
-				if bv == "" {
-					bv = "0"
-				}
-				if len(av) != len(bv) {
-					if len(av) > len(bv) {
-						return 1
-					}
-					return -1
-				}
-			}
-			if av > bv {
-				return 1
-			}
-			return -1
-		}
-	}
-	if ap == bp {
-		return 0
-	}
-	if ap == "" {
-		return 1
-	}
-	if bp == "" {
-		return -1
-	}
-	if ap > bp {
-		return 1
-	}
-	return -1
-}
+func comparePluginVersions(a, b string) int { return client.ComparePluginVersions(a, b) }
 
-func splitPluginVersion(value string) ([]string, string) {
-	value = strings.SplitN(value, "+", 2)[0]
-	parts := strings.SplitN(value, "-", 2)
-	core := strings.Split(parts[0], ".")
-	pre := ""
-	if len(parts) == 2 {
-		pre = parts[1]
+func (a *app) installMarketEntry(ctx context.Context, session *client.PluginInstallSession, installed *client.PluginInstallStore, marketURL string, entry client.PluginMarketEntry, store client.PluginMarketTrustStore, update bool) error {
+	if !validPluginID(entry.ID) || protectedPluginID(entry.ID) || entry.OS != runtime.GOOS || entry.Arch != runtime.GOARCH {
+		return errors.New("marketplace entry does not match an installable plugin/platform")
 	}
-	return core, pre
-}
-
-func isDigits(value string) bool {
-	if value == "" {
-		return false
+	if err := client.ValidatePluginVersion(entry.Version); err != nil {
+		return err
 	}
-	for _, r := range value {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
-}
-
-func (a *app) installMarketEntry(ctx context.Context, marketURL string, entry client.PluginMarketEntry, store client.PluginMarketTrustStore, update bool) error {
-	archivePath, cleanUp, err := fetchPluginSource(ctx, entry.URL)
+	fingerprint, err := client.PluginMarketSigningKeyFingerprint(store, entry.KeyID)
 	if err != nil {
 		return err
 	}
-	if cleanUp {
-		defer os.Remove(archivePath)
+	canonical := fmt.Sprintf("%s-%s-%s-%s.tar.gz", entry.ID, entry.Version, entry.OS, entry.Arch)
+	file, cleanup, err := fetchPluginSource(ctx, entry.URL, canonical)
+	if err != nil {
+		return err
 	}
-	canonical := filepath.Join(filepath.Dir(archivePath), fmt.Sprintf("%s-%s-%s-%s.tar.gz", entry.ID, entry.Version, entry.OS, entry.Arch))
-	if err := os.Rename(archivePath, canonical); err != nil {
-		return fmt.Errorf("prepare downloaded archive: %w", err)
-	}
-	defer os.Remove(canonical)
+	defer cleanup()
 	signature, err := fetchPluginBytes(ctx, entry.SignatureURL, client.PluginMarketMaxArchiveSignatureBytes)
 	if err != nil {
 		return err
 	}
-	if err := client.VerifyPluginMarketArchive(canonical, signature, entry, store); err != nil {
+	if err := client.VerifyPluginMarketArchive(ctx, file, signature, entry, store); err != nil {
 		return fmt.Errorf("verify plugin archive: %w", err)
 	}
-	meta := pluginInstallMeta{SourceURL: entry.URL, MarketURL: marketURL, SignatureURL: entry.SignatureURL, KeyID: entry.KeyID}
-	return a.doPluginInstall(ctx, canonical, entry.SHA256, meta, update)
+	meta := pluginInstallMeta{Format: pluginInstallMetaFormat, SourceKind: "market", SourceURL: entry.URL, SHA256: entry.SHA256, MarketURL: marketURL, SignatureURL: entry.SignatureURL, KeyID: entry.KeyID, KeySHA256: fingerprint}
+	return a.installPluginFile(ctx, session, installed, file, meta, &entry, update)
 }
 
 func listInstalledThirdPartyPlugins(base string) ([]string, error) {
@@ -354,25 +304,39 @@ func listInstalledThirdPartyPlugins(base string) ([]string, error) {
 	return ids, nil
 }
 
-func (a *app) updateOnePlugin(ctx context.Context, base, id, requestedVersion, marketURL string) error {
-	if !validPluginID(id) {
-		return errors.New("invalid plugin id")
+func (a *app) updateOnePlugin(ctx context.Context, session *client.PluginInstallSession, installed *client.PluginInstallStore, id, requestedVersion, marketURL string) error {
+	if !validPluginID(id) || protectedPluginID(id) {
+		return errors.New("invalid or built-in plugin id")
 	}
-	metaPath := filepath.Join(base, id, ".install-meta.json")
-	data, err := os.ReadFile(metaPath)
+	if requestedVersion != "" {
+		if err := client.ValidatePluginVersion(requestedVersion); err != nil {
+			return err
+		}
+	}
+	currentVersion, err := validateInstalledArtifact(ctx, id, installed.Base)
 	if err != nil {
-		return fmt.Errorf("cannot read install metadata: %w", err)
+		return err
 	}
-	var meta pluginInstallMeta
-	if err := client.DecodeStrictJSON(data, &meta); err != nil || meta.MarketURL == "" {
+	meta, err := readInstallMeta(id, installed.Base)
+	if err != nil {
+		return err
+	}
+	if meta.SourceKind == "manual" {
 		return errPluginNotMarket
 	}
 	if marketURL == "" {
 		marketURL = meta.MarketURL
 	}
+	if !isHTTPSPluginURL(marketURL) {
+		return errors.New("marketplace URL must use HTTPS")
+	}
 	store, err := a.loadPluginTrustStore()
 	if err != nil {
 		return err
+	}
+	fingerprint, err := client.PluginMarketSigningKeyFingerprint(store, meta.KeyID)
+	if err != nil || fingerprint != meta.KeySHA256 {
+		return errors.New("installed publisher key is unavailable or its key material changed; refusing key substitution")
 	}
 	index, err := fetchPluginIndex(ctx, marketURL, store)
 	if err != nil {
@@ -382,7 +346,9 @@ func (a *app) updateOnePlugin(ctx context.Context, base, id, requestedVersion, m
 	if err != nil {
 		return err
 	}
-	currentVersion := metaVersion(id, base)
+	if entry.KeyID != meta.KeyID {
+		return errors.New("marketplace update changed the installed publisher key; refusing key substitution")
+	}
 	comparison := comparePluginVersions(entry.Version, currentVersion)
 	if comparison < 0 {
 		return fmt.Errorf("refusing marketplace downgrade from %s to %s", currentVersion, entry.Version)
@@ -391,21 +357,139 @@ func (a *app) updateOnePlugin(ctx context.Context, base, id, requestedVersion, m
 		fmt.Fprintf(a.output, "Plugin %q is already up to date (%s).\n", id, currentVersion)
 		return nil
 	}
-	return a.installMarketEntry(ctx, marketURL, entry, store, true)
+	return a.installMarketEntry(ctx, session, installed, marketURL, entry, store, true)
 }
 
-func metaVersion(id, base string) string {
-	data, err := os.ReadFile(filepath.Join(base, id, "manifest.json"))
+func metaVersion(id, base string) (string, error) {
+	manifest, _, err := readInstalledManifest(id, base)
 	if err != nil {
-		return ""
+		return "", err
 	}
-	var manifest struct {
-		Version string `json:"version"`
+	return manifest.Version, nil
+}
+
+func readInstalledManifest(id, base string) (*sdk.PluginManifest, []byte, error) {
+	if !validPluginID(id) {
+		return nil, nil, errors.New("invalid installed plugin id")
 	}
-	if client.DecodeStrictJSON(data, &manifest) != nil {
-		return ""
+	data, err := readInstalledPluginFile(filepath.Join(base, id, "manifest.json"), pluginMaxManifest)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot read installed manifest: %w", err)
 	}
-	return manifest.Version
+	var manifest sdk.PluginManifest
+	if err := client.DecodeStrictJSON(data, &manifest); err != nil {
+		return nil, nil, fmt.Errorf("invalid installed manifest: %w", err)
+	}
+	if err := validateInstalledManifest(&manifest); err != nil {
+		return nil, nil, err
+	}
+	if manifest.ID != id {
+		return nil, nil, errors.New("installed manifest ID does not match its directory")
+	}
+	return &manifest, data, nil
+}
+
+func validateInstalledArtifact(ctx context.Context, id, base string) (string, error) {
+	manifest, data, err := readInstalledManifest(id, base)
+	if err != nil {
+		return "", err
+	}
+	receiptData, err := readInstalledPluginFile(filepath.Join(base, id, ".artifact-integrity.json"), pluginMaxManifest)
+	if err != nil {
+		return "", fmt.Errorf("cannot read installed artifact integrity: %w", err)
+	}
+	var receipt struct {
+		ManifestSHA256 string `json:"manifest_sha256"`
+		BinarySHA256   string `json:"binary_sha256"`
+	}
+	if err := client.DecodeStrictJSON(receiptData, &receipt); err != nil || !validPluginDigest(receipt.ManifestSHA256) || !validPluginDigest(receipt.BinarySHA256) {
+		return "", errors.New("invalid installed artifact integrity receipt")
+	}
+	digest := sha256.Sum256(data)
+	if hex.EncodeToString(digest[:]) != receipt.ManifestSHA256 {
+		return "", errors.New("installed manifest does not match its integrity receipt")
+	}
+	binaryDigest, err := pluginFileDigest(ctx, filepath.Join(base, id, manifest.Binary), pluginMaxBinary)
+	if err != nil {
+		return "", err
+	}
+	if binaryDigest != receipt.BinarySHA256 {
+		return "", errors.New("installed executable does not match its integrity receipt")
+	}
+	return manifest.Version, nil
+}
+
+func readInstalledPluginFile(name string, limit int64) ([]byte, error) {
+	dir, err := os.Lstat(filepath.Dir(name))
+	if err != nil || !dir.IsDir() || dir.Mode()&os.ModeSymlink != 0 {
+		return nil, errors.New("installed plugin directory is missing or unsafe")
+	}
+	file, err := os.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0022 != 0 {
+		return nil, errors.New("installed plugin metadata is not a safe regular file")
+	}
+	data, err := io.ReadAll(io.LimitReader(file, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, errors.New("installed plugin metadata exceeds size limit")
+	}
+	return data, nil
+}
+
+func readInstallMeta(id, base string) (pluginInstallMeta, error) {
+	if !validPluginID(id) {
+		return pluginInstallMeta{}, errors.New("invalid installed plugin id")
+	}
+	data, err := readInstalledPluginFile(filepath.Join(base, id, ".install-meta.json"), 64<<10)
+	if err != nil {
+		return pluginInstallMeta{}, fmt.Errorf("cannot read install metadata: %w", err)
+	}
+	var meta pluginInstallMeta
+	if err := client.DecodeStrictJSON(data, &meta); err != nil {
+		return pluginInstallMeta{}, fmt.Errorf("invalid install metadata: %w", err)
+	}
+	if err := validateInstallMeta(meta); err != nil {
+		return pluginInstallMeta{}, err
+	}
+	return meta, nil
+}
+
+func validateInstallMeta(meta pluginInstallMeta) error {
+	if meta.Format != pluginInstallMetaFormat {
+		return errors.New("unsupported or missing plugin install metadata format")
+	}
+	if _, err := time.Parse(time.RFC3339, meta.InstalledAt); err != nil || meta.SourceURL == "" || len(meta.SourceURL) > 4096 {
+		return errors.New("invalid plugin install metadata")
+	}
+	if meta.SHA256 != "" && !validPluginDigest(meta.SHA256) {
+		return errors.New("invalid installed archive digest")
+	}
+	switch meta.SourceKind {
+	case "manual":
+		if meta.MarketURL != "" || meta.SignatureURL != "" || meta.KeyID != "" || meta.KeySHA256 != "" {
+			return errors.New("manual plugin metadata contains marketplace trust fields")
+		}
+	case "market":
+		if !isHTTPSPluginURL(meta.SourceURL) || !isHTTPSPluginURL(meta.MarketURL) || !isHTTPSPluginURL(meta.SignatureURL) || meta.KeyID == "" || len(meta.KeyID) > 64 || !validPluginDigest(meta.KeySHA256) || !validPluginDigest(meta.SHA256) {
+			return errors.New("invalid installed marketplace provenance")
+		}
+		for i, c := range meta.KeyID {
+			alphaNumeric := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
+			if !alphaNumeric && (i == 0 || c != '.' && c != '_' && c != '-') {
+				return errors.New("invalid installed publisher key ID")
+			}
+		}
+	default:
+		return errors.New("unknown plugin installation source kind")
+	}
+	return nil
 }
 
 func (a *app) pluginTrustCmd() *cobra.Command {

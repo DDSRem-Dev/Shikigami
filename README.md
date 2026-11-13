@@ -4,6 +4,8 @@
 
 **当前源码的 Phase 0–5 验收清单已闭环（42/42）。** 功能、已验平台、证据来源及未支持范围见[支持声明](docs/18-release-readiness.md#current-support)，逐项进度见[路线图](docs/08-roadmap.md)。认证生命周期及长稳、资源与性能按用户确认测试通过关闭；真实 Claude 登录/推理、物理主机重启和生产 heap/object 归因仍保留未实测边界。公开安装入口仍为 alpha.2，不包含其后 master 修复；本轮未发布新版本。
 
+首个 beta 候选正在修复并验证安装、签名 marketplace 与插件运行时链路。发布前检查、实际 tag 发布和公开包验收是不同门槛，状态见 [beta 发布准备](docs/18-release-readiness.md#beta-readiness)；旧版本没有 `bootstrap.sh` Release 资产，不要套用尚未发布的新版本下载地址。
+
 ## 安装
 
 当前公开预发布为 [v0.0.1-alpha.2](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.2)。通过 Homebrew 安装：

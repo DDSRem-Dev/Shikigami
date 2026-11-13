@@ -2,6 +2,8 @@
 
 **状态：当前源码 Phase 0–5 验收清单已闭环（42/42）。** [当前支持声明](18-release-readiness.md#current-support)统一功能、平台、证据和未支持范围；[08 路线图](08-roadmap.md)、[15 实施记录](15-implementation-status.md)与[16 架构复核](16-architecture-conformance.md)记录关闭依据。认证生命周期和长稳、资源与性能按用户确认通过；真实 Claude 登录/推理、物理主机重启及生产 heap/object 归因仍保留未实测边界。公开安装入口仍为 v0.0.1-alpha.2，未包含后续 master 修复，本轮未发布新版本。00–14 保留设计契约，不能仅凭示例认定功能已经可用。
 
+首个 beta 候选的安装、签名 marketplace、第三方插件运行时与发行资产一致性正在修复和验证。新增路径以[本批证据](15-implementation-status.md#evidence-first-beta-candidate)和[beta 发布门槛](18-release-readiness.md#beta-readiness)为准，不用历史42/42或旧 CI 替代；当前未创建新 tag 或 Release。
+
 ## 文档清单
 
 共 15 份设计文档（00–14）、实施记录（15）、一致性检查（16）、原型复盘（17）、发布准备（18）、本地验收收敛（19）、资源审查（20）、密钥轮换（21）、Homebrew分发（22）、外部tsnet验收（23）、公开包升级兼容（24）、双主机验收（25）、原生平台验收（26）及本索引。

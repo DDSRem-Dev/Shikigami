@@ -1,6 +1,9 @@
 package client
 
 import (
+	"context"
+	"os"
+
 	"github.com/DDSRem-Dev/Shikigami/internal/pluginmarket"
 	"github.com/DDSRem-Dev/Shikigami/internal/strictjson"
 )
@@ -11,6 +14,8 @@ type PluginMarketTrustStore = pluginmarket.TrustStore
 type PluginMarketTrustRoot = pluginmarket.TrustRoot
 type PluginMarketIndex = pluginmarket.Index
 type PluginMarketEntry = pluginmarket.Entry
+type PluginInstallStore = pluginmarket.InstallStore
+type PluginInstallTransaction = pluginmarket.InstallTransaction
 
 const (
 	PluginMarketMaxURLLength             = pluginmarket.MaxURLLength
@@ -42,10 +47,26 @@ func VerifyPluginMarketIndex(data []byte, store PluginMarketTrustStore) (PluginM
 	return pluginmarket.VerifyIndex(data, store)
 }
 
-func VerifyPluginMarketArchive(path string, signature []byte, entry PluginMarketEntry, store PluginMarketTrustStore) error {
-	return pluginmarket.VerifyArchive(path, signature, entry, store)
+func VerifyPluginMarketArchive(ctx context.Context, file *os.File, signature []byte, entry PluginMarketEntry, store PluginMarketTrustStore) error {
+	return pluginmarket.VerifyArchive(ctx, file, signature, entry, store)
 }
 
 func DecodeStrictJSON(data []byte, out any) error {
 	return strictjson.Decode(data, out)
+}
+
+func ValidatePluginVersion(value string) error {
+	return pluginmarket.ValidateVersion(value)
+}
+
+func ComparePluginVersions(a, b string) int {
+	return pluginmarket.CompareVersions(a, b)
+}
+
+func OpenPluginInstallStore(ctx context.Context, base string) (*PluginInstallStore, error) {
+	return pluginmarket.OpenInstallStore(ctx, base)
+}
+
+func PluginMarketSigningKeyFingerprint(store PluginMarketTrustStore, keyID string) (string, error) {
+	return pluginmarket.SigningKeyFingerprint(store, keyID)
 }

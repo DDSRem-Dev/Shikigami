@@ -12,16 +12,15 @@ import (
 	"github.com/DDSRem-Dev/Shikigami/internal/client"
 	sdk "github.com/DDSRem-Dev/Shikigami/pkg/plugin"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // pluginActionCommands returns the `shiki plugins action` subcommand group,
 // which provides runtime-routed access to manifest-declared plugin actions.
 //
-// Because Cobra resolves the command tree before PersistentPreRunE, dynamic
-// per-plugin subcommands (from manifests) cannot be injected without a live
-// agent connection at startup. Instead this uses two general-purpose commands:
+// Manifest command names use the plugins root's runtime dispatch. This group
+// also exposes raw action IDs and discovery without building an offline copy
+// of the host's command registry.
 //
 //   - invoke <plugin-id> <action-id>: direct invocation for scripting
 //   - list-commands [plugin-id]:    discover available actions
@@ -37,12 +36,13 @@ func (a *app) pluginActionCommands() *cobra.Command {
 
 func (a *app) pluginActionInvokeCmd() *cobra.Command {
 	var jsonOut bool
+	var actionFlags map[string]string
 	cmd := &cobra.Command{
 		Use:   "invoke <plugin-id> <action-id>",
 		Short: "Invoke a plugin action by ID",
 		Long: `Invoke a manifest-declared action on a running local plugin.
 
-Flags beyond --json are forwarded to the plugin as the action's flags map.
+Use --flag name=value to pass plugin arguments (repeatable).
 Use --json to request structured JSON output.`,
 		Example: `  shiki plugins action invoke <plugin-id> <action-id> --json
   shiki plugins action invoke <plugin-id> list-actions`,
@@ -50,13 +50,12 @@ Use --json to request structured JSON output.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			pluginID, actionID := args[0], args[1]
 			return a.withClient(cmd.Context(), true, func(c *client.Client) error {
-				flags := collectFlags(cmd)
-				delete(flags, "json")
-				return a.invokePluginAction(cmd.Context(), c, pluginID, actionID, jsonOut, flags)
+				return a.invokePluginAction(cmd.Context(), c, pluginID, actionID, "", jsonOut, actionFlags)
 			})
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Return JSON output from the action")
+	cmd.Flags().StringToStringVar(&actionFlags, "flag", nil, "Plugin argument as name=value (repeatable)")
 	return cmd
 }
 
@@ -77,13 +76,16 @@ func (a *app) pluginActionListCmd() *cobra.Command {
 }
 
 // invokePluginAction sends InvokePluginAction to the agent and prints the result.
-func (a *app) invokePluginAction(ctx context.Context, c *client.Client, pluginID, actionID string, jsonOut bool, flags map[string]string) error {
+func (a *app) invokePluginAction(ctx context.Context, c *client.Client, pluginID, actionID, commandName string, jsonOut bool, flags map[string]string) error {
 	reqMap := map[string]any{
 		"plugin_id":     pluginID,
 		"side":          "local",
 		"action_id":     actionID,
 		"invocation_id": rand.Text(),
-		"flags":         flagsToAny(flags),
+		"flags":         pluginActionFlags(flags, jsonOut),
+	}
+	if commandName != "" {
+		reqMap["command_name"] = commandName
 	}
 	reqStruct, err := structpb.NewStruct(reqMap)
 	if err != nil {
@@ -117,7 +119,7 @@ func (a *app) listPluginActions(ctx context.Context, c *client.Client, args []st
 	}
 	pluginID := args[0]
 
-	// Try a 'list-actions' meta-action; fall back to static built-in list.
+	// Discovery is a real action; preserve transport, admission and worker errors.
 	reqMap := map[string]any{
 		"plugin_id":     pluginID,
 		"side":          "local",
@@ -126,19 +128,18 @@ func (a *app) listPluginActions(ctx context.Context, c *client.Client, args []st
 		"flags":         map[string]any{},
 	}
 	reqStruct, err := structpb.NewStruct(reqMap)
-	if err == nil {
-		resStruct, rpcErr := c.Actions().InvokePluginAction(ctx, reqStruct)
-		if rpcErr == nil {
-			result, parseErr := sdk.UnmarshalActionResult(resStruct)
-			if parseErr == nil {
-				return a.printActionResult(w, result, jsonOut)
-			}
-		}
+	if err != nil {
+		return err
 	}
-	// Plugin is not running or does not implement the list-actions meta-action.
-	fmt.Fprintf(w, "Plugin %q is not running or does not support action discovery.\n", pluginID)
-	fmt.Fprintln(w, "Use 'shiki plugins list --side local' to see installed plugins and their states.")
-	return nil
+	resStruct, err := c.Actions().InvokePluginAction(ctx, reqStruct)
+	if err != nil {
+		return err
+	}
+	result, err := sdk.UnmarshalActionResult(resStruct)
+	if err != nil {
+		return err
+	}
+	return a.printActionResult(w, result, jsonOut)
 }
 
 // printActionResult renders an ActionResult to w.
@@ -224,20 +225,13 @@ func actionResultKind(k sdk.ActionResultKind) string {
 	return "unknown"
 }
 
-func collectFlags(cmd *cobra.Command) map[string]string {
-	out := map[string]string{}
-	cmd.Flags().VisitAll(func(f *pflag.Flag) {
-		if f.Changed {
-			out[f.Name] = f.Value.String()
-		}
-	})
-	return out
-}
-
-func flagsToAny(flags map[string]string) map[string]any {
-	out := make(map[string]any, len(flags))
+func pluginActionFlags(flags map[string]string, jsonOut bool) map[string]any {
+	out := make(map[string]any, len(flags)+1)
 	for k, v := range flags {
 		out[k] = v
+	}
+	if jsonOut {
+		out["json"] = "true"
 	}
 	return out
 }

@@ -27,7 +27,9 @@ func (r *Resources) openPlugins(cfg *config.Client, build string, runtimeOptions
 	r.service.settingsRegistry.Store(settings)
 
 	options := host.SupervisorOptions{
-		StateDir: filepath.Join(cfg.Agent.StateDir, "plugin-intent"),
+		StateDir:   filepath.Join(cfg.Agent.StateDir, "plugin-intent"),
+		PluginsDir: cfg.PluginsDir,
+		Side:       "client",
 		Validate: func(id string, values *structpb.Struct) error {
 			if id == "sync" {
 				return schema.ValidateSyncClient(values)
@@ -51,9 +53,13 @@ func (r *Resources) openPlugins(cfg *config.Client, build string, runtimeOptions
 		},
 	}
 	options.Config = func(id string, values *structpb.Struct) (host.Config, error) {
-		manifest, err := host.ResolveBuiltinManifest(cfg.PluginsDir, id, "client", build)
-		if err != nil {
-			return host.Config{}, err
+		var manifest host.Manifest
+		if id == "sync" || id == "port" {
+			var err error
+			manifest, err = host.ResolveBuiltinManifest(cfg.PluginsDir, id, "client", build)
+			if err != nil {
+				return host.Config{}, err
+			}
 		}
 		core := &pluginCore{resources: r, id: id}
 		core.RemoteCore.Resolve = func(ctx context.Context, scope *ppb.Scope) (rpc.ShikiDaemonClient, error) {

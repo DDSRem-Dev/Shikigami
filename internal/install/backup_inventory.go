@@ -51,6 +51,18 @@ func (n *Native) collectBackup(ctx context.Context, plan Plan, lockWriters bool)
 	if plan.TailscaleDir != "" && !within(plan.StateDir, plan.TailscaleDir) {
 		sources = append(sources, source{"tailscale", plan.TailscaleDir, true})
 	}
+	// Package stores are retained in place across upgrades and legacy rollback.
+	// Copying their hard-linked ownership marker as host state would break that
+	// identity on restore; plugin-owned durable state outside these exact paths
+	// remains part of the ordinary state backup.
+	var pluginDirectory, parkedPlugins, pluginOwner string
+	if plan.PluginsDir != "" {
+		pluginDirectory = filepath.Clean(plan.PluginsDir)
+		parked, owner := pluginLinkPaths(pluginDirectory)
+		parent := filepath.Dir(pluginDirectory)
+		parkedPlugins = filepath.Join(parent, parked)
+		pluginOwner = filepath.Join(parent, owner)
+	}
 	b := &backupInventory{bytes: 1024}
 	defer func() {
 		if err != nil {
@@ -103,7 +115,8 @@ func (n *Native) collectBackup(ctx context.Context, plan Plan, lockWriters bool)
 				return walkErr
 			}
 			absolute := filepath.Join(base, filepath.FromSlash(relative))
-			if plan.ProjectsDir != "" && absolute == filepath.Clean(plan.ProjectsDir) {
+			if (plan.ProjectsDir != "" && absolute == filepath.Clean(plan.ProjectsDir)) ||
+				absolute == pluginDirectory || absolute == parkedPlugins || absolute == pluginOwner {
 				if entry.IsDir() {
 					return fs.SkipDir
 				}

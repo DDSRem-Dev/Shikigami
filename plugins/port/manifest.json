@@ -32,7 +32,10 @@
       "label": "自动允许端口列表",
       "description": "客户端侧明确允许自动转发的端口号列表。",
       "default_json": "[]",
-      "ui_hint": "textarea"
+      "ui_hint": "textarea",
+      "children": [
+        {"key": "port", "type": "int", "label": "端口号", "constraints": {"min": 1, "max": 65535}}
+      ]
     }
   ],
   "ui": {

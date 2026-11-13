@@ -47,7 +47,15 @@ func run(directory, id, version string) error {
 	if closeErr != nil {
 		return closeErr
 	}
-	manifest := host.Manifest{Name: id, Version: version, Executable: binary, SHA256: hex.EncodeToString(sum.Sum(nil)), Side: "both", Protocol: protocol}
+	declaration, err := host.ReadPluginManifest(filepath.Join("plugins", id))
+	if err != nil {
+		return err
+	}
+	declaration.Version = version
+	manifest := host.Manifest{Name: id, Version: version, Executable: binary, SHA256: hex.EncodeToString(sum.Sum(nil)), Side: "both", Protocol: protocol, PluginManifest: declaration}
+	if err := host.ValidateBuiltinMetadata(manifest); err != nil {
+		return err
+	}
 	data, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		return err

@@ -22,10 +22,15 @@ import (
 // Ready execute without the supervisor lock; CoreAPI callbacks may read state.
 type SupervisorOptions struct {
 	StateDir string
-	Config   func(string, *structpb.Struct) (Config, error)
-	Validate func(string, *structpb.Struct) error
-	Ready    func(context.Context, string, sdk.Lifecycle) error
-	Changed  func(string)
+	// PluginsDir and Side select this host's installed third-party packages.
+	// Config supplies host-owned callbacks/directories; their verified manifest
+	// is injected by the supervisor, never resolved as a built-in fallback.
+	PluginsDir string
+	Side       string
+	Config     func(string, *structpb.Struct) (Config, error)
+	Validate   func(string, *structpb.Struct) error
+	Ready      func(context.Context, string, sdk.Lifecycle) error
+	Changed    func(string)
 	// PluginRegistered is called after a plugin reaches "ready" state and its
 	// SettingsRegistry entry has been populated from the manifest/Info response.
 	// Called without the supervisor lock; safe to call back into the supervisor.
@@ -45,9 +50,14 @@ type supervised struct {
 	wake        chan struct{}
 	status      *pb.PluginStatus
 	instance    *Instance
+	artifact    *Manifest
+	artifactErr error
+	generation  uint64
 }
 type Supervisor struct {
 	startMu   sync.Mutex
+	refreshMu sync.Mutex
+	registry  *PluginRegistry
 	started   bool
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -85,13 +95,21 @@ func NewSupervisor(parent context.Context, opts SupervisorOptions) (*Supervisor,
 	}
 	ctx, cancel := context.WithCancel(parent)
 	m := &Supervisor{ctx: ctx, cancel: cancel, store: store, options: opts, slots: map[string]*supervised{}, manifests: map[string]*sdk.PluginManifest{}}
+	if opts.PluginsDir != "" {
+		if opts.Side != "client" && opts.Side != "server" {
+			cancel()
+			store.Close()
+			return nil, errors.New("plugin discovery requires a client or server side")
+		}
+		m.registry = NewPluginRegistry(opts.PluginsDir, opts.Side)
+	}
 	state, err := store.View()
 	if err != nil {
 		cancel()
 		store.Close()
 		return nil, err
 	}
-	for _, id := range []string{"sync", "port"} {
+	for id := range state.Buckets["plugins"] {
 		var want desiredPlugin
 		if err := state.Get("plugins", id, &want); err != nil {
 			cancel()
@@ -99,6 +117,11 @@ func NewSupervisor(parent context.Context, opts SupervisorOptions) (*Supervisor,
 			return nil, err
 		}
 		m.slots[id] = &supervised{wake: make(chan struct{}, 1), status: &pb.PluginStatus{PluginId: id, Enabled: want.Enabled, Revision: want.Revision, State: "stopped"}}
+	}
+	if err := m.refresh(); err != nil {
+		cancel()
+		store.Close()
+		return nil, err
 	}
 	return m, nil
 }
@@ -108,7 +131,7 @@ func validatePluginState(state *storage.Snapshot) error {
 		if err := json.Unmarshal(data, &want); err != nil {
 			return err
 		}
-		if (id != "sync" && id != "port") || want.ID != id || want.Revision == "" {
+		if !pluginIDPattern.MatchString(id) || want.ID != id || want.Revision == "" {
 			return errors.New("invalid persistent plugin intent")
 		}
 	}
@@ -119,7 +142,7 @@ func validatePluginState(state *storage.Snapshot) error {
 // readiness claim: callers observe List until the worker is ready or failed.
 // Replaying request_id returns the original result and never repeats a restart.
 func (m *Supervisor) Manage(ctx context.Context, request *pb.ManagePluginRequest) (*pb.PluginStatus, error) {
-	if request == nil || request.RequestId == "" || len(request.RequestId) > 128 || (request.PluginId != "sync" && request.PluginId != "port") {
+	if request == nil || request.RequestId == "" || len(request.RequestId) > 128 || !pluginIDPattern.MatchString(request.PluginId) {
 		return nil, connect.NewError(connect.CodeInvalidArgument, "invalid plugin operation")
 	}
 	if err := ctx.Err(); err != nil {
@@ -127,6 +150,9 @@ func (m *Supervisor) Manage(ctx context.Context, request *pb.ManagePluginRequest
 	}
 	if m.ctx.Err() != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, "plugin supervisor stopped")
+	}
+	if err := m.refresh(); err != nil {
+		return nil, err
 	}
 	request = proto.Clone(request).(*pb.ManagePluginRequest)
 	result := new(pb.PluginStatus)
@@ -142,7 +168,7 @@ func (m *Supervisor) Manage(ctx context.Context, request *pb.ManagePluginRequest
 		}
 		var want desiredPlugin
 		if err := state.Get("plugins", request.PluginId, &want); err != nil {
-			return err
+			return connect.NewError(connect.CodeNotFound, "plugin is not installed")
 		}
 		if want.Revision != request.ExpectedRevision {
 			return connect.NewError(connect.CodeAborted, "plugin revision changed")
@@ -152,6 +178,9 @@ func (m *Supervisor) Manage(ctx context.Context, request *pb.ManagePluginRequest
 		}
 		switch request.Action {
 		case pb.ManagePluginRequest_ENABLE:
+			if err := m.validate(want.ID, want.Values); err != nil {
+				return err
+			}
 			want.Enabled = true
 		case pb.ManagePluginRequest_DISABLE:
 			want.Enabled = false
@@ -159,11 +188,14 @@ func (m *Supervisor) Manage(ctx context.Context, request *pb.ManagePluginRequest
 			if !want.Enabled {
 				return connect.NewError(connect.CodeFailedPrecondition, "enable plugin before restarting")
 			}
+			if err := m.validate(want.ID, want.Values); err != nil {
+				return err
+			}
 		case pb.ManagePluginRequest_SET_CONFIG:
 			if request.Config == nil {
 				return connect.NewError(connect.CodeInvalidArgument, "plugin config required")
 			}
-			if err := m.options.Validate(want.ID, request.Config); err != nil {
+			if err := m.validate(want.ID, request.Config); err != nil {
 				return err
 			}
 			want.Values = proto.Clone(request.Config).(*structpb.Struct)
@@ -188,7 +220,9 @@ func (m *Supervisor) Manage(ctx context.Context, request *pb.ManagePluginRequest
 		return nil, err
 	}
 	if !replay {
+		m.mu.Lock()
 		slot := m.slots[request.PluginId]
+		m.mu.Unlock()
 		select {
 		case slot.wake <- struct{}{}:
 		default:
@@ -198,6 +232,9 @@ func (m *Supervisor) Manage(ctx context.Context, request *pb.ManagePluginRequest
 	return result, nil
 }
 func (m *Supervisor) List() (*pb.ListPluginsResponse, error) {
+	if err := m.refresh(); err != nil {
+		return nil, err
+	}
 	state, err := m.store.View()
 	if err != nil {
 		return nil, err
@@ -224,6 +261,19 @@ func (m *Supervisor) List() (*pb.ListPluginsResponse, error) {
 				status.ReasonCode = "PLUGIN_STOPPING"
 			}
 		}
+		if !builtinID(id) {
+			if slot.artifact == nil {
+				if want.Enabled {
+					status.State, status.ReasonCode = artifactFailure(slot.artifactErr)
+				}
+				status.Protocol = nil
+			} else {
+				status.BuildVersion = slot.artifact.Version
+				if slot.instance != nil && !sameArtifact(slot.artifact, &slot.instance.artifact) {
+					status.State, status.ReasonCode, status.Protocol = "starting", "", nil
+				}
+			}
+		}
 		if status.State == "ready" && !instanceReady(slot.instance) {
 			status.State = "failed"
 			status.ReasonCode = "PLUGIN_INSTANCE_ENDED"
@@ -238,6 +288,11 @@ func (m *Supervisor) List() (*pb.ListPluginsResponse, error) {
 // Call binds an operation to the current worker's credential lifetime. It does
 // not expose mutable process state and never calls worker code under a lock.
 func (m *Supervisor) Call(ctx context.Context, id, capability string, fn func(context.Context, sdk.Lifecycle) error) error {
+	if !builtinID(id) {
+		if err := m.refresh(); err != nil {
+			return err
+		}
+	}
 	instance := m.current(id)
 	if instance == nil {
 		return connect.NewError(connect.CodeFailedPrecondition, "plugin is unavailable")
@@ -275,7 +330,7 @@ func (m *Supervisor) changed(id string) {
 		m.options.Changed(id)
 	}
 }
-func (m *Supervisor) publish(id string, slot *supervised, want desiredPlugin, instance *Instance, state, reason string) {
+func (m *Supervisor) publish(id string, slot *supervised, want desiredPlugin, instance *Instance, state, reason string) bool {
 	status := &pb.PluginStatus{PluginId: id, Enabled: want.Enabled, Revision: want.Revision, State: state, ReasonCode: reason}
 	if instance != nil {
 		snapshot := instance.Snapshot()
@@ -283,11 +338,16 @@ func (m *Supervisor) publish(id string, slot *supervised, want desiredPlugin, in
 		status.Protocol = snapshot.Protocol
 	}
 	m.mu.Lock()
+	if instance != nil && !builtinID(id) && !sameArtifact(slot.artifact, &instance.artifact) {
+		m.mu.Unlock()
+		return false
+	}
 	slot.status = status
 	slot.instance = instance
 	m.mu.Unlock()
 	m.record(id, &pb.LogRecord{Timestamp: time.Now().Unix(), Level: "info", Message: "PLUGIN_STATE_CHANGED", Fields: map[string]string{"state": state, "reason_code": reason}})
 	m.changed(id)
+	return true
 }
 func (m *Supervisor) stop(slot *supervised) {
 	m.mu.Lock()
@@ -295,6 +355,9 @@ func (m *Supervisor) stop(slot *supervised) {
 	slot.instance = nil
 	m.mu.Unlock()
 	if instance != nil {
+		if m.options.PluginStopped != nil {
+			m.options.PluginStopped(instance.Snapshot().Name)
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		_ = instance.Stop(ctx)
 		cancel()
@@ -308,6 +371,7 @@ func (m *Supervisor) run(id string, slot *supervised) {
 	defer m.done.Done()
 	defer m.stop(slot)
 	revision := ""
+	var generation uint64
 	attempts := 0
 	var instance *Instance
 	started := time.Time{}
@@ -320,9 +384,11 @@ func (m *Supervisor) run(id string, slot *supervised) {
 			m.stop(slot)
 			return
 		}
-		changed := revision != want.Revision
+		artifact, artifactErr, currentGeneration := m.artifact(id)
+		changed := revision != want.Revision || generation != currentGeneration
 		if changed {
 			revision = want.Revision
+			generation = currentGeneration
 			attempts = 0
 			m.stop(slot)
 			instance = nil
@@ -332,6 +398,19 @@ func (m *Supervisor) run(id string, slot *supervised) {
 				m.options.PluginStopped(id)
 			}
 			m.publish(id, slot, want, nil, "stopped", "")
+			select {
+			case <-m.ctx.Done():
+				return
+			case <-slot.wake:
+				continue
+			}
+		}
+		if !builtinID(id) && artifact == nil {
+			if m.options.PluginStopped != nil {
+				m.options.PluginStopped(id)
+			}
+			state, reason := artifactFailure(artifactErr)
+			m.publish(id, slot, want, nil, state, reason)
 			select {
 			case <-m.ctx.Done():
 				return
@@ -363,9 +442,13 @@ func (m *Supervisor) run(id string, slot *supervised) {
 			}
 			m.publish(id, slot, want, nil, "starting", "")
 			var cfg Config
-			launchErr := m.options.Validate(id, want.Values)
+			launchErr := m.validate(id, want.Values)
 			if launchErr == nil {
 				cfg, launchErr = m.options.Config(id, want.Values)
+				if launchErr == nil && artifact != nil {
+					cfg.Manifest = *artifact
+					cfg.Policy.Capabilities = thirdPartyCallbacks(artifact.PluginManifest)
+				}
 			}
 			if launchErr == nil {
 				instance, launchErr = Launch(m.ctx, cfg)
@@ -402,20 +485,31 @@ func (m *Supervisor) run(id string, slot *supervised) {
 				continue
 			}
 			current, err := m.desired(id)
-			if err != nil || current.Revision != want.Revision {
+			_, _, latestGeneration := m.artifact(id)
+			if err != nil || current.Revision != want.Revision || latestGeneration != generation {
 				_ = instance.Stop(context.Background())
 				instance = nil
 				continue
 			}
 			started = time.Now()
 			m.mu.Lock()
+			if slot.generation != generation {
+				m.mu.Unlock()
+				_ = instance.Stop(context.Background())
+				instance = nil
+				continue
+			}
 			m.manifests[id] = cfg.Manifest.PluginManifest
 			m.mu.Unlock()
-			m.publish(id, slot, want, instance, "ready", "")
+			if !m.publish(id, slot, want, instance, "ready", "") {
+				_ = instance.Stop(context.Background())
+				instance = nil
+				continue
+			}
 			// Notify the SettingsRegistry after publish so the plugin's
 			// config_schema and UI contributions are available to the agent.
 			if m.options.PluginRegistered != nil {
-				settings := buildPluginSettings(id, cfg.Manifest.PluginManifest, instance.lifecycle)
+				settings := buildPluginSettings(id, cfg.Manifest.PluginManifest)
 				m.options.PluginRegistered(id, settings)
 			}
 		}
@@ -456,6 +550,9 @@ func (m *Supervisor) current(id string) *Instance {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	slot := m.slots[id]
+	if slot != nil && !builtinID(id) && (slot.artifact == nil || slot.instance != nil && !sameArtifact(slot.artifact, &slot.instance.artifact)) {
+		return nil
+	}
 	if slot == nil || slot.status.Revision != want.Revision || slot.status.State != "ready" || !instanceReady(slot.instance) {
 		return nil
 	}
@@ -510,6 +607,8 @@ func (m *Supervisor) Start() {
 		return
 	}
 	m.started = true
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for id, slot := range m.slots {
 		m.done.Add(1)
 		go m.run(id, slot)
@@ -526,19 +625,21 @@ func (m *Supervisor) Settings(id string) (*structpb.Struct, string, error) {
 	return proto.Clone(want.Values).(*structpb.Struct), want.Revision, nil
 }
 
-// PluginManifest returns the sdk.PluginManifest for id if the plugin was
-// launched with a manifest.json (new-style). Returns nil for legacy plugins
-// or if the plugin has never reached the ready state.
+// PluginManifest returns a detached validated declaration. Third-party metadata
+// is available before enable; built-in metadata is retained after first launch.
 func (m *Supervisor) PluginManifest(id string) *sdk.PluginManifest {
+	if err := m.refresh(); err != nil {
+		return nil
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.manifests[id]
+	return clonePluginManifest(m.manifests[id])
 }
 
-// buildPluginSettings constructs a PluginSettings entry from the manifest.
-// When protoc regenerates plugin.pb.go with ConfigSchema/UI fields, this
-// function should also query lifecycle.GetInfo() and prefer live data.
-func buildPluginSettings(id string, manifest *sdk.PluginManifest, _ sdk.Lifecycle) *PluginSettings {
+// Static, validated metadata remains authoritative; a process cannot expand its
+// config schema or UI declarations after launch.
+func buildPluginSettings(id string, manifest *sdk.PluginManifest) *PluginSettings {
+	manifest = clonePluginManifest(manifest)
 	settings := &PluginSettings{
 		PluginID: id,
 		Manifest: manifest,

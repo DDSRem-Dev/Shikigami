@@ -23,6 +23,19 @@ var embeddedExtraction sync.Mutex
 // manifest may use the matching build's embedded assets; incompatible/tampered
 // installed content never silently falls back to another implementation.
 func ResolveBuiltinManifest(directory, id, side, build string) (Manifest, error) {
+	// Managed installations keep the mutable third-party package directory
+	// separate from immutable release files. The private pointer selects one
+	// release directory; manifest and executable leaves still must be regular
+	// verified files, never permissive executable/manifest symlink fallbacks.
+	managed := filepath.Join(directory, ".builtin")
+	if _, err := os.Lstat(managed); err == nil {
+		if err := validateArtifactRoot(managed); err != nil {
+			return Manifest{}, err
+		}
+		return ReadInstalledManifest(managed, id, side, build)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return Manifest{}, err
+	}
 	manifest, err := ReadInstalledManifest(directory, id, side, build)
 	if err == nil || !errors.Is(err, os.ErrNotExist) {
 		return manifest, err

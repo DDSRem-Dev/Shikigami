@@ -11,8 +11,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	"github.com/DDSRem-Dev/Shikigami/internal/strictjson"
+	"github.com/DDSRem-Dev/Shikigami/pkg/plugin/state"
 )
 
 var trustStoreKeys = []string{"format", "roots"}
@@ -177,12 +179,37 @@ func trustedKeys(store TrustStore) (map[string]ed25519.PublicKey, error) {
 	return keys, nil
 }
 
+// SigningKeyFingerprint pins key material as well as its user-visible key ID.
+func SigningKeyFingerprint(store TrustStore, keyID string) (string, error) {
+	keys, err := trustedKeys(store)
+	if err != nil {
+		return "", err
+	}
+	key, ok := keys[keyID]
+	if !ok {
+		return "", errors.New("unknown signing key")
+	}
+	der, err := x509.MarshalPKIXPublicKey(key)
+	if err != nil {
+		return "", err
+	}
+	return digestBytes(der), nil
+}
+
 func readBoundedFile(path string, max int64) ([]byte, error) {
-	file, err := os.Open(path)
+	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	owner, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || owner.Uid != uint32(os.Geteuid()) || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 {
+		return nil, errors.New("unsafe trust store file")
+	}
 	data, err := io.ReadAll(io.LimitReader(file, max+1))
 	if err != nil {
 		return nil, err
@@ -193,37 +220,22 @@ func readBoundedFile(path string, max int64) ([]byte, error) {
 	return data, nil
 }
 
-func ensurePrivateParent(path string) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return err
-	}
-	info, err := os.Stat(dir)
-	if err != nil || !info.IsDir() {
-		return errors.New("invalid trust store directory")
-	}
-	if err := os.Chmod(dir, 0700); err != nil {
-		return err
-	}
-	return nil
-}
-
 // LoadTrustStore loads and validates a private trust-store file.
 func LoadTrustStore(path string) (TrustStore, error) {
 	if path == "" {
 		return TrustStore{}, errors.New("trust store path is required")
 	}
-	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-		return TrustStore{}, errors.New("invalid trust store file")
+	parent, err := os.Lstat(filepath.Dir(path))
+	if err != nil {
+		return TrustStore{}, fmt.Errorf("invalid trust store directory: %w", err)
 	}
-	parent, err := os.Stat(filepath.Dir(path))
-	if err != nil || !parent.IsDir() || parent.Mode().Perm()&0077 != 0 {
+	owner, ok := parent.Sys().(*syscall.Stat_t)
+	if !ok || owner.Uid != uint32(os.Geteuid()) || !parent.IsDir() || parent.Mode().Perm() != 0700 {
 		return TrustStore{}, errors.New("invalid trust store directory")
 	}
 	data, err := readBoundedFile(path, MaxTrustStoreBytes)
 	if err != nil {
-		return TrustStore{}, errors.New("unable to read trust store")
+		return TrustStore{}, fmt.Errorf("unable to read trust store: %w", err)
 	}
 	return decodeTrustStore(data)
 }
@@ -242,41 +254,9 @@ func SaveTrustStore(path string, store TrustStore) error {
 	if err != nil || len(data) > MaxTrustStoreBytes {
 		return errors.New("unable to encode trust store")
 	}
-	if err := ensurePrivateParent(path); err != nil {
-		return errors.New("unable to prepare trust store directory")
-	}
 	dir := filepath.Dir(path)
-	temp, err := os.OpenFile(filepath.Join(dir, ".trust-store.tmp-"+fmt.Sprintf("%d", os.Getpid())), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		// A random temporary name avoids collisions between concurrent saves.
-		temp, err = os.CreateTemp(dir, ".trust-store-*")
+	if err := state.EnsurePrivateDir(dir); err != nil {
+		return fmt.Errorf("unable to prepare trust store directory: %w", err)
 	}
-	if err != nil {
-		return errors.New("unable to create trust store temporary file")
-	}
-	tempName := temp.Name()
-	removeTemp := true
-	defer func() {
-		_ = temp.Close()
-		if removeTemp {
-			_ = os.Remove(tempName)
-		}
-	}()
-	if err := temp.Chmod(0600); err != nil {
-		return errors.New("unable to protect trust store temporary file")
-	}
-	if _, err := temp.Write(data); err != nil {
-		return errors.New("unable to write trust store")
-	}
-	if err := temp.Sync(); err != nil {
-		return errors.New("unable to sync trust store")
-	}
-	if err := temp.Close(); err != nil {
-		return errors.New("unable to close trust store")
-	}
-	if err := os.Rename(tempName, path); err != nil {
-		return errors.New("unable to install trust store")
-	}
-	removeTemp = false
-	return nil
+	return state.AtomicWrite(dir, filepath.Base(path), data)
 }

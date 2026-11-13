@@ -6,6 +6,7 @@ package plugin
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"regexp"
 )
 
@@ -67,7 +68,7 @@ func ValidateConfigValue(field *ConfigField, value any) error {
 		if !ok {
 			return fmt.Errorf("field %q expects int, got %T", field.Key, value)
 		}
-		if float64(int64(f)) != f {
+		if math.IsNaN(f) || math.IsInf(f, 0) || math.Trunc(f) != f {
 			return fmt.Errorf("field %q: %v is not an integer", field.Key, f)
 		}
 		if err := checkNumericConstraints(field, f); err != nil {
@@ -77,6 +78,9 @@ func ValidateConfigValue(field *ConfigField, value any) error {
 		f, ok := value.(float64)
 		if !ok {
 			return fmt.Errorf("field %q expects float, got %T", field.Key, value)
+		}
+		if math.IsNaN(f) || math.IsInf(f, 0) {
+			return fmt.Errorf("field %q expects a finite number", field.Key)
 		}
 		if err := checkNumericConstraints(field, f); err != nil {
 			return err
@@ -94,18 +98,30 @@ func ValidateConfigValue(field *ConfigField, value any) error {
 		if !ok {
 			return fmt.Errorf("field %q expects array, got %T", field.Key, value)
 		}
+		if err := checkLengthConstraints(field, len(arr)); err != nil {
+			return err
+		}
 		if len(field.Children) > 0 {
 			for i, item := range arr {
-				elem := ConfigField{Key: fmt.Sprintf("%s[%d]", field.Key, i), Type: field.Children[0].Type, Constraints: field.Children[0].Constraints}
+				elem := field.Children[0]
+				elem.Key = fmt.Sprintf("%s[%d]", field.Key, i)
 				if err := ValidateConfigValue(&elem, item); err != nil {
 					return err
 				}
 			}
 		}
 	case "object":
-		if _, ok := value.(map[string]any); !ok {
+		object, ok := value.(map[string]any)
+		if !ok {
 			return fmt.Errorf("field %q expects object, got %T", field.Key, value)
 		}
+		if len(field.Children) > 0 {
+			if err := ValidateConfig(field.Children, object); err != nil {
+				return fmt.Errorf("field %q: %w", field.Key, err)
+			}
+		}
+	default:
+		return fmt.Errorf("field %q has unsupported type %q", field.Key, field.Type)
 	}
 	return nil
 }
@@ -113,6 +129,18 @@ func ValidateConfigValue(field *ConfigField, value any) error {
 // ValidateConfig validates all declared fields in schema against the provided
 // JSON-decoded values map (map[string]any from json.Unmarshal).
 func ValidateConfig(schema []ConfigField, values map[string]any) error {
+	for key := range values {
+		known := false
+		for _, field := range schema {
+			if field.Key == key {
+				known = true
+				break
+			}
+		}
+		if !known {
+			return fmt.Errorf("unknown configuration field %q", key)
+		}
+	}
 	for _, field := range schema {
 		f := field
 		v, ok := values[f.Key]
@@ -153,23 +181,16 @@ func checkNumericConstraints(field *ConfigField, v float64) error {
 }
 
 func checkStringConstraints(field *ConfigField, v string) error {
-	c := field.Constraints
-	if c == nil {
-		return nil
+	if err := checkLengthConstraints(field, len(v)); err != nil {
+		return err
 	}
-	if c.MinLen != nil && len(v) < *c.MinLen {
-		return fmt.Errorf("field %q: length %d is below minimum %d", field.Key, len(v), *c.MinLen)
-	}
-	if c.MaxLen != nil && len(v) > *c.MaxLen {
-		return fmt.Errorf("field %q: length %d exceeds maximum %d", field.Key, len(v), *c.MaxLen)
-	}
-	if c.Pattern != "" {
-		matched, err := regexp.MatchString(c.Pattern, v)
+	if field.Constraints != nil && field.Constraints.Pattern != "" {
+		matched, err := regexp.MatchString(field.Constraints.Pattern, v)
 		if err != nil {
 			return fmt.Errorf("field %q: invalid constraint pattern: %w", field.Key, err)
 		}
 		if !matched {
-			return fmt.Errorf("field %q: %q does not match pattern %q", field.Key, v, c.Pattern)
+			return fmt.Errorf("field %q: %q does not match pattern %q", field.Key, v, field.Constraints.Pattern)
 		}
 	}
 	if len(field.EnumValues) > 0 {
@@ -179,6 +200,19 @@ func checkStringConstraints(field *ConfigField, v string) error {
 			}
 		}
 		return fmt.Errorf("field %q: %q is not in allowed values %v", field.Key, v, field.EnumValues)
+	}
+	return nil
+}
+
+func checkLengthConstraints(field *ConfigField, length int) error {
+	if field.Constraints == nil {
+		return nil
+	}
+	if field.Constraints.MinLen != nil && length < *field.Constraints.MinLen {
+		return fmt.Errorf("field %q: length %d is below minimum %d", field.Key, length, *field.Constraints.MinLen)
+	}
+	if field.Constraints.MaxLen != nil && length > *field.Constraints.MaxLen {
+		return fmt.Errorf("field %q: length %d exceeds maximum %d", field.Key, length, *field.Constraints.MaxLen)
 	}
 	return nil
 }

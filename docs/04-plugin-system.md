@@ -8,6 +8,8 @@
 
 同一二进制显式使用 `--side=client|server` 启动；两端分别构建对应 OS/arch 的产物，不能把 macOS 插件复制到 Linux。非 Go 插件还需实现 go-plugin 的握手、启动协议和 RPC，只有同名 gRPC service 不够。
 
+第三方包使用配置中的 `plugins_dir/<id>/manifest.json` 与相邻的 `shiki-plugin-<id>`；agent 只接纳 `client` side，daemon 只接纳 `server` side。第三方自身版本不必等于宿主版本，但必须与实际子进程 `GetInfo` 返回值逐字一致；manifest schema 1 使用 SDK protocol 1.0，协商还要求进程实现其声明的全部 capabilities。`sync` / `port` 保留独立的发行版/内嵌产物校验，不允许第三方同名目录覆盖。
+
 用户已确认：无法替换的 go-plugin 内部通道继续使用原生 gRPC；可独立替换的远端通信、本地 IPC、CoreAPI 回调使用 ConnectRPC。go-plugin 的 GRPCServer/GRPCClient 接口绑定 `*grpc.Server` / `*grpc.ClientConn`，不能将 Connect handler 塞入这两个接口。
 
 ## 通信路径与协议边界
@@ -48,6 +50,8 @@ CoreAPI 固定使用宿主提供的独立 Unix socket 上 Connect/h2c，不使�
 4. 每个插件/映射串行启停，幂等 Start/Stop；Stop 取消 watcher/流/listener、等待协程结束、超时强制结束并 Wait。
 5. 插件失败关闭相关请求并更新健康状态；有界退避重启。sync 重启必须重新对账；port 重启只能恢复监听，不能恢复旧 TCP 会话。
 6. 不持有 manager 全局锁调用插件或网络，也不向外暴露可变 LoadedPlugin 指针。状态快照与操作生命周期分开。
+
+管理器将每个已发现 ID 的 enabled、config 和 revision 写入宿主私有状态，`ManagePlugin` 使用 expected_revision 与持久 request_id 去重。`ListPlugins` / `ManagePlugin` 会刷新当前配置目录，因此 agent/daemon 无需重启便可发现新包；新的第三方包默认为 disabled。包被移走、损坏或不再兼容时，刷新立即撤销旧实例准入及回调凭据，然后等待进程清理；不继续提供旧可运行槽位。原 enabled/config/revision 不因文件缺失而改写，缺失包仍可显式 disable，已 disabled 的期望状态在重启和包重新出现后仍保持 disabled。更新/重启按新实例重新验证，既不从失效包回退到内置实现，也不从安装事务日志擅自启用插件。每次实际 launch 都重新验证路径、所有权、权限、manifest 与 binary 的精确摘要，go-plugin SecureConfig 再核对可执行文件。
 
 ### 保留 gRPC 的最小范围
 
@@ -111,9 +115,15 @@ shiki plugins disable port --side local
 shiki plugins status sync
 shiki plugins logs sync --tail 50
 shiki plugins restart sync
+shiki plugins install /path/to/plugin.tar.gz
+shiki plugins install example --market https://market.example/index.json
+shiki plugins update example
+shiki plugins fixture show --json --flag suffix=hello
+shiki plugins sync status --json
+shiki plugins action invoke sync get-sync-status --json
 ```
 
-第三方插件分发通过静态 HTTPS marketplace index 完成；index 和每个归档都使用相同格式的 Ed25519 signed envelope。客户端只信任本地 0600 trust store 中的 publisher key，按 `key_id` 选择根并校验 index、插件 ID、版本、OS/arch、归档文件名、大小和 SHA-256；任何签名、平台或清单不匹配都拒绝且不执行。`shiki plugins install <url-or-path>` 保留为明确的手工安装入口，不能冒充 marketplace 信任；`shiki plugins install <id> --market <index-url>` 与 `shiki plugins update` 只走签名 index/归档，更新沿用已记录的 market URL、版本和 key。market 不提供通用远程执行 RPC，插件仍是当前 OS 用户权限下的独立进程而非沙箱。
+第三方插件分发通过静态 HTTPS marketplace index 完成；index 和每个归档都使用相同格式的 Ed25519 signed envelope。客户端只信任本地 0600 trust store 中的 publisher key，按 `key_id` 选择根并校验 index、插件 ID、版本、OS/arch、归档文件名、大小和 SHA-256；任何签名、平台或清单不匹配都拒绝且不执行。`shiki plugins install <url-or-path>` 是明确的手工信任入口，不能冒充 marketplace 信任；`shiki plugins install <id> --market <index-url>` 与显式 `shiki plugins update [id]` 只走签名 index/归档，更新沿用已记录的 market URL、版本和 key。没有周期后台更新器。上述 example URL 是格式示例，不是公开可用的 marketplace。CLI 安装/更新/卸载仅作用于当前用户的本地配置目录，生命周期复用 ListPlugins/ManagePlugin IPC，不创建通用远程执行或远程安装 RPC。插件仍以当前 OS 用户权限运行而非沙箱。
 
 
 ## Manifest 与 UI 注入
@@ -122,21 +132,23 @@ shiki plugins restart sync
 
 每个插件在二进制同目录提供一个 `manifest.json` 文件，宿主在进程启动**前**读取并缓存。字段说明：
 
+安装器还在包目录生成私有 `.artifact-integrity.json`，记录精确安装字节的 `manifest_sha256` 与 `binary_sha256`。宿主要求此收据与普通、不可被其他用户替换的文件和目录；它是本地完整性记录，不是签名或额外信任根。手工安装也生成收据，表示用户明确接受该包；marketplace 的 publisher 签名、平台和分发信任仍归安装器验证。只有 `manifest.json` 而缺少收据的旧手工目录不能执行，须经显式安装入口重新发布，宿主不会临时计算摘要来“修复”收据。
+
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | schema_version | string | 当前为 `"1"` |
 | id | string | 插件唯一 ID（如 `sync`、`port`） |
-| version | string | 插件自身版本字符串 |
+| version | string | 插件自身版本，与 GetInfo 精确一致；第三方不要求等于宿主 build |
 | display_name | string | 展示名 |
 | description | string | 插件描述 |
-| binary | string | 相对于 manifest.json 的可执行文件路径 |
-| capabilities | []string | 插件声明的能力列表，含 `ui.action.v1` |
+| binary | string | 相邻可执行文件名，必须精确为 `shiki-plugin-<id>`，不允许路径分隔符 |
+| capabilities | []string | 非空、无重复的能力列表，要求 `core.scope.v1`；声明 CLI action 必须含 `ui.action.v1` |
 | sides | []string | `["client"]` / `["server"]` / `["client","server"]` |
-| binary_flags | []string | 传给二进制的额外启动参数 |
+| binary_flags | []string | 额外启动参数，支持 `${side}`；宿主统一注入一份 `--side=client|server`，不得指定其他 side 或终止参数解析 |
 | config_schema | []ConfigField | 配置字段声明，宿主用于预校验 SetConfig |
 | ui | UIContribution | UI 注入声明 |
 
-`config_schema` 中每个 `ConfigField` 包含 `key`、`type`（`string`/`number`/`bool`/`enum`/`object`/`array`）、`label`、`description`、`default_json`、`required`、`enum_values`、`constraints`（最小/最大/长度/正则）等字段。宿主在把配置转发给插件的 `SetConfig` 前，先用 `pkg/plugin.ValidateConfig` 进行预校验；校验不通过直接返回 `InvalidArgument`，不启动插件进程。`pkg/plugin.ValidateManifest` 在加载 manifest 时验证格式与能力声明的完整性。
+`config_schema` 中每个 `ConfigField` 包含 `key`、`type`（`string`/`int`/`float`/`bool`/`object`/`array`）、`label`、`description`、`default_json`、`required`、`enum_values`、`constraints`（最小/最大/长度/正则）及 `children`。object 的 children 声明嵌套字段，array 的单个 child 声明元素类型（可继续嵌套 object/array）。宿主使用 `pkg/plugin.ValidateConfig` 检查未知字段、必填、有限数字、整数、枚举、约束及嵌套结构；错误直接返回 `InvalidArgument`，不启动进程、不修改 config/revision。默认值声明也必须通过 schema 校验；`default_json` 是描述信息，不会绕过 required 或静默改写用户配置，插件实现仍负责自身未提供字段的运行默认值。`pkg/plugin.ValidateManifest` 在发现时校验 schema、side、能力、启动参数与 CLI flag 声明。
 
 ### UIContribution
 
@@ -146,35 +158,34 @@ shiki plugins restart sync
 {
   "ui": {
     "status_slots": [{
-      "id": "sync.status",
+      "slot_id": "primary",
       "label": "文件同步",
-      "default_text": "等待中",
       "event_type": "plugin.status.sync.v1"
     }],
     "dashboard_panels": [{
-      "id": "sync.panel",
+      "panel_id": "sync-overview",
       "title": "同步状态",
-      "action_id": "sync:show-panel"
+      "event_type": "plugin.panel.sync.v1"
     }],
     "settings_section": {
-      "title": "文件同步",
-      "action_id": "sync:open-settings"
+      "section_id": "sync",
+      "title": "文件同步"
     },
     "cli_commands": [{
       "name": "list-conflicts",
       "description": "列出当前冲突",
-      "action_id": "sync:list-conflicts",
+      "action_id": "list-conflicts",
       "flags": [{"name": "json", "type": "bool", "default": "false", "description": "以 JSON 格式输出"}]
     }]
   }
 }
 ```
 
-宿主把每个插件的 `UIContribution` 注册到 `SettingsRegistry`；agent 启动时从已启用插件的 manifest 中读取 `cli_commands` 并注册到 `cmd/shiki/dynamic_commands.go`，注册路径为 `shiki plugins <id> <command>`。
+宿主在插件 ready 后向 `SettingsRegistry` 注册其真实静态 metadata；第三方的已验证 manifest 在 enable 前也可查询。直接 CLI 语法为 `shiki plugins <id> <command> [--json] [--flag key=value]`，agent 按当前 manifest 的 `ui.cli_commands` 将 command_name 映射成 action_id，并校验声明的 flag 类型及默认值；不是启动 CLI 时连接 agent 动态重写 Cobra 命令树，也不承诺离线 help 列出每个注入命令。固定管理命令保留优先级；原始 action 调用 `shiki plugins action invoke <id> <action-id> [--json] [--flag key=value]` 是独立脚本接口。新发行版的内置 artifact 携带由真实源 manifest 生成并校验的嵌套 metadata；旧 alpha.2 没有此可选字段仍可装载，但不能虚构其 command-name metadata。
 
 ### StatusPayload 与 NotifyPayload
 
-插件通过 CoreAPI `PublishEvent` 发布以下 payload 类型；TUI/GUI 客户端订阅对应事件类型并渲染：
+插件可通过 CoreAPI `PublishEvent` 发布以下 payload。它们是协议和 metadata 契约；首版 TUI 的通用插件 status-slot、dashboard、settings/form 与通知渲染器仍待实现，GUI 也未交付，不得把下面的声明视为已有可见界面：
 
 ```
 // 状态槽更新：event_type = "plugin.status.<id>.v1"
@@ -188,12 +199,12 @@ NotifyPayload { level, title, message, action_id string }
 
 ### InvokeAction 调用链
 
-manifest 中每条 `cli_commands` 和 `dashboard_panels` 声明一个 `action_id`。调用链：
+manifest 中的 `cli_commands` 声明 action_id；dashboard/status/settings 当前仅声明 metadata，不会自动形成交互界面。已实现的本地 action 调用链：
 
 ```text
-shiki plugins <id> <command> [flags]
+shiki plugins <id> <command> --flag key=value [--json]
   → agent IPC InvokePluginAction（AgentActions Connect service）
-  → internal/plugin/action_router.go 解析 plugin_id / side / server_id
+  → agent 读取当前已验证 manifest，将 command_name 解析为 action_id
   → internal/plugin/Supervisor.Call(ctx, id, "ui.action.v1", fn)
   → fn 通过 lifecycleClient.InvokeAction 发送生成的 Plugin.InvokeAction gRPC 到插件进程
   → 插件 ActionImplementation.InvokeAction 处理并返回 ActionResult
@@ -202,21 +213,23 @@ shiki plugins <id> <command> [flags]
 `ActionResult` 的 `kind` 字段决定结果处理方式：
 
 - `ActionResultText` (0)：直接打印文本
-- `ActionResultForm` (1)：展示 `ActionForm`（含字段和 submit action_id）
+- `ActionResultForm` (1)：输出结构化 `ActionForm`（含字段和 submit action_id），不提供交互式表单渲染
 - `ActionResultJSON` (2)：格式化 JSON 输出
-- `ActionResultNotify` (3)：触发 `NotifyPayload` 事件
+- `ActionResultNotify` (3)：输出 `NotifyPayload` 描述，不自动形成 TUI 通知
 
-未实现 `ActionImplementation` 的插件（无 `ui.action.v1` 能力）对任何 InvokeAction 返回 Unimplemented，宿主向调用方传递该错误，不崩溃。
+`--json` 输出保留 `{kind, done, json|text|form|notify}` envelope；JSON action 的业务对象位于 `json` 字段，而不是文本 envelope。未协商 `ui.action.v1` 的插件会在宿主准入时返回 FailedPrecondition；如果进程声明了该能力却未实现 `ActionImplementation`，SDK InvokeAction 返回 Unimplemented，宿主传递错误而不崩溃或回退。
+
+该能力只在实际实现 ActionImplementation 的内置 client sync/port 上协商；server 内置插件不声明 `ui.action.v1`。远程 `InvokePluginAction` 明确返回 Unimplemented，第三方安装也不会自动获得跨机 action/data-plane 路由。`ActionResultForm`/Notify 可以结构化输出，但没有通用 TUI 表单或通知渲染闭环。
 
 ### PluginRegistry 扫描路径
 
-`internal/plugin/registry.go` 在 agent 启动时按优先级扫描以下路径：
+`internal/plugin/registry.go` 只扫描当前宿主配置的 `plugins_dir` 一层；默认 agent 为 `~/.shiki/plugins/`，daemon 为其配置的插件目录。不额外扫描另一个用户或硬编码“系统优先级”目录：
 
-1. `~/.shiki/plugins/<id>/manifest.json`（用户安装的第三方插件）
-2. `/var/lib/shiki/plugins/<id>/manifest.json`（系统级安装的插件）
-3. 内嵌内置插件（`plugins/sync/manifest.json`、`plugins/port/manifest.json`）
+- `<id>/manifest.json`、`.artifact-integrity.json` 与 `shiki-plugin-<id>` 必须共同通过校验，manifest ID 必须等于目录名；不接纳包目录/manifest/binary 符号链接、特殊文件或可被其他用户替换的位置。
+- `.builtin`、`.embedded`、`.plugin-txn-*` 等私有目录和 `sync`/`port` 第三方目录不会注册。新安装的 plugins_dir 是保留第三方数据的私有真实目录，内置文件通过 `.builtin` 目录指针选择不可变发行版；宿主验证该指针本身、原路径与目标的所有权/权限链，manifest/binary 叶节点仍须为普通文件。指针存在但无效时不回退。指针不存在才读取旧的 flat `<id>.manifest.json` 或匹配 build 的内嵌缓存；旧安装的整个 plugins_dir 管理符号链接仍可只读装载，安装器必须合法迁移后才可写入第三方包。
+- 每次刷新以新扫描结果替换注册表，损坏/移除的包不会留下旧缓存条目。缺失目录的持久 desired intent 留存但不能执行；未知或无效包不能被 ENABLE/RESTART/SET_CONFIG 接纳，DISABLE 始终可撤销已有期望状态。
+- marketplace index 与归档签名绑定 `id/version/os/arch/url-independent archive name/size/SHA-256`，trust root 由用户显式导入。显式 update 拒绝未知 key、降级、平台不匹配或校验失败；手工安装不因此获得 marketplace 更新资格。
 
-每个目录下必须同时存在合法 `manifest.json` 和对应二进制，且安装器必须先完成清单、归档完整性和 publisher trust-root 校验才可注册。第三方插件可以由静态 HTTPS marketplace index 分发；index 与归档签名均绑定 `id/version/os/arch/url-independent archive name/size/SHA-256`，trust root 由用户显式导入并保存在 0600 文件中。自动更新只接受已信任 key 签发的最新 index 和匹配归档；无来源、无签名、未知 key、降级版本、平台不匹配或校验失败均停止，不覆盖当前安装。手工 `plugins install <url-or-path>` 仍可用，但它是用户明确承担完整性责任的本地/URL路径，不获得 marketplace 自动更新资格。
 
 ## 完整 RPC 分工与双端路由
 

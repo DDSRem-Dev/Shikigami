@@ -1,2 +1,4 @@
 # Preserve terminal recordings byte-for-byte, including CR/LF and escape sequences.
 test/diagnostics/loadcapacity/workload/testdata/*.raw binary
+# Release license authentication requires the canonical bytes on every checkout.
+LICENSE text eol=lf

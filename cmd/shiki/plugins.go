@@ -41,9 +41,26 @@ func (a *app) pluginTarget(ctx context.Context, c *client.Client, side string) (
 }
 func (a *app) pluginCommands() *cobra.Command {
 	var side string
-	root := &cobra.Command{Use: "plugins", Short: "Manage local or remote plugins through the agent", Args: cobra.NoArgs}
+	var actionFlags map[string]string
+	root := &cobra.Command{
+		Use:   "plugins [<plugin-id> <command>]",
+		Short: "Manage plugins or invoke a local manifest-declared command",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return nil
+			}
+			return cobra.ExactArgs(2)(cmd, args)
+		},
+	}
+	root.Flags().StringToStringVar(&actionFlags, "flag", nil, "Plugin command argument as name=value (repeatable)")
 	root.PersistentFlags().StringVar(&side, "side", "", "Required: local or remote; remote also requires --server")
-	root.PersistentPreRunE = func(*cobra.Command, []string) error {
+	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if cmd == root && len(args) == 2 {
+			if side != "" && side != "local" || a.server != "" {
+				return errors.New("plugin commands require the local side and do not accept --server")
+			}
+			return nil
+		}
 		if side != "local" && side != "remote" {
 			return errors.New("--side must be explicitly local or remote")
 		}
@@ -68,7 +85,14 @@ func (a *app) pluginCommands() *cobra.Command {
 			return a.print(result)
 		})
 	}}
-	root.RunE = list.RunE
+	root.RunE = func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return list.RunE(cmd, args)
+		}
+		return a.withClient(cmd.Context(), true, func(c *client.Client) error {
+			return a.invokePluginAction(cmd.Context(), c, args[0], "", args[1], a.json, actionFlags)
+		})
+	}
 	root.AddCommand(list)
 	root.AddCommand(&cobra.Command{Use: "status <plugin-id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		return a.withClient(cmd.Context(), true, func(c *client.Client) error {
@@ -143,10 +167,14 @@ func (a *app) pluginCommands() *cobra.Command {
 		root.AddCommand(command)
 	}
 	root.AddCommand(a.pluginLogsCommand(&side))
-	// action subcommand does not require --side; override PersistentPreRunE
-	// with a no-op so the parent's --side validation is not enforced.
+	// Actions are local-only; never silently interpret a remote target locally.
 	actionCmd := a.pluginActionCommands()
-	actionCmd.PersistentPreRunE = func(*cobra.Command, []string) error { return nil }
+	actionCmd.PersistentPreRunE = func(*cobra.Command, []string) error {
+		if side != "" && side != "local" || a.server != "" {
+			return errors.New("plugin actions require the local side and do not accept --server")
+		}
+		return nil
+	}
 	root.AddCommand(actionCmd)
 	for _, c := range a.pluginInstallCommands() {
 		root.AddCommand(c)

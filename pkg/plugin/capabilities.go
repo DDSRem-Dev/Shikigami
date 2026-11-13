@@ -27,12 +27,13 @@ func BuiltinProtocol(id, side string) (*pb.ProtocolOffer, error) {
 	switch side {
 	case "client":
 		offer.Capabilities = append(offer.Capabilities, client)
+		offer.Capabilities = append(offer.Capabilities, UIActionCapability)
 		offer.RequiredCapabilities = append(offer.RequiredCapabilities, client)
 	case "server":
 		offer.Capabilities = append(offer.Capabilities, server)
 		offer.RequiredCapabilities = append(offer.RequiredCapabilities, server)
 	case "both":
-		offer.Capabilities = append(offer.Capabilities, client, server)
+		offer.Capabilities = append(offer.Capabilities, client, server, UIActionCapability)
 	default:
 		return nil, errors.New("invalid plugin side")
 	}

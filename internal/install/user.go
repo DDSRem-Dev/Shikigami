@@ -53,9 +53,25 @@ func UserHelper(ctx context.Context, operation string, in io.Reader, out io.Writ
 		if err := initializeConfig(request.Plan); err != nil {
 			return err
 		}
-		return installUserLinks(request.Plan, request.Prefix)
+		return installUserLinks(ctx, request.Plan, request.Prefix)
+	case "legacy-config":
+		metadata, err := readRegular(filepath.Join(request.Prefix, "current"), ManifestName, 64<<10)
+		if err != nil {
+			return err
+		}
+		var manifest Manifest
+		if strictjson.Decode(metadata, &manifest) != nil || !legacyPluginLinks(manifest.Version) {
+			return errors.New("legacy plugin layout is only supported for the frozen public alpha helpers")
+		}
+		lease, err := preparePluginLinks(ctx, request.Plan, request.Prefix, pluginLinksLegacy)
+		if err != nil {
+			return err
+		}
+		old := &Native{Prefix: request.Prefix, ExpectedVersion: manifest.Version}
+		_, callErr := old.userCall(ctx, request.Plan, "config")
+		return errors.Join(callErr, lease.Close())
 	case "unlink":
-		return removeUserLinks(request.Plan, request.Prefix)
+		return removeUserLinks(ctx, request.Plan, request.Prefix)
 	case "probe":
 		status, err := probeUser(ctx, request)
 		if err != nil {

@@ -166,6 +166,7 @@ func MarshalActionResult(res *ActionResult) (*structpb.Struct, error) {
 		return nil, fmt.Errorf("action result is nil")
 	}
 	m := map[string]any{"done": res.Done}
+	var jsonResult *structpb.Struct
 	switch res.Kind {
 	case ActionResultText:
 		m["kind"] = "text"
@@ -186,7 +187,14 @@ func MarshalActionResult(res *ActionResult) (*structpb.Struct, error) {
 	case ActionResultJSON:
 		m["kind"] = "json"
 		if res.JSON != nil {
-			m["json"] = res.JSON
+			data, err := json.Marshal(res.JSON)
+			if err != nil {
+				return nil, fmt.Errorf("marshal action JSON: %w", err)
+			}
+			jsonResult = new(structpb.Struct)
+			if err := jsonResult.UnmarshalJSON(data); err != nil {
+				return nil, fmt.Errorf("encode action JSON: %w", err)
+			}
 		}
 	case ActionResultNotify:
 		m["kind"] = "notification"
@@ -202,7 +210,14 @@ func MarshalActionResult(res *ActionResult) (*structpb.Struct, error) {
 			m["notify"] = notify
 		}
 	}
-	return structpb.NewStruct(m)
+	result, err := structpb.NewStruct(m)
+	if err != nil {
+		return nil, err
+	}
+	if jsonResult != nil {
+		result.Fields["json"] = structpb.NewStructValue(jsonResult)
+	}
+	return result, nil
 }
 
 // UnmarshalActionResult reconstructs ActionResult from a structpb.Struct.

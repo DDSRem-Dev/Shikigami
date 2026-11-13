@@ -178,6 +178,9 @@ func Verify(directory, expectedVersion, trustedChecksums string) (*Bundle, error
 		if p.Name != id || p.Version != m.Version || p.Side != "both" || p.Executable != "shiki-plugin-"+id || p.SHA256 != checksums[p.Executable] {
 			return nil, errors.New("plugin manifest mismatch")
 		}
+		if err := host.ValidateBuiltinMetadata(p); err != nil {
+			return nil, err
+		}
 		for _, side := range []string{"client", "server"} {
 			contract, _ := sdk.BuiltinProtocol(id, side)
 			if _, err = version.Negotiate(contract, p.Protocol, m.Version); err != nil {

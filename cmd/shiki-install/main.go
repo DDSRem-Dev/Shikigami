@@ -88,7 +88,7 @@ func execute(ctx context.Context, args []string, out, errOut io.Writer) (int, er
 	flags.StringVar(&pin, "checksums-sha256", "", "SHA256SUMS digest obtained independently from a trusted source")
 	flags.StringVar(&plan.Config, "config", "", "absolute configuration path")
 	flags.StringVar(&plan.StateDir, "state-dir", "", "private host state directory")
-	flags.StringVar(&plan.PluginsDir, "plugins-dir", "", "managed plugin link location")
+	flags.StringVar(&plan.PluginsDir, "plugins-dir", "", "private plugin store (managed built-ins plus third-party packages)")
 	flags.StringVar(&plan.BinDir, "bin-dir", "", "command link directory")
 	flags.StringVar(&plan.ProjectsDir, "projects-dir", "", "daemon project base")
 	flags.StringVar(&plan.Claude, "claude-executable", "claude", "daemon Claude executable")

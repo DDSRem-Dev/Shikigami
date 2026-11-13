@@ -37,7 +37,8 @@ class FormulaPublicationTests(unittest.TestCase):
 
     def test_old_runs_and_future_prereleases_do_not_replace_stable(self):
         for old, new, status in [("v0.0.1-beta.1", "v0.0.1-alpha.9", "newer-version-retained"),
-                                 ("v1.0.0", "v2.0.0-alpha.1", "stable-channel-retained")]:
+                                 ("v1.0.0", "v2.0.0-alpha.1", "stable-channel-retained"),
+                                 ("v1.0.0", "v2.0.0-beta.1", "stable-channel-retained")]:
             with self.subTest(old=old, new=new), patch.object(homebrew.release, "github_api", return_value=remote(old)) as api:
                 self.assertEqual(homebrew.update_formula("owner/repo", new, formula(new))["status"], status)
                 self.assertEqual(api.call_count, 1)
@@ -87,6 +88,38 @@ class FormulaPublicationTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     homebrew.require_public_release("owner/repo", "v1.0.0", "a" * 40, "1", expected)
                 self.assertFalse(any(len(call.args) > 1 for call in api.call_args_list))
+
+    def test_beta_public_inventory_includes_bootstrap_and_exact_hashes_on_every_retry(self):
+        version = "v0.0.1-beta.1"
+        expected = {name: {"size": len(name), "digest": "sha256:" + "a" * 64}
+                    for name in homebrew.publish.asset_names(version)}
+        self.assertEqual(len(expected), 23)
+        complete = [dict(name=name, state="uploaded", **metadata) for name, metadata in expected.items()]
+        current = {"id": 1, "draft": False, "published_at": "2026-11-13T00:00:00Z"}
+        for mutation in (None, "missing", "digest", "duplicate", "extra"):
+            with self.subTest(mutation=mutation):
+                assets = [dict(asset) for asset in complete]
+                script = next(asset for asset in assets if asset["name"] == "bootstrap.sh")
+                if mutation == "missing":
+                    assets.remove(script)
+                elif mutation == "digest":
+                    script["digest"] = "sha256:" + "0" * 64
+                elif mutation == "duplicate":
+                    assets.append(dict(script))
+                elif mutation == "extra":
+                    assets.append(dict(script, name="untracked-script.sh"))
+                with patch.object(homebrew.release, "validate_source"), \
+                        patch.object(homebrew.publish, "validate_existing"), \
+                        patch.object(homebrew.release, "github_api", side_effect=[current, assets]) as api:
+                    if mutation is None:
+                        # A matched public release remains a read-only prerequisite
+                        # on each Homebrew rerun, not just on initial publication.
+                        homebrew.require_public_release("owner/repo", version, "a" * 40, "1", expected)
+                    else:
+                        with self.assertRaises(ValueError):
+                            homebrew.require_public_release("owner/repo", version, "a" * 40, "1", expected)
+                    self.assertEqual(api.call_count, 2)
+                    self.assertTrue(all(len(call.args) == 1 for call in api.call_args_list))
 
 
 if __name__ == "__main__":

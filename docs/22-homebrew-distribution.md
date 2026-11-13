@@ -29,18 +29,18 @@ shiki-install help install
 brew info ddsrem-dev/shikigami/shikigami
 ```
 
-`brew info` 的 caveats 给出当前固定版本、可信 checksum pin 和 bundle 路径组成的 `--stage-only` 命令。先检查生成的服务 review；需要激活时，按 [11 安装契约](11-automated-installation.md)显式移除 `--stage-only`，完成依赖和登录。不能把 `brew install` 成功写成应用 ready。
+`brew info` 的 caveats 给出**实际已安装 Formula**的完整 `--stage-only` 命令，包含匹配的绝对 `--bundle` 路径、固定 `--version` 和 `--checksums-sha256` pin。必须原样保留这三项；不要简写成缺少发行身份和 pin 的 `shiki-install install --role=client`，也不要把文档中的旧版本号拼到新 Cellar bundle 上。先复制 caveats 的完整命令检查生成的服务 review；需要激活时，按 [11 安装契约](11-automated-installation.md)只显式移除 `--stage-only`，完成依赖和登录。不能把 `brew install` 成功写成应用 ready。
 
-服务安装器会将受信 bundle 复制到自身受管的不可变版本目录，并链接匹配插件。用户服务不直接引用会被 Homebrew 清理的旧 Cellar 路径。因而：
+服务安装器会将受信 bundle 复制到自身受管的不可变版本目录。当前 `plugins_dir` 是运行用户的真实私有目录：第三方包保留在 `<id>/`，只由受管 `.builtin -> <prefix>/current` 指针选择内置产物，不创建 manifest/二进制叶子 symlink，也不向 release/Cellar 写入第三方包。历史整根链接的迁移、旧 alpha helper 回滚与保留目录恢复见[11 安装契约](11-automated-installation.md#已验证的真实服务管理器边界)。用户服务不直接引用会被 Homebrew 清理的旧 Cellar 路径。因而：
 
-- `brew upgrade` 更新下载的 bundle 和 Homebrew 命令；使用新 CLI 前，按 caveats 对既有受管安装显式执行 `shiki-install install` 升级。
+- `brew upgrade` 更新下载的 bundle 和 Homebrew 命令；使用新 CLI 前，重新运行 `brew info ddsrem-dev/shikigami/shikigami`，按**新** caveats 中完整的 bundle/version/pin 命令显式 review 并升级既有受管安装。
 - `brew uninstall` 仅移除 Homebrew 包，不停止独立受管服务或删除用户状态。
 - 移除受管服务时，先按原 role/prefix 调用 `shiki-install uninstall`；配置、认证和项目数据的保留仍遵循文档11。
 - Linux daemon 服务必须显式选择普通运行用户和部署路径；包管理器不代替此操作。
 
 ## 信任链与许可证
 
-[scripts/homebrew-formula.py](../scripts/homebrew-formula.py)只消费已由可信仓库 verifier、独立公钥和固定 release 身份验证的22个文件。生成前再次核对所消费签名的大小/hash，并对四目标归档重新核对大小/SHA-256，从每个认证归档读取完整 `LICENSE`。
+[scripts/homebrew-formula.py](../scripts/homebrew-formula.py)只消费已由可信仓库 verifier、独立公钥和固定 release 身份认证的精确资产集。历史公开 alpha.1/alpha.2 严格保持22文件；它们没有 `bootstrap.sh`，不会补传或覆盖。当前流程的新 tag 严格要求23文件：原22文件加与固定 tag 源码逐字节一致的 bootstrap，在接触发布 token 前完成验证，随后发布器与 Homebrew 更新器都要求公开资产名称、数量、大小和 SHA-256 完整匹配。bootstrap 是有来源约束的分发脚本，不改变 Ed25519 私钥只签归档的用途。生成 Formula 前仍再次核对所消费签名的大小/hash，并对四目标归档重新核对大小/SHA-256，从每个认证归档读取完整 `LICENSE`。
 
 许可证识别采用完整文本摘要白名单，未知内容或四目标不一致立即失败。已发布 `v0.0.1-alpha.1` 的冻结归档是 MIT；`v0.0.1-alpha.2` 起的源码授权为 GPL-3.0-only。生成器按归档中的真实许可证生成 Homebrew SPDX 标签，不会用当前工作树的 LICENSE 把旧包改标。GPL 标准文本末尾的示例文字不改变项目 README 明确的 only 授权。
 

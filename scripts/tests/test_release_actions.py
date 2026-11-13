@@ -98,6 +98,7 @@ class ReleaseGateTests(unittest.TestCase):
                 release.validate_version(version)
 
 
+
 class BundleTests(unittest.TestCase):
     def setUp(self):
         folder = tempfile.TemporaryDirectory(prefix="shiki-release-actions-")

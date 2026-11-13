@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strconv"
 
 	"connectrpc.com/connect/v2"
 	host "github.com/DDSRem-Dev/Shikigami/internal/plugin"
@@ -13,6 +14,7 @@ import (
 	arpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/agent/agentconnect"
 	ppb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/plugin"
 	rpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/protocolconnect"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -213,6 +215,40 @@ func (s *Service) InvokePluginAction(ctx context.Context, req *structpb.Struct) 
 		return nil, connect.NewError(connect.CodeInvalidArgument, "PLUGIN_SIDE_REQUIRED")
 	}
 
+	if command, ok := fields["command_name"]; ok {
+		if side == "remote" {
+			return nil, connect.NewError(connect.CodeUnimplemented, "remote plugin action invocation not yet supported")
+		}
+		if side != "local" || command.GetStringValue() == "" {
+			return nil, connect.NewError(connect.CodeInvalidArgument, "PLUGIN_COMMAND_REQUIRED")
+		}
+		manager := s.plugins.Load()
+		if manager == nil {
+			return nil, unavailableWorker()
+		}
+		manifest := manager.PluginManifest(pluginID)
+		if manifest == nil {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, "PLUGIN_MANIFEST_UNAVAILABLE")
+		}
+		var declaration *sdk.UICLICommand
+		for i := range manifest.UI.CLICommands {
+			if manifest.UI.CLICommands[i].Name == command.GetStringValue() {
+				declaration = &manifest.UI.CLICommands[i]
+				break
+			}
+		}
+		if declaration == nil {
+			return nil, connect.NewError(connect.CodeNotFound, "PLUGIN_COMMAND_NOT_FOUND")
+		}
+		if actionID := fields["action_id"].GetStringValue(); actionID != "" && actionID != declaration.ActionID {
+			return nil, connect.NewError(connect.CodeInvalidArgument, "PLUGIN_COMMAND_ACTION_MISMATCH")
+		}
+		req = proto.Clone(req).(*structpb.Struct)
+		req.Fields["action_id"] = structpb.NewStringValue(declaration.ActionID)
+		if err := validateCommandFlags(req, declaration); err != nil {
+			return nil, err
+		}
+	}
 	actionReq, err := sdk.UnmarshalActionRequest(req)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err.Error())
@@ -241,4 +277,54 @@ func (s *Service) InvokePluginAction(ctx context.Context, req *structpb.Struct) 
 	default:
 		return nil, connect.NewError(connect.CodeInvalidArgument, "PLUGIN_SIDE_REQUIRED")
 	}
+}
+
+func validateCommandFlags(request *structpb.Struct, command *sdk.UICLICommand) error {
+	value, present := request.GetFields()["flags"]
+	flags := value.GetStructValue()
+	if present && flags == nil {
+		return connect.NewError(connect.CodeInvalidArgument, "INVALID_PLUGIN_COMMAND_FLAG")
+	}
+	if flags == nil {
+		flags = &structpb.Struct{Fields: map[string]*structpb.Value{}}
+		request.Fields["flags"] = structpb.NewStructValue(flags)
+	}
+	for name, value := range flags.GetFields() {
+		var declaration *sdk.UICLIFlag
+		for i := range command.Flags {
+			if command.Flags[i].Name == name {
+				declaration = &command.Flags[i]
+				break
+			}
+		}
+		text, ok := value.GetKind().(*structpb.Value_StringValue)
+		if declaration == nil || !ok {
+			return connect.NewError(connect.CodeInvalidArgument, "INVALID_PLUGIN_COMMAND_FLAG")
+		}
+		switch declaration.Type {
+		case "bool":
+			if _, err := strconv.ParseBool(text.StringValue); err != nil {
+				return connect.NewError(connect.CodeInvalidArgument, "INVALID_PLUGIN_COMMAND_FLAG")
+			}
+		case "int":
+			if _, err := strconv.ParseInt(text.StringValue, 10, 64); err != nil {
+				return connect.NewError(connect.CodeInvalidArgument, "INVALID_PLUGIN_COMMAND_FLAG")
+			}
+		}
+	}
+	for _, flag := range command.Flags {
+		if _, present := flags.Fields[flag.Name]; !present {
+			value := flag.Default
+			if value == "" {
+				switch flag.Type {
+				case "bool":
+					value = "false"
+				case "int":
+					value = "0"
+				}
+			}
+			flags.Fields[flag.Name] = structpb.NewStringValue(value)
+		}
+	}
+	return nil
 }

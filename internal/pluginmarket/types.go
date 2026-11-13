@@ -29,7 +29,7 @@ const (
 	MaxIndexPayloadBytes     = 1 << 20
 	MaxArchiveSignatureBytes = 256 << 10
 	MaxTrustStoreBytes       = 1 << 20
-	MaxArchiveBytes          = int64(8 << 30)
+	MaxArchiveBytes          = int64(256 << 20)
 	MaxEntries               = 10000
 	MaxURLLength             = 2048
 	MaxVersionLength         = 80
@@ -44,7 +44,6 @@ const (
 var (
 	pluginIDPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}[a-z0-9]$|^[a-z]$`)
 	keyIDPattern    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
-	versionPattern  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,79}$`)
 	digestPattern   = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
 
@@ -194,8 +193,8 @@ func ValidateEntry(entry Entry) error {
 	if err := ValidatePluginID(entry.ID); err != nil {
 		return err
 	}
-	if !versionPattern.MatchString(entry.Version) || len(entry.Version) > MaxVersionLength {
-		return errors.New("invalid plugin version")
+	if err := ValidateVersion(entry.Version); err != nil {
+		return err
 	}
 	if entry.OS != "linux" && entry.OS != "darwin" {
 		return errors.New("invalid plugin OS")
@@ -249,8 +248,8 @@ func validateArchiveMetadata(metadata ArchiveMetadata) error {
 	if err := ValidatePluginID(metadata.ID); err != nil {
 		return err
 	}
-	if !versionPattern.MatchString(metadata.Version) || len(metadata.Version) > MaxVersionLength {
-		return errors.New("invalid archive version")
+	if err := ValidateVersion(metadata.Version); err != nil {
+		return err
 	}
 	if metadata.OS != "linux" && metadata.OS != "darwin" {
 		return errors.New("invalid archive OS")

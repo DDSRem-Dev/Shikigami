@@ -10,10 +10,10 @@ import (
 	"time"
 )
 
-// Acquire excludes CLI auto-start for the whole client installation transaction.
+// acquireStartupGuard excludes CLI auto-start for the client transaction.
 // The agent itself does not acquire start.lock, so a service start remains able
 // to acquire instance.lock after Backup releases its state locks.
-func (n *Native) Acquire(ctx context.Context, plan Plan) (func(), error) {
+func (n *Native) acquireStartupGuard(ctx context.Context, plan Plan) (func(), error) {
 	if plan.Role != "client" {
 		return func() {}, nil
 	}

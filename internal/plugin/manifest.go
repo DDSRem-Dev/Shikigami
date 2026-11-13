@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -54,6 +55,9 @@ func ReadInstalledManifest(directory, id, side, build string) (Manifest, error) 
 	if manifest.Executable != "shiki-plugin-"+id || strings.ContainsAny(manifest.Executable, "/\\") {
 		return manifest, errors.New("plugin manifest executable must name its adjacent binary")
 	}
+	if err := ValidateBuiltinMetadata(manifest); err != nil {
+		return manifest, err
+	}
 	contract, err := sdk.BuiltinProtocol(id, side)
 	if err != nil {
 		return manifest, err
@@ -62,6 +66,18 @@ func ReadInstalledManifest(directory, id, side, build string) (Manifest, error) 
 		return manifest, fmt.Errorf("%w: %w", ErrIncompatible, err)
 	}
 	manifest.Protocol = contract
+	if manifest.PluginManifest != nil {
+		declaration := clonePluginManifest(manifest.PluginManifest)
+		declaration.Sides = []string{side}
+		declaration.Capabilities = slices.Clone(contract.Capabilities)
+		if side == "server" {
+			// The built-in action implementations and their settings UI are
+			// client-side. Do not claim them on a server process.
+			declaration.UI = sdk.UIContribution{}
+			declaration.ConfigSchema = nil
+		}
+		manifest.PluginManifest = declaration
+	}
 	manifest.Executable = filepath.Join(directory, manifest.Executable)
 	manifest.Side = side
 	return manifest, nil
@@ -101,4 +117,40 @@ func ReadPluginManifest(dir string) (*sdk.PluginManifest, error) {
 		return nil, err
 	}
 	return &manifest, nil
+}
+
+// ValidateBuiltinMetadata checks optional release metadata without requiring it
+// from older releases. Checksums/signatures continue to authenticate the entire
+// installed artifact; metadata cannot replace that validation.
+func ValidateBuiltinMetadata(manifest Manifest) error {
+	declaration := manifest.PluginManifest
+	if declaration == nil {
+		return nil
+	}
+	if err := sdk.ValidateManifest(declaration); err != nil {
+		return err
+	}
+	if !builtinID(manifest.Name) || declaration.ID != manifest.Name || declaration.Version != manifest.Version || declaration.Binary != manifest.Executable {
+		return errors.New("built-in public metadata does not match its artifact")
+	}
+	expectedSides := 1
+	if manifest.Side == "both" {
+		expectedSides = 2
+	} else if manifest.Side != "client" && manifest.Side != "server" {
+		return errors.New("invalid built-in artifact side")
+	}
+	if len(declaration.Sides) != expectedSides || len(declaration.Capabilities) != len(manifest.Protocol.GetCapabilities()) {
+		return errors.New("built-in public metadata does not describe the artifact sides and capabilities")
+	}
+	for _, side := range []string{"client", "server"} {
+		if (manifest.Side == "both" || manifest.Side == side) && !slices.Contains(declaration.Sides, side) {
+			return errors.New("built-in public metadata omits an artifact side")
+		}
+	}
+	for _, capability := range declaration.Capabilities {
+		if !slices.Contains(manifest.Protocol.GetCapabilities(), capability) {
+			return errors.New("built-in public metadata advertises an unavailable capability")
+		}
+	}
+	return nil
 }

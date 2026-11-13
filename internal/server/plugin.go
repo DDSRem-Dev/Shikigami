@@ -22,12 +22,18 @@ import (
 func (r *Runtime) startPlugins(options DaemonOptions) error {
 	hostID := "daemon_" + rand.Text()
 	supervisor, e := plugin.NewSupervisor(r.ctx, plugin.SupervisorOptions{
-		StateDir: filepath.Join(r.cfg.StateDir, "plugin-control"),
-		Validate: validateServerPluginConfig,
+		StateDir:   filepath.Join(r.cfg.StateDir, "plugin-control"),
+		PluginsDir: r.cfg.PluginsDir,
+		Side:       "server",
+		Validate:   validateServerPluginConfig,
 		Config: func(id string, values *structpb.Struct) (plugin.Config, error) {
-			manifest, e := plugin.ResolveBuiltinManifest(r.cfg.PluginsDir, id, "server", r.Service.Build)
-			if e != nil {
-				return plugin.Config{}, e
+			var manifest plugin.Manifest
+			if id == "sync" || id == "port" {
+				var e error
+				manifest, e = plugin.ResolveBuiltinManifest(r.cfg.PluginsDir, id, "server", r.Service.Build)
+				if e != nil {
+					return plugin.Config{}, e
+				}
 			}
 			core := &daemonPluginCore{service: r.Service, id: id}
 			return plugin.Config{Manifest: manifest, RunDir: filepath.Join(r.cfg.StateDir, "run", "p"), StateDir: filepath.Join(r.cfg.StateDir, "plugin-data", id), HostInstanceID: hostID, Values: values, Core: core, CredentialLifetime: options.PluginCredentialLifetime, Policy: plugin.Policy{Side: "server", Capabilities: []string{"core.projects.read", "core.sessions.read", "core.config.read", "core.log"}, Scopes: []*ppb.Scope{{}}, AuthorizeScope: core.authorizeScope}}, nil

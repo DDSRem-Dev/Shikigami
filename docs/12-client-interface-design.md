@@ -68,8 +68,8 @@ Claude 崩溃事件先结束当前 raw attachment；CLI 和 dashboard 的终端�
 **动态 CLI 命令**
 
 - CLI 命令（`UICLICommand`）来自插件 manifest 的 `ui.cli_commands`，每条命令包含 `name`、`description`、`action_id` 和 `flags`。
-- agent 启动时在 `cmd/shiki/dynamic_commands.go` 注册，路径为 `shiki plugins <id> <command> [flags]`。
-- 执行时通过 agent IPC `AgentActions.InvokePluginAction` 调用插件，结果以纯文本、JSON 或通知形式输出到终端。
+- CLI 的固定入口为 `shiki plugins <id> <command> [--json] [--flag name=value ...]`。CLI 不在启动前复制 manifest 或抢先连接 agent；agent 从已准入插件的 manifest 将 command name 解析为 action ID，并校验声明的参数。管理子命令仍由 Cobra 静态注册。
+- 执行时通过 agent IPC `AgentActions.InvokePluginAction` 调用独立插件进程，结果以纯文本、JSON 或通知形式输出。`--json` 同时传给插件并选择 CLI JSON envelope；传输、准入或插件查询失败保持失败，不转成空的成功结果。`shiki plugins action invoke <id> <action-id> [--flag name=value ...]` 保留显式 action ID 入口；两种入口当前只支持本地插件动作，不能把 `--server` 当远端调用能力。
 - 命令路径不与 `shiki plugins list|enable|disable|status|logs|restart` 冲突；已保留的管理子命令不可被 manifest 覆盖。
 
 

@@ -16,7 +16,7 @@
       "description": "单文件大小上限。超过此值的文件需要手动确认同步。",
       "default_json": "10485760",
       "ui_hint": "number",
-      "constraints": {"min": 0, "max": 1073741824}
+      "constraints": {"min": 1, "max": 1073741824}
     }
   ],
   "ui": {

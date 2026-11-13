@@ -1,34 +1,41 @@
 package install
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 )
 
 func managedLink(path, target string) error {
-	if existing, err := os.Readlink(path); err == nil {
-		if existing == target {
-			return nil
-		}
-		return errors.New("existing link belongs to another installation")
-	}
-	if _, err := os.Lstat(path); err == nil {
-		return errors.New("refusing to replace an existing unmanaged file or plugin directory")
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
 	parent, err := os.OpenRoot(filepath.Dir(path))
 	if err != nil {
 		return err
 	}
 	defer parent.Close()
-	return parent.Symlink(target, filepath.Base(path))
+	return managedRootLink(parent, filepath.Base(path), target)
 }
-func installUserLinks(plan Plan, prefix string) error {
-	if err := managedLink(plan.PluginsDir, filepath.Join(prefix, "current")); err != nil {
+
+func managedRootLink(root *os.Root, name, target string) error {
+	if existing, err := root.Readlink(name); err == nil {
+		if existing == target {
+			return nil
+		}
+		return errors.New("existing link belongs to another installation")
+	}
+	if _, err := root.Lstat(name); err == nil {
+		return errors.New("refusing to replace an existing unmanaged file or plugin directory")
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
+	return root.Symlink(target, name)
+}
+func installUserLinks(ctx context.Context, plan Plan, prefix string) (err error) {
+	lease, err := preparePluginLinks(ctx, plan, prefix, pluginLinksCurrent)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, lease.Close()) }()
 	if plan.Role == "client" {
 		if err := ownedServiceDirectory(plan.BinDir, os.Getuid()); err != nil {
 			return err
@@ -50,7 +57,11 @@ func unlinkManaged(path, target string) error {
 		return err
 	}
 	defer parent.Close()
-	existing, err := parent.Readlink(filepath.Base(path))
+	return unlinkRootManaged(parent, filepath.Base(path), target)
+}
+
+func unlinkRootManaged(root *os.Root, name, target string) error {
+	existing, err := root.Readlink(name)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
@@ -60,12 +71,14 @@ func unlinkManaged(path, target string) error {
 	if existing != target {
 		return errors.New("refusing to remove an unmanaged link")
 	}
-	return parent.Remove(filepath.Base(path))
+	return root.Remove(name)
 }
-func removeUserLinks(plan Plan, prefix string) error {
-	if err := unlinkManaged(plan.PluginsDir, filepath.Join(prefix, "current")); err != nil {
+func removeUserLinks(ctx context.Context, plan Plan, prefix string) (err error) {
+	lease, err := preparePluginLinks(ctx, plan, prefix, pluginLinksRemove)
+	if err != nil {
 		return err
 	}
+	defer func() { err = errors.Join(err, lease.Close()) }()
 	if plan.Role == "client" {
 		for _, name := range []string{"shiki", "shiki-agent", "shiki-install"} {
 			if err := unlinkManaged(filepath.Join(plan.BinDir, name), filepath.Join(prefix, "current", name)); err != nil {

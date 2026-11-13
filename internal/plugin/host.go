@@ -14,7 +14,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"sync"
 	"syscall"
 	"time"
@@ -41,9 +40,11 @@ type Manifest struct {
 	SHA256     string            `json:"sha256"`
 	Side       string            `json:"side"`
 	Protocol   *pb.ProtocolOffer `json:"protocol"`
-	// PluginManifest is non-nil for plugins launched with a manifest.json
-	// (new-style user-installed plugins). Legacy installed artifacts leave this nil.
-	PluginManifest *sdk.PluginManifest `json:"-"`
+	// PluginManifest optionally carries static public metadata. Legacy release
+	// artifacts omit it; third-party packages always carry an integrity-pinned
+	// adjacent manifest.json.
+	PluginManifest *sdk.PluginManifest `json:"plugin_manifest,omitempty"`
+	manifestSHA256 string
 }
 type Config struct {
 	Manifest                           Manifest
@@ -72,6 +73,7 @@ type Instance struct {
 	stopErr         error
 	handlerMu       sync.Mutex
 	handlers        sync.WaitGroup
+	artifact        Manifest
 	admissionClosed bool
 	snapshot        Snapshot
 	process         managedProcess
@@ -102,6 +104,17 @@ func (e *launchCleanupError) Unwrap() error { return e.cause }
 // On a failed startup deadline, cleanup can continue after Launch returns; the
 // instance keeps its writer lease until its process and callbacks have joined.
 func Launch(ctx context.Context, cfg Config) (instance *Instance, err error) {
+	if cfg.Manifest.PluginManifest != nil {
+		if !builtinID(cfg.Manifest.Name) {
+			current, readErr := readThirdPartyArtifact(filepath.Dir(cfg.Manifest.Executable), cfg.Manifest.Name, cfg.Manifest.Side)
+			if readErr != nil {
+				return nil, readErr
+			}
+			if !sameArtifact(&cfg.Manifest, &current) {
+				return nil, errors.New("plugin artifact changed before launch")
+			}
+		}
+	}
 	if err = validateConfig(cfg); err != nil {
 		return nil, err
 	}
@@ -144,7 +157,7 @@ func Launch(ctx context.Context, cfg Config) (instance *Instance, err error) {
 		policy.Scopes = append(policy.Scopes, proto.Clone(scope).(*ppb.Scope))
 	}
 	grant := &grant{token: token, instance: id, host: cfg.HostInstanceID, deadline: time.Now().Add(cfg.CredentialLifetime), valid: true, policy: policy, lifetime: lifetime, cancel: cancel}
-	i := &Instance{snapshot: Snapshot{InstanceID: id, Name: cfg.Manifest.Name, Version: cfg.Manifest.Version, Side: cfg.Manifest.Side, State: "starting"}, grant: grant, dir: dir, stateLock: lock, done: make(chan struct{})}
+	i := &Instance{artifact: cfg.Manifest, snapshot: Snapshot{InstanceID: id, Name: cfg.Manifest.Name, Version: cfg.Manifest.Version, Side: cfg.Manifest.Side, State: "starting"}, grant: grant, dir: dir, stateLock: lock, done: make(chan struct{})}
 	lockTransferred = true
 	startup, stopStartup := context.WithTimeout(lifetime, cfg.StartupTimeout)
 	defer stopStartup()
@@ -174,7 +187,7 @@ func Launch(ctx context.Context, cfg Config) (instance *Instance, err error) {
 	i.server = connection.NewHTTPServer(lifetime, handler)
 	i.serveDone = make(chan error, 1)
 	go func() { i.serveDone <- i.server.Serve(listener) }()
-	command := exec.Command(cfg.Manifest.Executable, append(append([]string(nil), cfg.Args...), "--side="+cfg.Manifest.Side)...)
+	command := exec.Command(cfg.Manifest.Executable, pluginArguments(cfg.Args, cfg.Manifest.PluginManifest, cfg.Manifest.Side)...)
 	// The child inherits the same flock description. A crashed host therefore
 	// cannot release the writer lease before its old worker actually exits.
 	command.ExtraFiles = []*os.File{lock}
@@ -427,7 +440,7 @@ func privateDirectory(path string) error {
 }
 func validateConfig(c Config) error {
 	m := c.Manifest
-	if !regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`).MatchString(m.Name) || m.Version == "" || m.Protocol == nil {
+	if !pluginIDPattern.MatchString(m.Name) || m.Version == "" || m.Protocol == nil {
 		return errors.New("invalid plugin manifest")
 	}
 	if (m.Side != "client" && m.Side != "server") || c.Policy.Side != m.Side {
