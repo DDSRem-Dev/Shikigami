@@ -2,7 +2,7 @@
 
 **当前进度（2026-11-12）：42/42，原清单最后一项已关闭。** 当前源码的功能、平台、验收依据及未支持范围已统一到[支持声明](18-release-readiness.md#current-support)。Phase 0–5各阶段为11/11、7/7、6/6、6/6、6/6、6/6。认证生命周期和长稳/资源/性能沿用2026-11-01用户确认的关闭结论，历史实测/失败及源码范围保留；生产heap/object归因、真实Claude登录/推理及物理主机重启仍按未实测边界披露。42/42表示当前源码验收登记与声明核对完成，不表示新包或稳定版已发布；仓库公开安装入口仍为alpha.2，未包含后续master修复。
 
-## 首个 beta 候选复核（2026-11-13，进行中）
+## 首个 beta 候选复核（2026-11-14，发布前验收通过）
 
 基线 `f4a28dd` 的 [CI 43258490322 attempt 2](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43258490322) 为57/57；新增路径审计仍发现：有效 bootstrap 签名元数据被拒绝、bootstrap 资产与严格发布清单冲突、第三方插件安装与 supervisor 脱节、更新身份/版本/发行者绑定不足，以及动作丢弃 JSON/查询错误。该 CI 不能覆盖这些未进入原测试的路径；旧文档“第三方插件完全可用”以本批实测结果为准，不追认历史实现。
 
@@ -12,7 +12,9 @@
 
 最终源码复核覆盖七类契约：目录与 SDK/host 依赖、RPC/实例凭据与 capability、持久状态/修订/去重、进程所有权与退出、文件/终端/网络语义、CLI/安装与资产布局、行为证据与支持声明。独立布局复核无确定性新增偏差；插件事务复核发现的接受前 schema 拒绝死锁已修复，仅对宿主确定性拒绝持久清除请求，不确定错误仍保留 request_id 重放。立即拒绝、丢失响应恢复、后续更新及真实签名进程回归均通过；复核方已确认该发现关闭。静态复核、构造中断状态测试和真实 helper 执行均不冒充物理断电验证。
 
-候选 `058ea5d` 的 [CI 43464849797](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43464849797) 暴露 macOS 两架构下载取消超时，`87cfefb` 修复后的四平台 preflight 已通过，不改变签名/HTTPS/大小/所有权/资产契约。[CI 43470576055](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43470576055) 前两次55/57，两个 macOS arm64 作业未获 runner；第三次56/57，仅实际 launchd-lifecycle 失败。源码复核发现卸载测试仍要求删除 plugins_dir，现对齐保留目录/数据、仅移除 `.builtin` 的设计并补充原生用户数据保留断言，生产语义不变。原生结果尚待，不将静态发现冒充已取得私有失败行；目录依赖、RPC、持久状态、进程、文件网络、CLI/资产及证据七类契约无其他变更。
+候选 `058ea5d` 的 [CI 43464849797](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43464849797) 暴露 macOS 下载取消超时，`87cfefb` 修复后的四平台 preflight 通过，不改变签名/HTTPS/大小/所有权/资产契约。[CI 43470576055](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43470576055) 前两次55/57为两项未获 runner，第三次56/57为实际 launchd-lifecycle 失败；私有失败行未公开。`a5032c1` 将过时的卸载断言对齐保留私有目录/数据、只移除 `.builtin` 的既有设计，未改生产语义，原生结果已通过。目录依赖、RPC、持久状态、进程、文件网络、CLI/资产及证据七类契约复核完成。
+
+固定提交 `a5032c112ffdace9b9ab6455f7280480223a8482` 的 [CI 43484685340](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43484685340) attempt 1 已 completed/success，57/57，无失败、取消或跳过；macOS 原生生命周期/卸载、活动上传及下载升级均有公开 passed 证据。08/15/18 的本批发布前状态同步关闭；旧失败/取消和各本地检查源码范围保留，不扩大外部账号、物理重启、生产资源或公开发行声明。
 
 
 **插件 marketplace 安装批次（2026-11-12）：** 新增实现保持插件边界：签名/信任和归档验证位于宿主侧 `internal/pluginmarket`，CLI 编排位于 `cmd/shiki`，插件业务进程未导入 host `internal/`。准入前严格校验 signed index、已信任 key、固定平台、归档文件名/大小/SHA-256 和 manifest；手工 URL/path 入口不获得自动更新资格。Linux amd64 CLI 目标编译及内部包测试编译通过；Windows Unix-only 编译和测试受平台/Application Control 限制，外部 marketplace 资源未验收。未改变 RPC、插件进程权限、状态/修订或能力声明，未新增路线图勾选。

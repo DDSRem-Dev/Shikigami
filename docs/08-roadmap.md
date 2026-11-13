@@ -2,13 +2,15 @@
 
 **当前进度（2026-11-12）：42/42，原清单最后一项已关闭。** 当前源码的功能、平台、验收依据及未支持范围已统一到[支持声明](18-release-readiness.md#current-support)。Phase 0–5各阶段为11/11、7/7、6/6、6/6、6/6、6/6。认证生命周期和长稳/资源/性能沿用2026-11-01用户确认的关闭结论，历史实测/失败及源码范围保留；生产heap/object归因、真实Claude登录/推理及物理主机重启仍按未实测边界披露。42/42表示当前源码验收登记与声明核对完成，不表示新包或稳定版已发布；仓库公开安装入口仍为alpha.2，未包含后续master修复。
 
-**首个 beta 候选修复与验收（2026-11-13—14，CI进行中）：** 基线 `f4a28dd` 的 [CI 43258490322 attempt 2](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43258490322) 已完成57/57，但后续审计确认 bootstrap 有效签名解析、发布资产集合、第三方插件运行时接入、更新身份/版本绑定及动作输出仍有缺陷，不能用旧 CI 全绿证明 beta 就绪。本批修复上述路径并完成新增本地验收，候选远端 CI 尚待。原42项保持原证据范围，不新增勾选；发布前门槛与发布时门槛见[18](18-release-readiness.md#beta-readiness)。
+**首个 beta 候选修复与验收（2026-11-14，发布前验收通过）：** 本批安装、签名 marketplace、插件运行时及发行工具修复已完成新增本地验收和固定候选 `a5032c1` 的完整远端 CI（57/57）。原42项保持原证据范围，不新增勾选；只关闭本批发布前门槛，实际 tag/Release、发行签名和公开包验收仍待执行，见[18](18-release-readiness.md#beta-readiness)。
 
 本地证据已完成：bootstrap 真实签名、发布/公式工具、actionlint，SDK/host/sync-client、真实第三方生命周期及 sync/port CLI JSON race；真实 HTTPS 签名 marketplace 进程验收包含接受前 schema 拒绝、丢失响应恢复和后续有效更新。已独立验签并执行真实 alpha.1/alpha.2 helper 的迁移/回滚/卸载/再升级，保留第三方数据、原目录与锁 inode。真实 systemd 用户服务完成 bootstrap 安装、就绪、卸载与配置/状态保留；节点显式禁用，外部 peer 仍 pending。详见[15 本批记录](15-implementation-status.md#evidence-first-beta-candidate)。
 
-候选 `058ea5d` 的 [CI 43464849797](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43464849797) 已失败：macOS 两架构均在 bootstrap 下载取消测试中超时，后续依赖矩阵未展开；两 Linux preflight、四平台编译/Homebrew 与 WSL2 通过。下载监督器改用有界 readiness 等待，并在退出前显式终止/回收生产子进程；Linux bootstrap 10项及强化的 HUP/INT/TERM 取消回归通过，macOS 与完整矩阵仍待新提交验证。七类契约复核及此前其他本地验收保留实际源码范围，不创建 tag/Release。
+候选 `058ea5d` 的 [CI 43464849797](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43464849797) 首轮失败：macOS 两架构均在 bootstrap 下载取消测试中超时，后续依赖矩阵未展开；两 Linux preflight、四平台编译/Homebrew 与 WSL2 通过。随后下载监督器改用有界 readiness 等待，并在退出前显式终止/回收生产子进程；Linux bootstrap 10项及强化的 HUP/INT/TERM 取消回归通过，macOS 结果由后续 CI 补齐。
 
-下载取消修复 `87cfefb` 的 [CI 43470576055](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43470576055) 前两次为55/57：两项 macOS arm64 作业未获 runner 即取消。第三次 unit-test-support 通过，达到56/57；真实 launchd-lifecycle 失败，公开证据只有阶段退出码，未包含私有日志。发现其测试仍要求卸载删除整个 plugins_dir，与已实现的保留用户插件目录契约冲突；现改为检查 `.builtin` 移除、0700 私有目录及用户数据保留，不修改生产卸载语义。新原生回归与完整矩阵仍待。
+下载取消修复 `87cfefb` 的 [CI 43470576055](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43470576055) 前两次为55/57：两项 macOS arm64 作业未获 runner 即取消。第三次为56/57，仅真实 launchd-lifecycle 失败，公开证据未包含私有日志；其测试仍要求卸载删除整个 plugins_dir，与保留用户插件目录的契约冲突。`a5032c1` 对齐 `.builtin` 移除、0700 私有目录及用户数据保留断言，不修改生产卸载语义。
+
+最终 [CI 43484685340](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43484685340) 对固定提交 `a5032c112ffdace9b9ab6455f7280480223a8482` 首次执行即 completed/success，57/57，无失败、取消或跳过；覆盖四平台单元/集成/E2E/发行工具/Homebrew、WSL2、终端及原生维护。macOS 生命周期、活动上传升级、活动下载升级均通过。此前失败/取消保留历史记录，不以成功覆盖；本轮未创建 tag/Release。
 
 **插件 marketplace 安装批次（2026-11-12）：** 新增 `internal/pluginmarket` 签名 envelope、Ed25519 trust store、严格 JSON/HTTPS/平台/归档身份校验和流式 SHA-256 验证；CLI 新增 `plugins trust`、`plugins market`、签名 marketplace 安装与更新路径。手工 URL/path 安装保持显式责任边界，不进入自动更新。Linux amd64 目标 CLI 编译和内部包测试编译通过；Windows 执行受 Unix-only 源码与 Application Control 限制，外部 marketplace/发布验证仍待，未新增路线图勾选或发布声明。
 

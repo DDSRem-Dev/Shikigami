@@ -3,7 +3,7 @@
 **当前进度（2026-11-12）：42/42，原清单最后一项已关闭。** 当前源码的功能、平台、验收依据及未支持范围已统一到[支持声明](18-release-readiness.md#current-support)。Phase 0–5各阶段为11/11、7/7、6/6、6/6、6/6、6/6。认证生命周期和长稳/资源/性能沿用2026-11-01用户确认的关闭结论，历史实测/失败及源码范围保留；生产heap/object归因、真实Claude登录/推理及物理主机重启仍按未实测边界披露。42/42表示当前源码验收登记与声明核对完成，不表示新包或稳定版已发布；仓库公开安装入口仍为alpha.2，未包含后续master修复。
 
 <a id="evidence-first-beta-candidate"></a>
-## 首个 beta 候选修复与验证（2026-11-13—14，CI进行中）
+## 首个 beta 候选修复与验证（2026-11-13—14，发布前验收通过）
 
 基线 `f4a28dd` 的 [CI 43258490322 attempt 2](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43258490322) 已完成57/57；后续代码审计和离线真实签名复现发现新增安装/插件路径未被该矩阵充分覆盖，不能直接发布。修复范围为 bootstrap 认证与清理、发布/重跑/Homebrew 资产一致性、插件发现与启用/动作、原始 manifest 完整性、发行者/版本绑定、有界下载/解包和可恢复更新/卸载。新增真实签名 HTTPS → CLI → agent → 独立 SDK 插件进程验收，以及内置 sync/port 动作和失败报告回归。
 
@@ -25,7 +25,9 @@
 
 修复已提交推送为 `87cfefbc2316f2eef8b9262c0d872da773d41a55`。[CI 43470576055](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43470576055) 前两次为55/57：macOS arm64 unit-test-support/maintenance 均 runner_id=0、steps=[] 即 cancelled，注解为 `The job was not acquired by Runner of type hosted even after multiple attempts`；未将未调度记为通过。第三次实际调度后 unit-test-support 通过，整体56/57，仅 maintenance 的 launchd-lifecycle 退出1（282.029秒）；其公开产物没有原始失败行，不将之前 runner 容量问题当作本次执行失败的解释。
 
-发现 LaunchAgent 生命周期测试仍在卸载后断言整个 plugins_dir 不存在，与本批私有目录/第三方数据保留契约必然冲突。已改为要求 `.builtin` 发行链接移除、0700 私有目录保留，并在安装后写入用户数据标记，验证经崩溃恢复、升级、回滚和卸载后字节不变；服务、进程、锁、命令链接及原配置/状态/备份检查保留。此次仅更新过时测试契约，未修改生产行为；Darwin/arm64 `go test -c -tags=e2e`（CGO=0）交叉编译通过，不冒充原生 LaunchAgent 运行验收，实际回归仍待。
+LaunchAgent 生命周期测试仍在卸载后断言整个 plugins_dir 不存在，与本批私有目录/第三方数据保留契约必然冲突。`a5032c1` 改为要求 `.builtin` 发行链接移除、0700 私有目录保留，并写入用户数据标记，验证经崩溃恢复、升级、回滚和卸载后字节不变；服务、进程、锁、命令链接及原配置/状态/备份检查保留。仅更新过时测试契约，未修改生产行为；Darwin/arm64 交叉编译通过后，真实原生验收亦已通过，见下方完整 CI。
+
+最终固定提交 `a5032c112ffdace9b9ab6455f7280480223a8482` 的 [CI 43484685340](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43484685340) attempt 1 为 completed/success，57/57作业通过，无失败、取消或跳过。四平台单元/集成/E2E、发行工具、embedded、Homebrew、WSL2、terminal 与原生 maintenance 均完成。公开 macOS 维护证据中，`TestNativeLaunchAgentLifecycle` 为261.426秒，活动上传/下载升级分别为134.563/122.721秒，均 exit_code=0、state=passed；旧卸载断言修正后的真实流程已闭环。macOS 排队容量告警保留，本地监视器超时只重新接续观察，没有取消或重启该轮远端验收。本批发布前门槛关闭，不代表 beta 已公开发布。
 
 真实公开 marketplace、发行密钥/tag/新 Release、真实 Claude 登录/推理、物理重启和生产 heap/object 归因不由隔离夹具替代。原42/42保留历史范围；[08](08-roadmap.md)、[16](16-architecture-conformance.md)和[发布门槛](18-release-readiness.md#beta-readiness)同步记录。
 

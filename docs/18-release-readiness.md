@@ -5,7 +5,7 @@
 历史首个公开预发布 [v0.0.1-alpha.1](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.1) 已通过 tag 全自动工作流发布；固定提交为 `f0b5f83dce599c8e0d715bda5e7806a0ef6aaa72`，[Actions 40895007350](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40895007350) 已完成且成功，包含同源 CI、四目标构建、签名验签和公开发布。Release 于 `2026-10-29T15:13:47Z` 公开，`draft=false`、`prerelease=true`，共22个资产；独立下载与实际产物验证结果见[公开发行证据](15-implementation-status.md#evidence-public-alpha-release-20261029)。本文件保存发布流程、验收边界与剩余门槛；[该版本说明](./releases/v0.0.1-alpha.1.md) 随 tag 冻结。完整范围仍由 [08 路线图](./08-roadmap.md) 决定，预发布不缩小交付要求。
 
 <a id="current-support"></a>
-## 当前支持声明（2026-11-13）
+## 当前支持声明（2026-11-14）
 
 本节是当前支持范围的统一入口。路线图 Phase 0–5 的原42项已完成验收登记与支持声明核对；这不表示已发布包含当前修复的新版本或稳定版。下文按日期保留的候选、失败、平台待办仅代表当时范围，不能覆盖本节。
 
@@ -13,7 +13,7 @@
 
 | 对象 | 当前结论 | 来源与限制 |
 |---|---|---|
-| 当前源码 | 正在基于 `f4a28dd7ea7960a48eeca1b7164b761ae3bfc1d9` 修复首个 beta 候选的安装、插件与发布阻塞项 | 基线 [CI 43258490322 attempt 2](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43258490322) 为57/57；不覆盖本批新增修复，候选验证见[15](15-implementation-status.md#evidence-first-beta-candidate) |
+| 当前源码 | 本批安装、签名 marketplace、插件运行时与发行工具的发布前验收通过 | 固定提交 `a5032c112ffdace9b9ab6455f7280480223a8482` 的 [CI 43484685340](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43484685340) 为57/57；本地真实安装/旧 helper 兼容及历史失败范围见[15](15-implementation-status.md#evidence-first-beta-candidate)，不代表新公开包已发布 |
 | 认证生命周期、长稳/资源/性能 | 2026-11-01按用户确认测试通过关闭 | 既有实测证据分别见23、20；用户确认与独立实测分别记录，不补造官方URL到期现场或生产heap/object归因结果 |
 | 公开安装包 | 本仓库安装入口及Formula固定为 `v0.0.1-alpha.2`，来源 `fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2` | 本轮重新核对公开 Release：只有 alpha.1/alpha.2，alpha.2 的22个资产没有 `bootstrap.sh`；其后 master 修复不在旧包内 |
 | 下一发行版 | 目标 `v0.0.1-beta.1`，本轮不创建 tag 或 Release | 发布准备、发布执行及公开包验收分开；只有下方发布前门槛全部有证据时才可宣布候选就绪 |
@@ -61,7 +61,7 @@ GUI、插件状态槽/dashboard/设置表单渲染、WSS、文件级快照/workt
 
 - [x] bootstrap 有效真实签名成功安装、错误签名拒绝、安装失败保留退出码且清理完成；发布/重跑/Homebrew 使用同一严格资产集合。Linux 真实 systemd 安装/卸载通过；macOS 下载取消缺陷修复后，四平台 preflight 全部通过，外部 peer 仍 pending。
 - [x] 真实 CLI/agent/SDK 插件完成签名安装、显式启用、manifest 命令、更新/失败回滚、宿主重启恢复和卸载；降级、身份/发行者替换与不可信下载拒绝，不破坏当前可用版本。接受前 schema 拒绝和丢失响应恢复均已回归。
-- [ ] 固定候选源码的本地相关回归、架构依赖检查、发行工具检查及完整远端 CI 成功；原生 Linux/macOS 与 WSL2 结果分别可追溯。
+- [x] 固定候选源码的本地相关回归、架构依赖检查、发行工具检查及完整远端 CI 成功；`a5032c1` 的 CI 43484685340 为57/57，原生 Linux/macOS 与 WSL2 结果可追溯，macOS 生命周期及活动上传/下载升级全部通过。
 
 **发布时（需要实际 tag/Release，未执行不能预先勾选）：**
 
