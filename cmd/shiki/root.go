@@ -54,6 +54,7 @@ func newRoot(input *os.File, output, errorOutput io.Writer) *cobra.Command {
 	root.PersistentFlags().DurationVar(&a.timeout, "timeout", 5*time.Second, "Timeout for each short IPC call")
 	root.AddCommand(a.agentCommands(), a.serverCommands(), a.connectCommand(), a.projectCommands(), a.sessionCommands(), a.attachCommand(), a.doctorCommand(), a.pluginCommands(), a.nodeCommands(), a.syncCommands(), a.portCommands(), a.statsCommand(), a.logsCommand(), a.dashboardCommand())
 	root.AddCommand(a.regionCommands(), a.browserCommands())
+	root.AddCommand(a.setupCommand())
 	initialize, templates := a.templateCommands()
 	root.AddCommand(initialize, templates)
 	root.AddCommand(a.configCommands())

@@ -78,6 +78,14 @@ set -eu
 trap 'printf cancelled > "$SHIKI_TEST_CANCELLED"; exit 73' TERM
 printf '%s\\n' "$$" > "$SHIKI_TEST_PID"
 printf '%s\\0' "$@" > "$SHIKI_TEST_ARGS"
+if [[ "$1" == quickstart ]]; then
+  for option in "$@"; do
+    case "$option" in
+      --archive=*|--signature=*|--public-key=*)
+        test -s "${option#*=}" || exit 86 ;;
+    esac
+  done
+fi
 if [[ "${SHIKI_TEST_WAIT:-0}" == 1 ]]; then
   while :; do sleep 0.1; done
 fi
@@ -252,6 +260,58 @@ exit "${SHIKI_TEST_STATUS:-0}"
             with self.subTest(status=status):
                 self.finish(self.start(SHIKI_TEST_STATUS=str(status)), status)
                 self.assert_installer_arguments()
+
+    def start_quickstart(self, **environment):
+        # script supplies a real controlling terminal, including when the caller
+        # pipes bootstrap into bash. No prerequisite commands or real services run.
+        self.script.write_text(self.source)
+        command = ["bash", str(self.script), "--quickstart", "--role=client",
+                   "--version=" + VERSION, "--components=core"]
+        if platform.system() == "Darwin":
+            terminal = ["/usr/bin/script", "-q", "/dev/null", *command]
+        else:
+            terminal = ["script", "-q", "-e", "-c", shlex.join(command), "/dev/null"]
+        process = subprocess.Popen(terminal, env=dict(self.environment, **environment), stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.addCleanup(self.stop_process, process)
+        return process
+
+    def test_quickstart_keeps_authenticated_inputs_until_helper_finishes(self):
+        process = self.start_quickstart()
+        self.finish(process, 0)
+        arguments = self.args_file.read_bytes().decode().rstrip("\0").split("\0")
+        self.assertEqual(arguments[0], "quickstart")
+        self.assertIn("--components=core", arguments)
+        self.assertIn("--checksums-sha256=" + self.pin, arguments)
+        for flag in ("--archive=", "--signature=", "--public-key="):
+            path = Path(next(value[len(flag):] for value in arguments if value.startswith(flag)))
+            self.assertTrue(path.is_relative_to(self.workspaces))
+            self.assertFalse(path.exists(), "authenticated temporary input was not cleaned")
+
+    def test_quickstart_old_release_stops_at_help_without_starting_installation(self):
+        stdout, stderr = self.finish(self.start_quickstart(SHIKI_TEST_STATUS="2"), 1)
+        self.assertIn("does not provide guided installation", stdout + stderr)
+        arguments = self.args_file.read_bytes().decode().rstrip("\0").split("\0")
+        self.assertEqual(arguments, ["quickstart", "--help"])
+
+    def test_quickstart_rejects_automation_or_custom_layout_before_download(self):
+        self.script.write_text(self.source)
+        for extra in (["--non-interactive"], ["--stage-only=true"], ["--prefix=/tmp/custom"]):
+            result = subprocess.run(["bash", str(self.script), "--quickstart", "--role=client", *extra],
+                                    env=self.environment, capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertFalse(self.args_file.exists())
+            self.assertEqual(list(self.workspaces.iterdir()), [])
+
+    def test_quickstart_without_terminal_does_not_install_prerequisites(self):
+        self.script.write_text(self.source)
+        result = subprocess.run(["bash", str(self.script), "--quickstart", "--role=client"],
+                                env=self.environment, stdin=subprocess.DEVNULL,
+                                capture_output=True, text=True, start_new_session=True, timeout=10)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("needs a terminal", result.stderr)
+        self.assertFalse(self.args_file.exists())
+        self.assertEqual(list(self.workspaces.iterdir()), [])
 
     def test_signed_additive_plugin_payloads_and_partial_groups(self):
         members = dict(self.members)

@@ -7,17 +7,18 @@
 # pin the explicit tag rather than GitHub's stable-only latest/download alias.
 #
 # Server (daemon) — from the reviewed checkout, run on the VPS:
-#   sudo bash scripts/bootstrap.sh --version=v0.0.1-alpha.2 --user=rem
+#   sudo bash scripts/bootstrap.sh --quickstart
 #
 # Client (agent + CLI) — run as your own ordinary user:
-#   bash scripts/bootstrap.sh --version=v0.0.1-alpha.2 --role=client
+#   bash scripts/bootstrap.sh --quickstart --role=client
 #
 # Non-interactive VPS (CI / automation):
-#   sudo bash scripts/bootstrap.sh --version=v0.0.1-alpha.2 \
+#   sudo bash scripts/bootstrap.sh --version=VERSION \
 #       --user=rem --tailscale-key-file=/run/secrets/ts-key \
 #       --non-interactive --token-output=/run/secrets/shiki-token
 #
 # Options:
+#   --quickstart                 guided dependencies, services, login and plugins (new releases only)
 #   --role=daemon|client          default: daemon when running as root, else client
 #   --user=NAME                   required for daemon; ordinary account to run the service
 #   --version=vX.Y.Z              pin a specific release; default: latest published release
@@ -56,6 +57,7 @@ shiki_key_file=""
 shiki_token_output=""
 shiki_noninteractive=0
 shiki_yes=0
+shiki_quickstart=0
 shiki_pass_through=()
 
 while [[ $# -gt 0 ]]; do
@@ -75,6 +77,7 @@ while [[ $# -gt 0 ]]; do
     --token-output=*) shiki_token_output="${1#*=}" ;;
     --token-output)   shift; shiki_token_output="$1" ;;
     --yes|-y)       shiki_yes=1 ;;
+    --quickstart)   shiki_quickstart=1 ;;
     # pass unknown flags through to shiki-install for forward compat
     --*=*|--*) shiki_pass_through+=("$1") ;;
     *) echo "bootstrap: unknown argument '$1'" >&2; exit 2 ;;
@@ -95,7 +98,11 @@ fi
 [[ "$shiki_role" == "daemon" || "$shiki_role" == "client" ]] || {
   echo "bootstrap: --role must be daemon or client" >&2; exit 2
 }
-if [[ "$shiki_role" == "daemon" && -z "$shiki_user" ]]; then
+if [[ "$shiki_quickstart" -eq 1 && "$shiki_noninteractive" -eq 1 ]]; then
+  echo "bootstrap: --quickstart requires an interactive terminal; use the advanced install flags for automation." >&2
+  exit 2
+fi
+if [[ "$shiki_role" == "daemon" && -z "$shiki_user" && "$shiki_quickstart" -eq 0 ]]; then
   echo "bootstrap: --user is required for daemon installation" >&2
   echo "  Example: sudo bash -s -- --user=rem" >&2
   exit 2
@@ -120,6 +127,23 @@ case "$(uname -m)" in
   aarch64|arm64) shiki_arch="arm64" ;;
   *) echo "bootstrap: unsupported architecture '$(uname -m)'" >&2; exit 1 ;;
 esac
+
+if [[ "$shiki_quickstart" -eq 1 ]]; then
+  if [[ "$shiki_role" == "daemon" && ( "$shiki_os" != "linux" || "$(id -u)" -ne 0 ) ]]; then
+    echo "bootstrap: daemon quickstart requires Linux; run it with sudo. The daemon itself runs as an ordinary user." >&2
+    exit 2
+  fi
+  if [[ -n "$shiki_key_file" || -n "$shiki_token_output" ]]; then
+    echo "bootstrap: quickstart guides authentication in the terminal; key/token file flags belong to advanced installation." >&2
+    exit 2
+  fi
+  for _option in "${shiki_pass_through[@]+"${shiki_pass_through[@]}"}"; do
+    case "$_option" in
+      --components=all|--components=core|--resume) ;;
+      *) echo "bootstrap: unsupported quickstart option '$_option'; use advanced installation for custom layouts." >&2; exit 2 ;;
+    esac
+  done
+fi
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -324,11 +348,8 @@ shiki_safe_copy() {
   ' "$1" "$2" "$3"
 }
 
-shiki_need_tools() {
+shiki_find_openssl() {
   local _tool _candidate _version
-  for _tool in curl tar gzip base64; do
-    command -v "$_tool" >/dev/null 2>&1 || shiki_die "$_tool is required."
-  done
   # macOS /usr/bin/openssl is normally LibreSSL, whose pkeyutl cannot verify
   # Ed25519 raw messages. Prefer an OpenSSL 3+ CLI, including Homebrew's keg.
   shiki_openssl=""
@@ -341,8 +362,66 @@ shiki_need_tools() {
       break
     fi
   done
+}
+
+shiki_need_tools() {
+  local _tool
+  for _tool in curl tar gzip base64; do
+    command -v "$_tool" >/dev/null 2>&1 || shiki_die "$_tool is required."
+  done
+  shiki_find_openssl
   [[ -n "$shiki_openssl" ]] ||
     shiki_die "OpenSSL 3+ with Ed25519 pkeyutl -rawin support is required (on macOS: brew install openssl@3; system LibreSSL is not sufficient)."
+}
+
+# Only the explicitly requested interactive quickstart can install verifier
+# prerequisites. Application/system support is planned by the signed helper.
+shiki_confirm_tools() {
+  local _answer
+  printf '[shiki] %s Continue? [y/N] ' "$1" >/dev/tty
+  IFS= read -r _answer </dev/tty || shiki_die "Confirmation cancelled."
+  case "$_answer" in y|Y|yes|YES) ;; *) shiki_die "No changes approved." ;; esac
+}
+
+shiki_quickstart_tools() {
+  local _missing=0 _tool _brew="" _brew_script
+  # Fail before downloads or package mutations when there is no controlling TTY.
+  ( : </dev/tty >/dev/tty ) 2>/dev/null ||
+    shiki_die "Quickstart needs a terminal. Run the command in Terminal or an interactive SSH session."
+  for _tool in curl tar gzip base64; do
+    command -v "$_tool" >/dev/null 2>&1 || _missing=1
+  done
+  [[ -x /usr/bin/perl ]] || _missing=1
+  shiki_find_openssl
+  [[ -n "$shiki_openssl" ]] || _missing=1
+  [[ "$_missing" -eq 1 ]] || return 0
+  if [[ "$shiki_os" == "linux" && "$(id -u)" -eq 0 && -x /usr/bin/apt-get ]]; then
+    shiki_confirm_tools "Install download/signature prerequisites from your configured APT repositories (ca-certificates, curl, openssl, perl, tar, gzip, coreutils)."
+    shiki_run /usr/bin/apt-get -o APT::Update::Error-Mode=any update
+    shiki_run /usr/bin/apt-get install --no-install-recommends --yes ca-certificates curl openssl perl tar gzip coreutils
+  elif [[ "$shiki_os" == "darwin" ]]; then
+    # The system's curl/Perl are needed to bound the official Homebrew download.
+    command -v curl >/dev/null 2>&1 && [[ -x /usr/bin/perl ]] ||
+      shiki_die "The macOS system curl and /usr/bin/perl are required."
+    for _tool in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+      if [[ -x "$_tool" ]]; then _brew="$_tool"; break; fi
+    done
+    if [[ -z "$_brew" ]]; then
+      shiki_confirm_tools "Install Homebrew using https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh, then OpenSSL 3 for release signature verification. Homebrew may request administrator access and Command Line Tools."
+      _brew_script="$shiki_tmp/homebrew-install.sh"
+      shiki_download https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh "$_brew_script" 1048576
+      shiki_run /bin/bash "$_brew_script" </dev/tty
+      for _tool in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+        if [[ -x "$_tool" ]]; then _brew="$_tool"; break; fi
+      done
+      [[ -n "$_brew" ]] || shiki_die "Homebrew did not finish. Resolve its reported issue and rerun the same quickstart command."
+    else
+      shiki_confirm_tools "Install OpenSSL 3 with Homebrew for release signature verification."
+    fi
+    shiki_run "$_brew" install openssl@3 </dev/tty
+  else
+    shiki_die "Verifier prerequisites are missing. Use an administrator for Debian/Ubuntu daemon setup, or install OpenSSL 3, curl, Perl, tar and gzip with your package manager."
+  fi
 }
 
 shiki_stop_child() {
@@ -377,8 +456,6 @@ shiki_cancel() {
 # ---------------------------------------------------------------------------
 # Main install flow
 # ---------------------------------------------------------------------------
-shiki_need_perl
-shiki_need_tools
 shiki_tmp=""
 shiki_child=""
 trap shiki_cleanup EXIT
@@ -386,8 +463,22 @@ trap 'shiki_cancel 129' HUP
 trap 'shiki_cancel 130' INT
 trap 'shiki_cancel 143' TERM
 umask 077
-shiki_tmp="$(mktemp -d /tmp/shiki-bootstrap.XXXXXXXX)"
+if [[ "$shiki_quickstart" -eq 1 && "$shiki_role" == "daemon" && "$(id -u)" -eq 0 ]]; then
+  # Extension trust keys require protected ancestors, including the temporary
+  # directory's parent. Never weaken that check for sticky /tmp.
+  for _parent in / /var /var/lib; do
+    [[ ! -L "$_parent" && -d "$_parent" ]] || shiki_die "A protected /var/lib directory is required."
+    [[ "$(stat -c '%u:%a' "$_parent")" =~ ^0:(700|750|755)$ ]] ||
+      shiki_die "/var/lib and its ancestors must be root-owned and not writable by other users."
+  done
+  shiki_tmp="$(mktemp -d /var/lib/shiki-bootstrap.XXXXXXXX)"
+else
+  shiki_tmp="$(mktemp -d /tmp/shiki-bootstrap.XXXXXXXX)"
+fi
 chmod 700 "$shiki_tmp"
+if [[ "$shiki_quickstart" -eq 1 ]]; then shiki_quickstart_tools; fi
+shiki_need_perl
+shiki_need_tools
 
 shiki_say "Detecting platform: ${shiki_os}/${shiki_arch}"
 shiki_say "Role: ${shiki_role}"
@@ -396,7 +487,7 @@ shiki_resolve_version
 shiki_say "Version: ${shiki_version}"
 
 # Confirmation prompt
-if [[ "$shiki_yes" -eq 0 && "$shiki_noninteractive" -eq 0 && -t 0 ]]; then
+if [[ "$shiki_quickstart" -eq 0 && "$shiki_yes" -eq 0 && "$shiki_noninteractive" -eq 0 && -t 0 ]]; then
   if [[ "$shiki_role" == "daemon" ]]; then
     printf '\033[1;34m[shiki]\033[0m About to install Shikigami daemon %s for user %s. Continue? [y/N] ' \
       "$shiki_version" "$shiki_user"
@@ -442,7 +533,7 @@ shiki_ok "Ed25519 signature verified. Key fingerprint: e21f6dd671ea5042c43c492b7
 shiki_say "Extracting bundle..."
 shiki_tar="${shiki_tmp}/bundle.tar"
 shiki_capture "$shiki_tar" "$SHIKI_MAX_BUNDLE" gzip -dc "$shiki_archive"
-rm -f -- "$shiki_archive"
+if [[ "$shiki_quickstart" -eq 0 ]]; then rm -f -- "$shiki_archive"; fi
 # Also bound inode growth and reject paths outside the release's fixed payload
 # set before extracting. A single legacy top-level directory is still accepted.
 shiki_members="${shiki_tmp}/members"
@@ -524,6 +615,12 @@ shiki_install_args=(
   "--role=${shiki_role}"
   "--version=${shiki_version}"
 )
+if [[ "$shiki_quickstart" -eq 1 ]]; then
+  shiki_install_args[0]="quickstart"
+  shiki_trusted_key="$shiki_tmp/release-signing.pub"
+  printf '%s\n' "$SHIKI_EMBEDDED_PUB" >"$shiki_trusted_key"
+  shiki_install_args+=("--archive=$shiki_archive" "--signature=$shiki_sig" "--public-key=$shiki_trusted_key")
+fi
 [[ -n "$shiki_user"         ]] && shiki_install_args+=("--user=${shiki_user}")
 [[ -n "$shiki_key_file"     ]] && shiki_install_args+=("--tailscale-key-file=${shiki_key_file}")
 [[ -n "$shiki_token_output" ]] && shiki_install_args+=("--token-output=${shiki_token_output}")
@@ -536,6 +633,13 @@ shiki_install_args+=("${shiki_pass_through[@]+"${shiki_pass_through[@]}"}")
 shiki_installer_copy="${shiki_tmp}/shiki-install"
 shiki_safe_copy "$shiki_installer" "$shiki_installer_copy" "$SHIKI_MAX_ARCHIVE"
 chmod 700 "$shiki_installer_copy"
+
+if [[ "$shiki_quickstart" -eq 1 ]]; then
+  if ! shiki_capture "$shiki_tmp/quickstart-help" "$SHIKI_MAX_META" \
+      "$shiki_installer_copy" quickstart --help; then
+    shiki_die "Release $shiki_version does not provide guided installation. Choose a release containing quickstart; alpha.3 and older need the advanced installer. No application installation was started."
+  fi
+fi
 
 shiki_say "Running installer..."
 shiki_run "$shiki_installer_copy" "${shiki_install_args[@]}"

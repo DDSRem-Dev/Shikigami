@@ -1,5 +1,7 @@
 # 自动化安装与运维契约
 
+用户于 2026-11-16 要求首次部署不再手工串联底层步骤。新 `bootstrap.sh --quickstart` / `shiki-install quickstart` / `shiki setup` 组合入口及恢复契约见 [28 一键安装](28-quickstart.md)。以下验签、服务、身份、授权和就绪要求继续作为基线；公开 alpha.3 尚不包含该新入口。
+
 **本文保留安装流程契约。仓库已实现固定版本bundle校验、事务安装/回滚、服务渲染、异步登录引导与就绪诊断。当前公开预发布v0.0.1-alpha.3已由tag自动构建、签名、发布并更新Homebrew Formula，公开验签及Linux amd64首次/重复暂存证据见[15](15-implementation-status.md#evidence-public-alpha3-release-20261115)。下文既有systemd/LaunchAgent、五平台产品及升级/恢复验收保持各自历史源码与环境范围，不冒充全部在新公开包重跑。真实Claude登录/推理不纳入原Phase0–5交付验收且未实测，见[验收范围](#claude-acceptance-scope-20261031)；物理Mac/VPS重启仍未实测，见[替代验收](#no-host-reboot-acceptance-20261031)。**
 
 `scripts/install.sh`、`install-client.sh`、`uninstall.sh`及短时运维helper `shiki-install`已存在。[当前公开Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.3)来自固定源`d9056c3ffed86b2bbac9cd5e89c433eaa3093cb2`及成功运行`43727419792`，四目标独立验签见[发行证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)。安装接受本地bundle、固定版本和独立可信checksum pin；`scripts/release-trust.go fetch`可从显式HTTPS地址使用独立可信公钥认证归档，并生成私有副本/pin/receipt，但不建立公钥信任。GitHub下载会重定向，而`fetch`拒绝重定向；可用`gh release download v0.0.1-alpha.3 --repo DDSRem-Dev/Shikigami`取回资产，再由可信verifier和预置信任公钥离线验签。解包、安装和服务激活仍须显式执行；预发布成功不降低完整就绪与运维要求。

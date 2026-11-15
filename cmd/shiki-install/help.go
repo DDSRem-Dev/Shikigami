@@ -12,6 +12,7 @@ const installerHelp = `Usage: shiki-install <command> [flags]
 Short-lived local installation and maintenance helper.
 
 Commands:
+  quickstart Guided installation, dependency setup and connection onboarding
   install    Verify and install a fixed local bundle, or stage it without activation
   rollback   Select the previous compatible artifact; retain current data and credentials
   uninstall  Remove managed activation and links; retain configuration, state and projects
@@ -30,7 +31,7 @@ Local checksums are not publisher signatures. External peer acceptance remains s
 
 func publicOperation(operation string) bool {
 	switch operation {
-	case "install", "rollback", "uninstall", "status", "probe", "setup", "maintenance", "version":
+	case "install", "quickstart", "rollback", "uninstall", "status", "probe", "setup", "maintenance", "version":
 		return true
 	default:
 		return false

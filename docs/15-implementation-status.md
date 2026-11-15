@@ -1,5 +1,23 @@
 # 实施与验收记录
 
+**alpha.4 发布准备（2026-11-16）：** 用户已授权提交、推送、修复全部 CI 并发布 `v0.0.1-alpha.4`。本批新增固定版本的一键安装命令与[发行说明](releases/v0.0.1-alpha.4.md)；完整远端 CI、签名发行及公开资产验证待执行，不提前计为通过。沿用下述目录/SDK、RPC/授权、状态事务、进程、文件网络、CLI/安装和证据七类复核结论；实际 VPS/Mac 首装、账号授权与物理重启仍是独立门槛。
+
+## 一键安装增量（2026-11-16，本地实现与隔离回归完成）
+
+用户要求与新增基线见 [28](28-quickstart.md)。新增 `bootstrap.sh --quickstart`、受信 `shiki-install quickstart`、`shiki setup`；不修改已发布 alpha.3，不增加 RPC、插件业务或第三方依赖。
+
+已完成：下载/验签工具引导、签名归档自动传给系统支持安装、普通用户/Claude 官方安装编排、私有终端登录和连接凭据、客户端双端插件准入/端口完整替换确认/持久浏览器启动查看器、重复运行保留配置与失败状态。客户端不把远端仅检查 executable 的 HealthCheck 当作 Claude 账号已登录。
+
+本地证据：bootstrap 15 项 HTTPS/真实签名夹具通过（包括向导输入保留、旧版本拒绝、无 TTY/自动化拒绝及清理）；客户端 13 项专项 race 通过（含真实 UDS/HTTP2 CLI 分派、继承 installer 登录与并发 AlreadyExists）；客户端/原安装事务/架构整包 race 通过（43.434s/11.250s/1.375s）；发行/发布/Homebrew 工具 28 项通过。shellcheck warning 级及 Bash 语法通过；全级 shellcheck 原有 SC2015/SC2016 提示保留，未冒称无提示。
+
+最终复核已修：同源支持经签名来源、产物 hash、凭据摘要、策略、授权和服务文件检查后跳过重复 setup，保留运行 Chrome；普通 UID 使用真实 auth.Manager 验证 Token，过期/撤销时向导内确认后创建确定性后继文件，重试复用；部分 enrollment 读取原口令继续、绝不重置已存在 store，未提交密文或外部冲突仍保留人工检查；实际系统计划打印后再次确认；PATH 不覆盖 dotfiles 链接，失败不阻塞连接；client Plan 默认值与底层 receipt 一致；两端接续有效登录及并发 AlreadyExists。
+
+最终安装专项 13 项顶层 race 通过（cmd 3.760s / install 1.219s），包含真实前台 PTY、系统计划拒绝、签名/撤销校验、登录恢复/取消、默认配置重入和私有文件保护；新增后整包 race 再通过（cmd/shiki-install 3.801s，internal/install 10.410s），vet 通过。初期真实 PTY 夹具因匹配输出后停止 drain 导致退出等待，已改持续 drain；Token 夹具的配置父目录已修为0700；失败轮不追认为通过。
+
+独立 Linux arm64 容器使用 `golang:1.26.11-bookworm`，镜像摘要 `sha256:dc40a13b61304647ed7e5d581d246b86413dfc29d63c6d018310feb93cd98fc0`，2 CPU/3 GiB、network none、普通 checker UID1000、只读冻结源码/module cache。20 项顶层 quickstart/help/installer 检查全部通过、零 skip（cmd 2.074s，install 4.473s）；包含 Linux build-tag 实现编译，不表示实际 APT/systemd/Chrome 全向导。创建夹具用户时容器报告 home chown 警告，测试实际成功，不称无警告完整用户安装。证据 `/tmp/shiki-quickstart-verification-20261116/`，1014文件源码 manifest SHA-256 为 `27de87699e672be9574de82eef3a28d23be2629cb28afe892048b390b6321a70`；完成后核对 Go/scripts 与冻结副本一致；Linux amd64 两个入口交叉构建通过，不替代 amd64 运行。测试容器已自动移除，临时拉取的专用 Go 镜像也按精确标签回收，不操作已有用户容器。
+
+真实 APT/官方 Claude 安装、Linux systemd/Mac LaunchAgent 完整新向导、真实账号、公网、物理重启和包含新入口的公开发行仍未执行。公开 alpha.3 不含本功能，未新建 tag/发布资产。
+
 **原清单进度（2026-11-12）：42/42，原清单最后一项已关闭。** 功能、平台、验收依据及未支持范围统一见[支持声明](18-release-readiness.md#current-support)。Phase 0–5各阶段为11/11、7/7、6/6、6/6、6/6、6/6；认证生命周期和长稳/资源/性能沿用2026-11-01用户确认，历史实测/失败及源码范围保留。生产heap/object归因、真实Claude登录/推理及物理主机重启仍未实测。2026-11-15已发布alpha.3，新增地区/浏览器及发行证据单列如下，不扩大原42项或宣称稳定版。
 
 <a id="evidence-public-alpha3-release-20261115"></a>

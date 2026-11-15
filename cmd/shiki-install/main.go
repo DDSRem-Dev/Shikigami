@@ -45,6 +45,12 @@ func execute(ctx context.Context, args []string, out, errOut io.Writer) (int, er
 		args = []string{args[1], "--help"}
 	}
 	operation := args[0]
+	if operation == "quickstart" {
+		return executeQuickstart(ctx, args[1:], out, errOut)
+	}
+	if operation == "_quickstart-token-check" {
+		return quickstartTokenCheck(args[1:], out)
+	}
 	if operation == "--help" || operation == "-h" {
 		if len(args) != 1 {
 			return 2, errors.New("unexpected arguments after help")

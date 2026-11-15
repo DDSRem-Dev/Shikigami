@@ -1,5 +1,7 @@
 # Shikigami 设计文档导航
 
+**一键体验迭代（2026-11-16）：** 用户要求首次部署收敛为 VPS/Mac 各一条命令，新增契约见 [28 一键安装与首次使用](28-quickstart.md)。此入口属于 alpha.3 之后的源码增量；公开 alpha.3 不含向导，发布与真实环境验收单独记录。
+
 **状态：当前源码 Phase 0–5 验收清单已闭环（42/42）。** [当前支持声明](18-release-readiness.md#current-support)统一功能、平台、证据和未支持范围；[08 路线图](08-roadmap.md)、[15 实施记录](15-implementation-status.md)与[16 架构复核](16-architecture-conformance.md)记录关闭依据。认证生命周期和长稳、资源与性能按用户确认通过；真实 Claude 登录/推理、物理主机重启及生产 heap/object 归因仍保留未实测边界。当前公开安装入口为 v0.0.1-alpha.3，不是beta或稳定版。00–14保留设计契约，不能仅凭示例认定功能已通过所有平台验收。
 
 alpha.3固定源CI57/57通过，自动发行及Homebrew更新完成；23公开资产、四目标签名/成员/来源和Linux amd64首次/重复暂存已独立核验，见[公开证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)。历史[beta候选证据](15-implementation-status.md#evidence-first-beta-candidate)及[beta发布门槛](18-release-readiness.md#beta-readiness)仍保留，不表示发布了beta。

@@ -8,6 +8,8 @@ alpha.3 固定源码的发布前 CI 为57/57；自动构建、签名、公开发
 
 ## 安装
 
+本仓库新增下一版的一键安装入口：VPS 使用 `sudo bash scripts/bootstrap.sh --quickstart`，Mac 使用 `bash scripts/bootstrap.sh --quickstart --role=client`，由向导处理依赖、服务、登录和插件；已有客户端使用 `shiki setup`。**这些入口需要包含向导的新发行包，当前公开 alpha.3 不支持。** 行为与验证范围见 [一键安装](docs/28-quickstart.md)，当前公开版安装如下。
+
 当前公开预发布为 [v0.0.1-alpha.3](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.3)。通过 Homebrew 安装：
 
 ```bash
@@ -27,7 +29,7 @@ make test
 make lint
 ```
 
-`make build` 输出 `bin/shiki`、`bin/shiki-agent`、`bin/shiki-daemon`、短时运维 helper `bin/shiki-install`，以及两个插件和对应 manifest。这是开发构建；固定版本 bundle 的打包、验签及安装工具见 [工具说明](docs/18-release-readiness.md)，公开归档见 [GitHub Releases](https://github.com/DDSRem-Dev/Shikigami/releases)。`make test` 包含 race detector 和本机 tmux 测试；缺少 tmux 时对应测试会报告跳过，不能据此声称完成终端验证。
+`make build` 输出 `bin/shiki`、`bin/shiki-agent`、`bin/shiki-daemon`、短时运维 helper `bin/shiki-install`，以及当前平台的内置插件和对应 manifest（macOS：sync/port/browser；Linux 另含 region 和两种系统支持程序）。这是开发构建；固定版本 bundle 的打包、验签及安装工具见 [工具说明](docs/18-release-readiness.md)，公开归档见 [GitHub Releases](https://github.com/DDSRem-Dev/Shikigami/releases)。`make test` 包含 race detector 和本机 tmux 测试；缺少 tmux 时对应测试会报告跳过，不能据此声称完成终端验证。
 
 重新生成协议：
 
@@ -47,7 +49,7 @@ make generate-proto
 - `internal/server/`：项目/会话事务、认证 RPC、tmux/PTY、多观察者重绘及控制权。
 - `pkg/config/`、`configs/`：严格 YAML 配置、迁移、条件保存与示例。
 - `pkg/plugin/`、`internal/plugin/`：双协议插件 SDK 与宿主生命周期、路由。
-- `plugins/sync/`、`plugins/port/`：独立插件入口和业务实现，分别以 `--side=client|server` 启动。
+- `plugins/sync/`、`plugins/port/`：双端独立插件入口和业务实现；`plugins/region/` 提供 Linux 地区插件与受限 helper，`plugins/browser/` 提供远程浏览器及本地查看器，Linux runtime 由独立用户服务持有。
 - `internal/node/`：内嵌 tsnet 与本地 NodeControl；真实本地控制面及官方网络认证生命周期测试已通过，平台和资源边界见文档。
 
 设计文档入口：[docs/README.md](docs/README.md)。代码仓库：[DDSRem-Dev/Shikigami](https://github.com/DDSRem-Dev/Shikigami)。公开版本、自动发布流程与安装方式见 [发布准备](docs/18-release-readiness.md)。
