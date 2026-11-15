@@ -23,11 +23,25 @@ type Manager struct {
 	base, user string
 	baseAlias  string
 	baseRoot   *os.Root
+	protected  []string
 }
 
-func New(store *storage.Store, base, user string) (*Manager, error) {
+// Protected roots come from daemon configuration, never project metadata or
+// user-editable sync ignore rules. Ancestors are also excluded from projects.
+func New(store *storage.Store, base, user string, protectedRoots ...string) (*Manager, error) {
 	if store == nil || user == "" || !filepath.IsAbs(base) {
 		return nil, errors.New("project store, ordinary user and absolute base directory are required")
+	}
+	protected := make([]string, 0, len(protectedRoots)*2)
+	for _, path := range protectedRoots {
+		canonical, err := canonicalPath(path)
+		if err != nil {
+			return nil, err
+		}
+		protected = append(protected, canonical)
+		if alias := filepath.Clean(path); alias != canonical {
+			protected = append(protected, alias)
+		}
 	}
 	if err := os.MkdirAll(base, 0700); err != nil {
 		return nil, err
@@ -36,7 +50,7 @@ func New(store *storage.Store, base, user string) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Manager{store: store, base: canonical, baseAlias: filepath.Clean(base), baseRoot: root, user: user}, nil
+	return &Manager{store: store, base: canonical, baseAlias: filepath.Clean(base), baseRoot: root, user: user, protected: protected}, nil
 }
 
 // Close releases the pinned project-base handle; the shared state store remains
@@ -160,6 +174,9 @@ func (m *Manager) Create(ctx context.Context, request *pb.CreateProjectRequest) 
 	if outcome != nil {
 		return nil, outcome
 	}
+	if err = m.admitPath(result.Path); err != nil {
+		return nil, err
+	}
 	// The result map must not alias a caller-owned request or store snapshot.
 	data, err := json.Marshal(result)
 	if err != nil {
@@ -189,6 +206,9 @@ func (m *Manager) Get(ctx context.Context, request *pb.GetProjectRequest) (*pb.P
 	} else if err != nil {
 		return nil, storeError(err)
 	}
+	if err = m.admitPath(project.Path); err != nil {
+		return nil, err
+	}
 	if err = deriveSessions(state, project); err != nil {
 		return nil, storeError(err)
 	}
@@ -211,6 +231,9 @@ func (m *Manager) List(ctx context.Context, request *pb.ListProjectsRequest) (*p
 		project := new(pb.Project)
 		if err = state.Get(storage.ProjectsBucket, id, project); err != nil {
 			return nil, storeError(err)
+		}
+		if err = m.admitPath(project.Path); err != nil {
+			return nil, err
 		}
 		if err = deriveSessions(state, project); err != nil {
 			return nil, storeError(err)

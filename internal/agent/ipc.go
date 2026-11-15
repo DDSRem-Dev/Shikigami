@@ -13,6 +13,7 @@ import (
 	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
 	agentpb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/agent"
 	agentrpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/agent/agentconnect"
+	erpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/extensions/extensionsconnect"
 	rpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/protocolconnect"
 	"github.com/DDSRem-Dev/Shikigami/pkg/protocol/version"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -62,7 +63,11 @@ func (s *Service) SettingsRegistry() *host.SettingsRegistry {
 	return s.settingsRegistry.Load()
 }
 func (s *Service) Handshake(ctx context.Context, in *agentpb.HandshakeRequest) (*agentpb.HandshakeResponse, error) {
-	agreement, err := version.Negotiate(&pb.ProtocolOffer{Major: 1, Capabilities: []string{"agent.control.v1", "agent.events.v1", "agent.startup.v1"}}, in.GetProtocol(), s.build)
+	capabilities := []string{"agent.control.v1", "agent.events.v1", "agent.startup.v1", "region.host.v1", "browser.remote.v1"}
+	if manager := s.plugins.Load(); manager != nil && manager.ReadyInstanceID("browser") != "" {
+		capabilities = append(capabilities, "browser.viewer.v1")
+	}
+	agreement, err := version.Negotiate(&pb.ProtocolOffer{Major: 1, Capabilities: capabilities}, in.GetProtocol(), s.build)
 	if err != nil {
 		return nil, err
 	}
@@ -111,6 +116,7 @@ func (s *Service) RPCServer() *connect.Server {
 	server := connect.NewServer(s.Interceptor())
 	agentrpc.RegisterAgentHandler(server, s)
 	agentrpc.RegisterAgentActionsHandler(server, s)
+	erpc.RegisterBrowserLocalServiceHandler(server, s)
 	s.registerProxy(server)
 	server.SetUnknownHandler(func(context.Context, connect.Spec, connect.ServerStream) error {
 		return connect.NewError(connect.CodePermissionDenied, "IPC_METHOD_FORBIDDEN")
@@ -211,7 +217,18 @@ func (s *Service) Interceptor() connect.ServerInterceptor {
 			stopCancellation := bindFrontendCancellation(boundContext, output)
 			defer stopCancellation()
 			ctx = context.WithValue(ctx, identityKey{}, Identity{FrontendID: frontend, ServerID: serverID})
-			if strings.HasPrefix(spec.Procedure, "/"+rpc.ShikiDaemonName+"/") {
+			extensionCapability := host.ExtensionCapability(spec.Procedure)
+			localViewer := strings.HasPrefix(spec.Procedure, "/"+erpc.BrowserLocalServiceName+"/")
+			if extensionCapability != "" || localViewer {
+				capability := extensionCapability
+				if localViewer {
+					capability = "browser.viewer.v1"
+				}
+				if !s.Registry.hasCapability(frontend, capability) {
+					return connect.NewError(connect.CodeFailedPrecondition, "EXTENSION_CAPABILITY_REQUIRED")
+				}
+			}
+			if strings.HasPrefix(spec.Procedure, "/"+rpc.ShikiDaemonName+"/") || extensionCapability != "" {
 				if !ProxyAllowed(spec.Procedure) {
 					return connect.NewError(connect.CodePermissionDenied, "PROXY_METHOD_FORBIDDEN")
 				}
@@ -232,10 +249,17 @@ func (s *Service) Interceptor() connect.ServerInterceptor {
 					return connect.NewError(connect.CodeUnavailable, "SERVER_UNAVAILABLE")
 				}
 				ctx = context.WithValue(ctx, remoteClientKey{}, client)
+				if extensionCapability != "" {
+					stream = &extensionRouteStream{ServerStream: stream, serverID: serverID}
+				}
 			} else if !strings.HasPrefix(spec.Procedure, "/"+agentrpc.AgentName+"/") &&
+				!localViewer &&
 				!strings.HasPrefix(spec.Procedure, "/"+agentrpc.AgentActionsName+"/") {
 				return connect.NewError(connect.CodePermissionDenied, "IPC_METHOD_FORBIDDEN")
 			} else if serverID != "" && !strings.HasPrefix(spec.Procedure, "/"+agentrpc.AgentActionsName+"/") {
+				if localViewer {
+					return connect.NewError(connect.CodeInvalidArgument, "LOCAL_VIEWER_SERVER_HEADER_FORBIDDEN")
+				}
 				stream = &routeCheckingStream{ServerStream: stream, serverID: serverID}
 			}
 			return next(ctx, spec, stream)

@@ -22,6 +22,7 @@ import (
 	"github.com/DDSRem-Dev/Shikigami/internal/connection"
 	sdk "github.com/DDSRem-Dev/Shikigami/pkg/plugin"
 	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
+	erpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/extensions/extensionsconnect"
 	ppb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/plugin"
 	prpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/plugin/pluginconnect"
 	"github.com/DDSRem-Dev/Shikigami/pkg/protocol/version"
@@ -52,6 +53,8 @@ type Config struct {
 	RunDir, StateDir, HostInstanceID   string
 	Policy                             Policy
 	Core                               prpc.CoreAPIHandler
+	Region                             erpc.RegionServiceHandler
+	RegisterExtensions                 func(*connect.Server)
 	Values                             *structpb.Struct
 	CredentialLifetime, StartupTimeout time.Duration
 }
@@ -182,6 +185,12 @@ func Launch(ctx context.Context, cfg Config) (instance *Instance, err error) {
 	}
 	rpcServer := connect.NewServer(grant.interceptor)
 	prpc.RegisterCoreAPIHandler(rpcServer, cfg.Core)
+	if cfg.Region != nil {
+		erpc.RegisterRegionServiceHandler(rpcServer, cfg.Region)
+	}
+	if cfg.RegisterExtensions != nil {
+		cfg.RegisterExtensions(rpcServer)
+	}
 	rpcHandler := WithStreamCancellation(connection.NewRPCHandler(rpcServer))
 	handler := i.coreHandler(rpcHandler)
 	i.server = connection.NewHTTPServer(lifetime, handler)

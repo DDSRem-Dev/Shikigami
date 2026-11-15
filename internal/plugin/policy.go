@@ -10,6 +10,8 @@ import (
 	"connectrpc.com/connect/v2"
 	"github.com/DDSRem-Dev/Shikigami/internal/connection"
 	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
+	epb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/extensions"
+	erpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/extensions/extensionsconnect"
 	ppb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/plugin"
 	prpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/plugin/pluginconnect"
 	"google.golang.org/protobuf/proto"
@@ -35,6 +37,19 @@ var callbackPermissions = map[string]string{
 	prpc.CoreAPIRemoteListFilesProcedure: "file.read", prpc.CoreAPIRemoteStatFileProcedure: "file.read", prpc.CoreAPIRemoteReadFileProcedure: "file.read",
 	prpc.CoreAPIRemoteWriteFileProcedure: "file.write", prpc.CoreAPIRemoteDeleteFileProcedure: "file.write", prpc.CoreAPIRemoteWatchFilesProcedure: "file.watch",
 	prpc.CoreAPIRemoteCheckPortProcedure: "port.forward", prpc.CoreAPIRemoteListPortsProcedure: "port.list", prpc.CoreAPIRemoteWatchPortsProcedure: "port.list", prpc.CoreAPIRemoteForwardPortProcedure: "port.forward",
+	erpc.RegionServiceInspectRegionProcedure: "region.read",
+	erpc.BrowserServiceListBrowserProfilesProcedure: "browser.remote",
+	erpc.BrowserServicePutBrowserProfileProcedure: "browser.remote",
+	erpc.BrowserServiceDeleteBrowserProfileProcedure: "browser.remote",
+	erpc.BrowserServiceStartBrowserProcedure: "browser.remote",
+	erpc.BrowserServiceStopBrowserProcedure: "browser.remote",
+	erpc.BrowserServiceGetBrowserStatusProcedure: "browser.remote",
+	erpc.BrowserServiceTakeBrowserControlProcedure: "browser.remote",
+	erpc.BrowserServiceBrowserStreamProcedure: "browser.remote",
+	erpc.BrowserServiceListBrowserFilesProcedure: "browser.remote",
+	erpc.BrowserServiceReadBrowserFileProcedure: "browser.remote",
+	erpc.BrowserServiceWriteBrowserFileProcedure: "browser.remote",
+	erpc.BrowserServiceDiagnoseBrowserProcedure: "browser.remote",
 }
 
 type grant struct {
@@ -75,6 +90,9 @@ func (g *grant) interceptor(next connect.ServerFunc) connect.ServerFunc {
 		if g.policy.Side != "client" && strings.Contains(spec.Procedure, "/Remote") {
 			return connect.NewError(connect.CodePermissionDenied, "remote callbacks require a client plugin")
 		}
+		if ExtensionCapability(spec.Procedure) != "" && g.policy.Side != "client" && spec.Procedure != erpc.RegionServiceInspectRegionProcedure {
+			return connect.NewError(connect.CodePermissionDenied, "remote extensions require a client plugin")
+		}
 		permitted := false
 		for _, c := range g.policy.Capabilities {
 			if c == capability {
@@ -99,6 +117,8 @@ type scopeStream struct {
 	grant     *grant
 	procedure string
 	opened    bool
+	serverID  string
+	profileID string
 }
 
 func (s *scopeStream) Receive(msg any) error {
@@ -200,7 +220,15 @@ func (s *scopeStream) Receive(msg any) error {
 			return nil
 		}
 	default:
-		return connect.NewError(connect.CodePermissionDenied, "unsupported callback message")
+		message, ok := msg.(proto.Message)
+		if !ok || ExtensionCapability(s.procedure) == "" {
+			return connect.NewError(connect.CodePermissionDenied, "unsupported callback message")
+		}
+		var err error
+		scope, err = s.extensionScope(message)
+		if err != nil {
+			return err
+		}
 	}
 	if scope == nil {
 		return scopeDenied()
@@ -214,6 +242,41 @@ func (s *scopeStream) Receive(msg any) error {
 		return s.grant.policy.AuthorizeScope(s.ctx, proto.Clone(scope).(*ppb.Scope))
 	}
 	return scopeDenied()
+}
+
+func (s *scopeStream) extensionScope(message proto.Message) (*ppb.Scope, error) {
+	reflected := message.ProtoReflect()
+	fields := reflected.Descriptor().Fields()
+	server := fields.ByName("server_id")
+	if server == nil {
+		return nil, scopeDenied()
+	}
+	serverID := reflected.Get(server).String()
+	profileID := ""
+	if profile := fields.ByName("profile_id"); profile != nil {
+		profileID = reflected.Get(profile).String()
+	}
+	streaming := s.procedure == erpc.BrowserServiceBrowserStreamProcedure || s.procedure == erpc.BrowserServiceWriteBrowserFileProcedure
+	if streaming {
+		if !s.opened {
+			if serverID == "" || profileID == "" {
+				return nil, scopeDenied()
+			}
+			if frame, ok := message.(*epb.BrowserFrame); ok && frame.Kind != epb.BrowserFrame_OPEN {
+				return nil, scopeDenied()
+			}
+			s.opened, s.serverID, s.profileID = true, serverID, profileID
+		} else {
+			if serverID != "" && serverID != s.serverID || profileID != "" && profileID != s.profileID {
+				return nil, scopeDenied()
+			}
+			serverID = s.serverID
+		}
+	}
+	if s.grant.policy.Side == "client" && serverID == "" || s.grant.policy.Side == "server" && serverID != "" {
+		return nil, scopeDenied()
+	}
+	return &ppb.Scope{ServerId: serverID}, nil
 }
 func scopeDenied() error {
 	return connect.NewError(connect.CodePermissionDenied, "plugin scope is not granted")

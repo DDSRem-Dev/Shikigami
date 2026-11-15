@@ -33,14 +33,14 @@ func main() {
 }
 func execute(ctx context.Context, args []string, out, errOut io.Writer) (int, error) {
 	if len(args) == 0 {
-		return 2, errors.New("use install, rollback, uninstall, status, probe, or version")
+		return 2, errors.New("use install, rollback, uninstall, status, probe, setup, maintenance, or version")
 	}
 	if args[0] == "help" {
 		if len(args) == 1 {
 			return writeHelp(out, installerHelp)
 		}
 		if len(args) != 2 || !publicOperation(args[1]) {
-			return 2, errors.New("use help or help <install|rollback|uninstall|status|probe|version>")
+			return 2, errors.New("use help or help <install|rollback|uninstall|status|probe|setup|maintenance|version>")
 		}
 		args = []string{args[1], "--help"}
 	}
@@ -63,6 +63,9 @@ func execute(ctx context.Context, args []string, out, errOut io.Writer) (int, er
 			return 1, err
 		}
 		return 0, nil
+	}
+	if operation == "setup" || operation == "maintenance" {
+		return executeExtension(ctx, operation, args[1:], out, errOut)
 	}
 	if strings.HasPrefix(operation, "_user-") {
 		err := install.UserHelper(ctx, strings.TrimPrefix(operation, "_user-"), os.Stdin, out)

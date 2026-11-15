@@ -10,6 +10,7 @@ import (
 	"os/user"
 	"path/filepath"
 
+	host "github.com/DDSRem-Dev/Shikigami/internal/plugin"
 	"github.com/DDSRem-Dev/Shikigami/pkg/config"
 	"github.com/DDSRem-Dev/Shikigami/pkg/plugin/buildinfo"
 )
@@ -72,6 +73,11 @@ func UserHelper(ctx context.Context, operation string, in io.Reader, out io.Writ
 		return errors.Join(callErr, lease.Close())
 	case "unlink":
 		return removeUserLinks(ctx, request.Plan, request.Prefix)
+	case "disable-browser":
+		if request.Plan.Role != "daemon" {
+			return errors.New("offline browser disable applies only to the daemon")
+		}
+		return host.DisableOffline(filepath.Join(request.Plan.StateDir, "plugin-control"), "browser")
 	case "probe":
 		status, err := probeUser(ctx, request)
 		if err != nil {

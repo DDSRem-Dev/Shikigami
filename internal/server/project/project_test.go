@@ -30,7 +30,7 @@ func setup(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { store.Close() })
-	manager, err := New(store, base, "test-user")
+	manager, err := New(store, base, "test-user", stateDir)
 	if err != nil {
 		t.Fatal(err)
 	}

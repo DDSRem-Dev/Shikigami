@@ -91,8 +91,50 @@ func OpenWorkingDirectory(projectRoot, requested string) (string, *os.Root, erro
 	return canonical, dir, nil
 }
 
+// canonicalPath also resolves the existing ancestors of a not-yet-created
+// directory. A lexical prefix check alone misses aliases of private state.
+func canonicalPath(path string) (string, error) {
+	if !filepath.IsAbs(path) || strings.IndexByte(path, 0) >= 0 {
+		return "", rpc(connect.CodeInvalidArgument, "absolute project directory required")
+	}
+	path = filepath.Clean(path)
+	for ancestor := path; ; ancestor = filepath.Dir(ancestor) {
+		canonical, err := filepath.EvalSymlinks(ancestor)
+		if err == nil {
+			relative, err := filepath.Rel(ancestor, path)
+			if err != nil {
+				return "", filesystemError(err)
+			}
+			return filepath.Join(canonical, relative), nil
+		}
+		if !errors.Is(err, os.ErrNotExist) || filepath.Dir(ancestor) == ancestor {
+			return "", filesystemError(err)
+		}
+	}
+}
+
+func (m *Manager) admitPath(path string) error {
+	if len(m.protected) == 0 {
+		return nil
+	}
+	path = filepath.Clean(path)
+	canonical, err := canonicalPath(path)
+	if err != nil {
+		return err
+	}
+	for _, protected := range m.protected {
+		if storage.Within(protected, canonical) || storage.Within(canonical, protected) || path != canonical && (storage.Within(protected, path) || storage.Within(path, protected)) {
+			return rpc(connect.CodePermissionDenied, "PROJECT_PATH_PROTECTED")
+		}
+	}
+	return nil
+}
+
 func (m *Manager) resolve(path string) (canonical string, exists bool, err error) {
 	path = filepath.Clean(path)
+	if err := m.admitPath(path); err != nil {
+		return "", false, err
+	}
 	info, statErr := os.Stat(path)
 	if statErr == nil {
 		if !info.IsDir() {

@@ -105,9 +105,11 @@ class BundleTests(unittest.TestCase):
         self.addCleanup(folder.cleanup)
         self.root = Path(folder.name)
 
-    def bundle(self, system="linux", arch="amd64", mutation=None):
+    def bundle(self, system="linux", arch="amd64", mutation=None, optional=False):
         name = f"shikigami-{VERSION}-{system}-{arch}.tar.gz"
         members = {item: b"fixture payload\n" for item in release.PAYLOADS - {"SHA256SUMS"}}
+        if optional:
+            members.update({item: b"optional fixture payload\n" for item in release.optional_payloads(system)})
         members["release.json"] = json.dumps({"version": VERSION, "os": system, "arch": arch}).encode()
         if mutation == "identity":
             members["release.json"] = b'{"version":"wrong","os":"linux","arch":"amd64"}'
@@ -150,6 +152,19 @@ class BundleTests(unittest.TestCase):
         next(self.root.glob("*.sha256")).unlink()
         with self.assertRaises(ValueError):
             release.validate_bundles(self.root, VERSION)
+
+    def test_additive_plugins_are_authenticated_without_requiring_old_releases(self):
+        for system in ("linux", "darwin"):
+            for optional in (False, True):
+                self.bundle(system=system, optional=optional)
+                release.validate_bundle(self.root, VERSION, system, "amd64")
+        for system in ("linux", "darwin"):
+            full = release.PAYLOADS | release.optional_payloads(system)
+            for removed in release.OPTIONAL_PLUGINS & full:
+                with self.subTest(system=system, removed=removed), self.assertRaises(ValueError):
+                    release.validate_payload_members(full - {removed}, system)
+        with self.assertRaises(ValueError):
+            release.validate_payload_members(release.PAYLOADS | release.LINUX_SUPPORT, "darwin")
 
     def test_archive_structure_identity_and_payload_are_checked(self):
         for mutation in ("identity", "content", "missing", "path", "symlink", "duplicate"):

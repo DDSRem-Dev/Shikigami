@@ -14,7 +14,9 @@ PACKAGE = "github.com/DDSRem-Dev/Shikigami/pkg/plugin/buildinfo"
 PROGRAMS = {
     "bin/shiki", "bin/shiki-agent", "bin/shiki-daemon", "bin/shiki-install",
     "bin/shiki-plugin-sync", "bin/shiki-plugin-port",
+    "bin/shiki-plugin-region", "bin/shiki-plugin-browser",
 }
+LINUX_PROGRAMS = {"bin/shiki-region-helper", "bin/shiki-browser-runtime"}
 
 
 class BuildMetadataTests(unittest.TestCase):
@@ -28,7 +30,8 @@ class BuildMetadataTests(unittest.TestCase):
         for name in ("build.sh", "build-embedded.sh", "build-metadata.sh"):
             shutil.copyfile(ROOT / "scripts" / name, self.root / "scripts" / name)
         for entrypoint in ("cmd/shiki", "cmd/shiki-agent", "cmd/shiki-daemon",
-                           "cmd/shiki-install", "plugins/sync", "plugins/port"):
+                           "cmd/shiki-install", "plugins/sync", "plugins/port", "plugins/region",
+                           "plugins/browser", "plugins/region/cmd/helper", "plugins/browser/cmd/runtime"):
             (self.root / entrypoint).mkdir(parents=True)
         (self.root / "internal/plugin").mkdir(parents=True)
         self.log = self.root / "go-calls.jsonl"
@@ -46,7 +49,7 @@ class BuildMetadataTests(unittest.TestCase):
         for name in ("SHIKI_VERSION", "SHIKI_COMMIT", "SHIKI_BUILT_AT", "SHIKI_EMBED_VERIFY"):
             self.env.pop(name, None)
         self.env.update(PATH=str(fakebin) + os.pathsep + os.environ["PATH"],
-                        SHIKI_TEST_GO_LOG=str(self.log))
+                        SHIKI_TEST_GO_LOG=str(self.log), GOOS="linux")
 
     def run_script(self, metadata):
         self.log.unlink(missing_ok=True)
@@ -62,21 +65,30 @@ class BuildMetadataTests(unittest.TestCase):
         if self.entrypoint == "build.sh":
             self.assertEqual(calls[0], ["build", "-trimpath", "./..."])
         builds = [call for call in calls if call[0] == "build" and "-o" in call]
-        self.assertEqual(len(builds), 6)
-        expected = PROGRAMS
+        expected = set(PROGRAMS)
+        if self.env.get("GOOS") == "linux":
+            expected |= LINUX_PROGRAMS
+        else:
+            expected.discard("bin/shiki-plugin-region")
         if self.entrypoint == "build-embedded.sh":
             expected = {name.replace("bin/shiki-plugin-", "internal/plugin/embedded-assets/shiki-plugin-")
-                        for name in PROGRAMS}
+                        for name in expected}
             self.assertFalse((self.root / "internal/plugin/embedded-assets").exists())
         self.assertEqual({call[call.index("-o") + 1] for call in builds}, expected)
+        self.assertEqual(len(builds), len(expected))
         flags = {call[call.index("-ldflags") + 1] for call in builds}
         self.assertEqual(len(flags), 1)
-        # Both plugin manifests still receive the same explicit version.
+        # Every shipped plugin manifest receives the same explicit version.
         manifests = [call for call in calls if call[0] == "run"]
-        self.assertEqual(len(manifests), 2)
+        expected_plugins = {"sync", "port", "browser"}
+        if self.env.get("GOOS") == "linux":
+            expected_plugins.add("region")
+        self.assertEqual({call[call.index("--id") + 1] for call in manifests}, expected_plugins)
+        self.assertEqual(len(manifests), len(expected_plugins))
         for call in manifests:
             self.assertEqual(call[call.index("--version") + 1],
                              metadata.get("SHIKI_VERSION") or "dev")
+            self.assertEqual(call[call.index("--os") + 1], self.env["GOOS"])
         return flags.pop()
 
     def assert_linked_metadata(self, flags, expected):
@@ -108,7 +120,7 @@ class BuildMetadataTests(unittest.TestCase):
         actual = json.loads(result.stdout)
         self.assertEqual({key: actual[key] for key in expected}, expected)
 
-    def test_explicit_metadata_reaches_all_six_builds_and_real_binary(self):
+    def test_explicit_metadata_reaches_all_payloads_and_real_binary(self):
         metadata = {"SHIKI_VERSION": "v0.0.0-metadata-test", "SHIKI_COMMIT": "a1" * 20,
                     "SHIKI_BUILT_AT": "2024-02-29T23:59:59Z"}
         self.assert_linked_metadata(self.emitted_flags(metadata), {
@@ -125,6 +137,10 @@ class BuildMetadataTests(unittest.TestCase):
         for stamp in ("2000-02-29T00:00:00Z", "2026-04-30T01:02:03Z"):
             with self.subTest(stamp=stamp):
                 self.emitted_flags({"SHIKI_COMMIT": "AB" * 32, "SHIKI_BUILT_AT": stamp})
+
+    def test_darwin_never_builds_linux_support(self):
+        self.env["GOOS"] = "darwin"
+        self.emitted_flags({"SHIKI_VERSION": "v0.0.0-darwin-artifacts"})
 
     def test_invalid_metadata_is_rejected_before_any_build(self):
         invalid = {

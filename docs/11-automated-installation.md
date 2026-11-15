@@ -4,6 +4,32 @@
 
 `scripts/install.sh`、`install-client.sh`、`uninstall.sh` 与短时运维 helper `shiki-install` 已存在；已完成专用公钥的四目标签名及验签。[当前公开 Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.2) 来自提交 `fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2`、成功自动发布运行 `40912019720`，公开资产的下载验证结果见[发行证据](./15-implementation-status.md#evidence-public-alpha2-release-20261030)。安装只接受本地 bundle、固定版本及调用者从独立可信渠道取得的 checksum pin。可信源码工具 `scripts/release-trust.go fetch` 提供显式HTTPS归档/签名地址、独立可信公钥和固定版本/平台的下载验签入口，先认证签名再下载归档，成功后生成私有副本/pin/receipt；解包与安装仍是显式后续步骤，工具不指定正式来源或建立公钥信任。GitHub下载地址会重定向，现有 `fetch` 拒绝重定向；应使用 `gh release download v0.0.1-alpha.2 --repo DDSRem-Dev/Shikigami` 取回资产，再用可信源码 verifier 和独立可信公钥离线验签。命令与限制见发布认证，本批验收进度见16。下列完整就绪和运维要求不因预发布成功而降低。
 
+## 地区/浏览器系统支持扩展（本地/容器验收完成）
+
+[27](27-region-browser-plugins.md)规定新增可选`region`/`browser`的完整边界；以下不继承旧42项或公开alpha.2的安装验收。`shiki-install setup --component region|browser|all --user <普通用户>`和`maintenance`默认仅输出只读计划；管理员审阅后显式`--yes`，不会因启用普通用户插件而隐式安装系统包。
+
+setup的root二进制来源须由独立可信、root拥有的公钥验证固定版本归档签名，并核对解包bundle；用户目录里的helper不能直接以root执行。固定安装位置为`/usr/lib/shikigami/shiki-region-helper`和`shiki-browser-runtime`。Linux发行包含region/server、browser双端和两个支持程序；macOS仅包含browser/client，不安装region或Linux运行服务。
+
+管理员计划必须展示固定依赖、官方Chrome源、整机Chrome托管策略与既有策略冲突。首次安装和维护不关闭既有系统更新策略、不重启正在运行的Chrome。密码保存/同步/Chrome账号登录策略影响同机全部官方Chrome，网站登录仍可用；其他管理员策略不得静默覆盖。
+
+用户已确认使用systemd加密凭据提供可选的显式管理员启动解锁配置，以支持持久Cookie和无人值守开机恢复。密钥环保持加密，解锁口令只经stdin；既有密钥环不得被重置。无TPM的host-key模式不抵御整盘与root密钥同时失窃；解锁或密钥环验证失败阻止Chrome启动。Debian12/systemd252手工runtime及Ubuntu24.04/systemd255实际签名安装已有加密凭据创建/重新解锁证据，精确产物与增量见15；物理重启仍未验。
+
+卸载先停止daemon并取得宿主维护锁、持久禁用受管插件，再停止身份匹配的浏览器实例；保留profile。region在root状态锁中封闭新变更并处理待恢复事务，只有无pending且状态为`disabled`才能移除恢复守卫/helper/授权。冲突或失败保留恢复组件和证据，报告未完成，不能遗留活动root守卫却宣称卸载成功。
+
+使用已独立验证的新源码发行产物，先将`BUNDLE`、`ARCHIVE`、`SIGNATURE`、`VERSION`设为同一固定版本的真实绝对路径/版本；公钥须由独立可信渠道预置为root所有。以下不是公开alpha.2命令，也不提供新的公开下载源：
+
+```sh
+sudo shiki-install setup --component all --user <普通用户> \
+  --bundle "$BUNDLE" --archive "$ARCHIVE" --signature "$SIGNATURE" \
+  --version "$VERSION" --public-key /etc/shikigami/release-signing.pub \
+  --boot-unlock --keyring-mode dedicated --provision-keyring
+# 审阅完整计划后，使用相同参数追加 --yes；交互终端隐藏读取口令。
+```
+
+仅首次创建不存在的专用密钥环使用`--provision-keyring`。已有受管凭据采用`--boot-unlock --keyring-mode dedicated --reuse-keyring-credential`；既有登录密钥环须显式选择`existing-login`，不能用provision重置。自动化可选择私有stdin或受限0600单链接文件，不把口令放入argv、环境或日志。注册凭据前先显式停止受管Chrome。
+
+`shiki-install maintenance --component all --user <普通用户>`默认只检查；`--update --yes`才更新固定依赖和官方稳定Chrome。支持二进制升级使用新的已签名setup，不用APT替代。输入法采用`fcitx5-frontend-gtk3`而非XIM/IBus daemon，既有同总线Fcitx服务冲突会明确阻止浏览器启动，见27。
+
 ## 第三方插件签名 marketplace 安装（当前源码）
 
 `shiki plugins install <plugin-id>` 只接受已配置并通过签名验证的 marketplace index；`shiki plugins install <url-or-path>` 仍是用户明确承担完整性责任的手工入口，可选 `--sha256`，不获得自动更新资格。首次配置：

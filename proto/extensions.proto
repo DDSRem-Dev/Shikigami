@@ -1,0 +1,141 @@
+syntax = "proto3";
+package shiki.extensions.v1;
+option go_package = "github.com/DDSRem-Dev/Shikigami/pkg/protocol/extensions";
+
+// These are versioned, fixed-purpose plugin services. No method accepts a shell
+// command, arbitrary file path, network destination, or caller supplied grant.
+service RegionService {
+  rpc InspectRegion(RegionInspectRequest) returns (RegionStatus);
+  rpc PlanRegion(RegionPlanRequest) returns (RegionPlan);
+  rpc ApplyRegion(RegionApplyRequest) returns (RegionOperation);
+  rpc ConfirmRegion(RegionOperationRequest) returns (RegionOperation);
+  rpc RollbackRegion(RegionOperationRequest) returns (RegionOperation);
+  rpc GetRegionOperation(RegionOperationRequest) returns (RegionOperation);
+  rpc DiagnoseRegion(DiagnosticRequest) returns (DiagnosticReport);
+}
+service BrowserService {
+  rpc ListBrowserProfiles(BrowserScope) returns (BrowserProfileList);
+  rpc PutBrowserProfile(PutBrowserProfileRequest) returns (BrowserProfile);
+  rpc DeleteBrowserProfile(DeleteBrowserProfileRequest) returns (BrowserProfile);
+  rpc StartBrowser(BrowserActionRequest) returns (BrowserStatus);
+  rpc StopBrowser(BrowserActionRequest) returns (BrowserStatus);
+  rpc GetBrowserStatus(BrowserScope) returns (BrowserStatus);
+  rpc TakeBrowserControl(BrowserControlRequest) returns (BrowserStatus);
+  rpc BrowserStream(stream BrowserFrame) returns (stream BrowserFrame);
+  rpc ListBrowserFiles(BrowserFileRequest) returns (BrowserFileList);
+  rpc ReadBrowserFile(BrowserFileRequest) returns (stream BrowserFileChunk);
+  rpc WriteBrowserFile(stream BrowserFileChunk) returns (BrowserFile);
+  rpc DiagnoseBrowser(DiagnosticRequest) returns (DiagnosticReport);
+}
+service BrowserLocalService {
+  rpc OpenBrowserViewer(OpenBrowserViewerRequest) returns (BrowserViewer);
+  rpc CloseBrowserViewer(CloseBrowserViewerRequest) returns (BrowserViewer);
+}
+message RegionInspectRequest { string server_id = 1; }
+message DNSConfig {
+  bool manage_system = 1;
+  repeated string servers = 2;
+  string chrome_mode = 3; // unchanged/system/secure/automatic
+  repeated string chrome_templates = 4;
+  repeated string check_domains = 5;
+}
+message RegionConfig {
+  string country = 1;
+  string timezone = 2;
+  string locale = 3;
+  repeated string languages = 4;
+  map<string, string> formats = 5; // allowlisted LC_* categories only
+  DNSConfig dns = 6;
+}
+message RegionStatus {
+  RegionConfig actual = 1;
+  RegionConfig desired = 2;
+  string revision = 3;
+  string dns_manager = 4;
+  bool helper_available = 5;
+  repeated string warnings = 6;
+  int64 observed_at = 7;
+  string state = 8;
+  string pending_operation_id = 9;
+  int64 confirm_before = 10;
+}
+message RegionPlanRequest { string server_id = 1; RegionConfig config = 2; string expected_revision = 3; string request_id = 4; }
+message SettingChange { string setting = 1; string before = 2; string after = 3; bool privileged = 4; }
+message RegionPlan {
+  string id = 1;
+  string revision = 2;
+  RegionConfig config = 3;
+  repeated SettingChange changes = 4;
+  repeated string warnings = 5;
+  bool changes_dns = 6;
+  int64 expires_at = 7;
+}
+message RegionApplyRequest {
+  string server_id = 1; string plan_id = 2; string expected_revision = 3; string request_id = 4;
+  bool confirm = 5;
+  bool dns_authorized = 6; // host overwrites from authenticated permissions
+}
+message RegionOperationRequest { string server_id = 1; string operation_id = 2; string request_id = 3; bool confirm = 4; }
+message RegionOperation {
+  string id = 1; string state = 2; string revision = 3; string reason = 4;
+  bool restart_required = 5; int64 confirm_before = 6; repeated string warnings = 7;
+}
+message ProbeProvider { string id = 1; string kind = 2; string url = 3; string dns_zone = 4; string ip_family = 5; }
+message DiagnosticRequest {
+  string server_id = 1; string profile_id = 2; bool allow_external = 3;
+  repeated ProbeProvider providers = 4;
+  bool allow_webrtc = 5; // explicit consent; no implicit third-party STUN/TURN
+}
+message DiagnosticObservation {
+  string check = 1; string state = 2; string value = 3; string expected = 4;
+  string source = 5; string vantage = 6; int64 observed_at = 7; string limitation = 8;
+}
+message DiagnosticReport { repeated DiagnosticObservation observations = 1; repeated string warnings = 2; int64 observed_at = 3; }
+message BrowserScope { string server_id = 1; string profile_id = 2; }
+message BrowserProfile {
+  string id = 1; string name = 2; string revision = 3; bool boot_start = 4;
+  RegionConfig region = 5; int64 created_at = 6; string state = 7;
+}
+message BrowserProfileList { repeated BrowserProfile profiles = 1; }
+message PutBrowserProfileRequest {
+  string server_id = 1; BrowserProfile profile = 2; string expected_revision = 3;
+  string request_id = 4; bool replace_boot_profile = 5;
+}
+message DeleteBrowserProfileRequest {
+  string server_id = 1; string profile_id = 2; string expected_revision = 3;
+  string request_id = 4; bool confirm = 5;
+}
+message BrowserActionRequest {
+  string server_id = 1; string profile_id = 2; string request_id = 3;
+  bool confirm = 4; bool replace_running = 5;
+}
+message BrowserStatus {
+  string profile_id = 1; string instance_id = 2; string state = 3;
+  string reason = 4; string controller_id = 5; string control_revision = 6;
+  string region_revision = 7; bool restart_required = 8;
+  repeated string warnings = 9; uint32 attachments = 10; string chrome_version = 11;
+}
+message BrowserControlRequest {
+  string server_id = 1; string profile_id = 2; string instance_id = 3;
+  string attachment_id = 4; string expected_control_revision = 5;
+  string owner_id = 6; // authenticated host-owned field
+}
+message BrowserFrame {
+  enum Kind { UNSPECIFIED = 0; OPEN = 1; READY = 2; DATA = 3; CONTROL = 4; CLOSE = 5; }
+  Kind kind = 1; string server_id = 2; string profile_id = 3; string instance_id = 4;
+  string attachment_id = 5; bool read_only = 6; bytes data = 7;
+  string control_revision = 8; string owner_id = 9; // authenticated host-owned field
+  bool can_control = 10; // authenticated host-owned field
+  string reason = 11;
+  string controller_id = 12; // current controller; attachment_id remains recipient scope
+}
+message BrowserFileRequest { string server_id = 1; string profile_id = 2; string area = 3; string name = 4; }
+message BrowserFile { string profile_id = 1; string area = 2; string name = 3; int64 size = 4; string sha256 = 5; int64 modified_at = 6; }
+message BrowserFileList { repeated BrowserFile files = 1; }
+message BrowserFileChunk {
+  string server_id = 1; string profile_id = 2; string name = 3; bytes data = 4;
+  int64 total_size = 5; string request_id = 6; string sha256 = 7; bool finish = 8;
+}
+message OpenBrowserViewerRequest { string server_id = 1; string profile_id = 2; bool read_only = 3; }
+message CloseBrowserViewerRequest { string viewer_id = 1; }
+message BrowserViewer { string id = 1; string url = 2; string state = 3; int64 expires_at = 4; }

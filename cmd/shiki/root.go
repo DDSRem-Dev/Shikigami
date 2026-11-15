@@ -53,6 +53,7 @@ func newRoot(input *os.File, output, errorOutput io.Writer) *cobra.Command {
 	root.PersistentFlags().BoolVar(&a.verbose, "verbose", false, "Show bounded plugin log tails after detach and in the dashboard Plugins panel")
 	root.PersistentFlags().DurationVar(&a.timeout, "timeout", 5*time.Second, "Timeout for each short IPC call")
 	root.AddCommand(a.agentCommands(), a.serverCommands(), a.connectCommand(), a.projectCommands(), a.sessionCommands(), a.attachCommand(), a.doctorCommand(), a.pluginCommands(), a.nodeCommands(), a.syncCommands(), a.portCommands(), a.statsCommand(), a.logsCommand(), a.dashboardCommand())
+	root.AddCommand(a.regionCommands(), a.browserCommands())
 	initialize, templates := a.templateCommands()
 	root.AddCommand(initialize, templates)
 	root.AddCommand(a.configCommands())

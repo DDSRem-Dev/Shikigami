@@ -2,6 +2,72 @@
 
 **当前进度（2026-11-12）：42/42，原清单最后一项已关闭。** 当前源码的功能、平台、验收依据及未支持范围已统一到[支持声明](18-release-readiness.md#current-support)。Phase 0–5各阶段为11/11、7/7、6/6、6/6、6/6、6/6。认证生命周期和长稳/资源/性能沿用2026-11-01用户确认的关闭结论，历史实测/失败及源码范围保留；生产heap/object归因、真实Claude登录/推理及物理主机重启仍按未实测边界披露。42/42表示当前源码验收登记与声明核对完成，不表示新包或稳定版已发布；仓库公开安装入口仍为alpha.2，未包含后续master修复。
 
+## alpha.3 发布执行（2026-11-15）
+
+用户授权 commit/push、持续修复至 CI 全通过，再发布 `v0.0.1-alpha.3`。发布来源包括最终查看器 EOF 修复，而不是前批不含该修复的私有签名包。当前只完成待发布文件清单、工作流及签名环境配置检查；版本尚不存在，CI/公开产物验证结果待实际执行后登记。新增功能的隔离实测与外部门槛沿用下节精确范围，不因版本发布扩大支持声明。
+
+<a id="region-browser-20261115"></a>
+## 地区环境与远程浏览器扩展（2026-11-15，实现及本地/容器验收完成）
+
+用户已确认[27设计](27-region-browser-plugins.md)并授权完整实现。新增region/browser插件及独立特权helper/浏览器运行服务，使用`proto/extensions.proto`固定用途协议；不是远端通用执行。用户要求可跳过需要其账号/管理员/外部平台参与的测试，但须最终逐项披露，不把跳过记通过。
+
+已交付设计、类型化schema/SDK、宿主路由、CLI、查看器、诊断、region/runtime及安装维护，并完成授权范围内的本地/隔离容器增量验收。下文按时间保留失败、修复及各自产物证据，最后闭环段落是当前结论。Windows自动Go1.26.11被Application Control阻止，使用授权Docker Linux工具链，不放宽主机策略。本记录不更新历史42项计数或公开发行版本；外部门槛见27。
+
+首批证据：隔离Debian12 amd64 systemd容器，Go1.26.11，普通`shikitest`用户，冻结目录`/work/sdk-20261115`，`go test -p=2 -race -count=1 ./pkg/plugin ./pkg/plugin/diagnostics ./pkg/protocol/extensions/...`通过：SDK 2.281s、诊断1.041s，生成扩展包无测试但编译通过。初次执行被容器`/tmp`的noexec阻止；仅在可丢弃容器内调整该挂载后完成检查，未修改宿主挂载或削弱产品校验。这不覆盖尚未运行的CLI/宿主/插件全链路、真实浏览器画面和安装流程。
+
+后续冻结快照`/work/host-20261115`的定向race检查通过：`internal/auth`、`internal/plugin`、`internal/agent`、`internal/server`、`internal/server/session`、`internal/client`、`cmd/shiki`和`test/architecture`。查看器首次编译发现`files.go`漏导入`errors`，补齐后仅重跑`plugins/browser/client`通过（1.378s）。独立`/work/region-20261115`的`go test -p=1 -race -count=1 ./plugins/region/...`通过：helper 1.220s、server 1.030s，两个入口包编译通过。真实系统变更、Chrome和安装仍待验；源码文件系统事务测试不冒充真实主机DNS/重启。
+
+用户追加确认：整机Chrome托管策略强制禁止密码保存、Chrome同步及Chrome账号登录；管理员计划披露影响全部官方Chrome实例，拒绝覆盖冲突策略。网站登录仍允许。原生Chrome诊断保留实际网络路径，域名供应商的连接前DNS重绑定风险如实披露，不能把预检或连接后检查写成阻止保证。
+
+用户另确认管理员启动解锁：通过systemd加密凭据和固定用途解锁服务向普通用户密钥环提供stdin口令，保持无人值守开机目标，不重置已有密钥环。无TPM时使用host-key并披露整盘/root密钥失窃边界；实现和真实服务验收尚待完成。完整依赖Debian12容器镜像已构建；Ubuntu24.04镜像首次构建因官方APT下载返回502失败，未记为平台通过，单独重试不重启现有已验环境。
+
+真实Debian12链路已通过：普通用户CLI → agent IPC → 直连TLS daemon → 独立region插件 → sudo固定helper，完成inspect、JP计划/应用、同request_id重放、过期revision拒绝、主机诊断和回滚。真实tmux `/bin/sh`场景证明旧pane的PID及环境不变，新会话和显式重启收到`LANG=ja_JP.UTF-8`、`LANGUAGE=ja_JP:ja`、`TZ=Asia/Tokyo`；随后恢复原系统设置。这不是Claude账号登录或推理验收。
+
+真实root守卫另在`--network none`的可丢弃容器通过：固定路径helper、sudo白名单、systemd守卫、实际`/etc/resolv.conf`变更、30秒确认租约、无人确认后的独立恢复、显式确认与回滚、外部编辑冲突保留和安全卸载预检。DNS/TLS端点为容器私有夹具：将8.8.8.8仅绑定到该容器loopback，以`probe.example.test`及临时CA完成真实解析和证书校验；没有连接公共DNS或第三方服务，不冒充真实出口/公共DNS地区验证。首次脚本错误地期待确认状态`applied`，实际正确状态为`confirmed`；修正脚本后从确认后的步骤继续，不更改生产状态契约。
+
+实际冲突恢复发现：管理员恢复冲突文件后，旧helper仍因已清除pending但保留recovery_problem而无法完成卸载。已修复root-only `prepare-uninstall`：仅在待恢复记录仍对应当前desired时重新验证并恢复全部目标；外部差异仍拒绝覆盖，普通RPC不能绕过管理员复核。扩展既有卸载回归并通过定向race（1.059s），实际容器复查得到`disabled`、无pending且原resolver恢复。CLI同时将`rollback_conflict`返回非零退出码并保留结构化证据；定向server/client/CLI回归通过。浏览器启动预算与加密密钥环等待对齐：server插件启动120秒，远端browser插件管理默认等待150秒，显式用户截止仍优先。
+
+增量验收：已安装helper在普通UID下实际拒绝五类请求：sudo启动guard、管理员activate、inspect额外argv、JSON任意路径以及不经sudo直接执行。region诊断统一采用`observed`/`warning`/`unknown`，不把配置匹配宣称风控通过；`TestRegionDiagnosticComparisonDoesNotPromoteMissingEvidence`定向race通过（1.127s）。Ubuntu24.04完整依赖镜像在有界APT重试后构建成功，独立断网systemd255容器启动成功；只记录环境就绪，尚不属于产品平台验收。
+
+原生DNS owner增量：Debian12 resolvconf 1.91+nmu1、openresolv 3.12.0及Ubuntu24.04 systemd-resolved 255.4分别在独立`--network none`容器完成真实DNS/TLS检查、30秒截止无人确认恢复、显式确认和回滚。Debian两个owner还证明竞争DNS源/独占源在计划中报告阻塞原因、应用时拒绝，原peer保留。resolved需要活动链路；仅loopback环境返回Network is down，增加容器内dummy接口后完成，不连接外部网络。原测试误用了守卫unit名称、openresolv参数顺序及“计划必须失败”的断言，按真实契约修正；不据此修改产品行为。
+
+原生验收发现并修复：Ubuntu标准`/etc/default/locale -> ../locale.conf`需要操作固定canonical文件并保留alias归属检查；systemd-resolved生成目录/文件属于systemd-resolve，读取仅对两个固定输出增加有界、fd验证、禁止symlink跟随的只读例外，不放宽root写权限；helper创建resolved配置目录时显式0755，避免调用者私有umask让服务无法读取。Debian resolvconf会删除记录注释，改用root私有、参与同一事务与开机校验的记录摘要证明归属，不认领无证明的同名记录。
+
+进一步定位空tail冲突的真正原因：空文件字节在JSON omitempty往返后成为nil，而reflect比较误认为内容改变。文件状态现在按kind/target/mode及字节内容比较，空与nil字节等价；不将不存在的文件与空文件合并，不忽略权限或外部内容变化。既有失败夹具由管理员恢复原检查点后，经root-only预检恢复，再验证新事务。helper定向race通过1.231s；resolved文件信任、locale alias与空检查点回归通过1.035s。实际resolvconf与resolved新事务均恢复原DNS，openresolv拒绝竞争exclusive且完成卸载预检。
+
+浏览器CLI文件链路增量：实际上传已提交，但客户端收到canceled。根因是`internal/plugin/extension_proxy.go`在Connect client-stream首次Receive已消费单响应及终态、remotePool释放调用上下文后，再Receive一次。删除多余读取，不取消终态验证；新增`TestBrowserUploadProxyPreservesTerminalResult`覆盖真实HTTP/2两跳及pool生命周期，成功回执和终态DataLoss均保持，定向race通过1.096s。更新隔离agent后，恢复同request_id上传验证通过；303360字节SHA256为`38ae72e0775c2d67e4c414396839c191a11af2ed44997bbcb8f885312d672363`，重复上传、列表、下载内容与0600权限、覆盖确认及profile删除通过。此前同场景已完成profile创建重放和过期revision拒绝；没有把失败上传响应记为成功。
+
+真实密钥环验收在完整依赖Debian12容器完成：systemd252 `LoadCredentialEncrypted`从root保护的host-key密文向UID1000提供口令，创建非空口令专用加密keyring，停止创建unit后通过独立unlock unit重新解锁，均得到active。首次因Docker Desktop私有`/run`未共享传播导致空凭据挂载；仅在可丢弃容器内`mount --make-rshared /run`后通过，未打印口令或采用明文后端。这是手工受控runtime夹具，不冒充安装器、重启或TPM验收。
+
+Chrome首次CLI启动在Prepare阶段失败：实际plugin环境只有经过宿主过滤的HOME/PATH，缺少XDG_RUNTIME_DIR与DBUS_SESSION_BUS_ADDRESS。修复runtime manager按当前UID选择`/run/user/<uid>`并检查已存在的私有归属目录，systemd子命令明确使用该用户固定bus；不扩大宿主环境继承。Prepare失败改为可见FailedPrecondition。`plugins/browser/runtime`、`plugins/browser/server`定向race分别通过1.234s、1.176s，实际Chrome链路仍继续验证。
+
+冻结宿主交叉编译通过：Linux arm64的CLI/agent/daemon/region/helper，以及darwin amd64/arm64的CLI/agent。这只证明这些冻结源的目标编译，不代表Chrome、安装包、ARM或macOS原生运行通过；后续helper原生兼容修复另行编译，不追认早先产物。
+
+实际查看器增量：Debian12普通UID运行官方Google Chrome157.0.8103.78，经过CLI/agent/直连TLS/独立插件、loopback查看器显示真实页面，显式接管后完成英文地址导航及`日本語 / 中文`剪贴板粘贴。初次剪贴板被拒绝：固定noVNC使用Z_FULL_FLUSH而不结束zlib流；服务端现在只在flush边界和完整有界格式载荷均成立时接受。`TestRFB*`定向race通过1.132s。一次误用旧`/work/host-20261115`快照导致已有元数据上限用例失败；改用完整冻结源后通过，不修改或削弱断言。
+
+原生下载→CLI取回通过：远程Chrome点击下载生成`browser-proof.txt`，47字节，SHA256 `f1be8ac6aae86a947a366273123622e6691e234e01c6866656b4ce683fbf2709`，CLI验证内容及0600权限。直接VNC同样复现XIM快速输入绕过组合，完整链路按键字节及顺序正确；尝试独立IBUS_ADDRESS又暴露GTK模块仍在会话总线上监视服务。最终使用原生Fcitx GTK3前端，Fcitx与Chrome同选定密钥环总线、私有显示/配置不变，已有同名输入法拒绝接管。真实noVNC中零人工延迟输入`nihao`/`nihongo`，Pinyin/Mozc候选及提交`你好ニホンゴ`通过。冻结`/work/browser-native-gtk-20261115`的Chrome/diagnostic/launch/IME定向race通过1.188s。
+
+安装/发行冻结快照`/work/install-lf-20261115`通过manifest生成和release Go用例及48项Python工具用例。Windows导出的shell换行和manifest 0777权限不属于Linux规范产物：冻结导出规范化LF/0644后验证，仓库补充shell LF属性，不放宽生产manifest权限。真实Ubuntu安装发现APT维护目录归属和systemd255凭据ACL掩码差异，正在修复并实际复验；不以这些工具用例宣称系统安装完成。
+
+完整静态复核发现11项事务、恢复、持久化、传输和敏感目录准入缺口。浏览器状态修复已通过独立冻结`/work/browser-state-fix-20261115-00ZnY3`中的runtime7项及server13项定向用例（2.045s、2.881s）：覆盖上传硬链接发布中断、初始化清理、重试冲突、真实私有socket延迟就绪、落盘后错误的revision/receipt保持和64KiB/8MiB编码上限。就绪的systemd属性与同步错误为受控注入，未冒充真实系统重启或掉电；region与宿主准入修复继续进行。
+
+并行修复交付：helper冻结`/work/region-conformance-20261115.41I68X`全包race通过4.544s，journal schema2持久化操作归属及前驱，覆盖ABA回滚拒绝、部分应用管理员恢复、进程组取消/输出有界及DNS备用服务器。宿主冻结`/work/host-conformance-final-20261115-bJnBk0`的项目/插件/SDK/server/client定向race与SDK回调追加检查通过；真实sync冻结`/work/host-conformance-sync-20261115-vYC13c`通过，覆盖状态目录祖先/子孙/别名/旧关联/缓存后重定向和List/Stat/Read/Write/Delete/Watch。三处新增集成夹具API错误已修正，不省略失败文件。
+
+Ubuntu24.04 amd64/systemd255.4/UID1001实际安装验收已通过：20文件私有Ed25519签名bundle、完整setup及专用加密keyring创建、离线维护、错误口令不损伤旧凭据、真实重新解锁、daemon重启保留Chrome、运行中拒绝重新注册凭据、异身份unit阻止卸载、回滚后卸载成功并保留278个profile文件/加密凭据/无关哨兵。普通备份排除敏感档案；TLS与shell夹具正确返回application_pending，不宣称Claude可用。产物SHA256为`75cd6d0856c0ad5c3d17511f6186306505c90ccbd54ce43bfd0460320ad4a357`；该历史产物不含后续schema2/持久化/GTK增量，最终增量另验。APT仅校验root lists父目录，允许APT自管_apt partial；systemd255凭据0550/0440必须通过fd与ACL校验，不能只按mode放宽。凭据ACL三项（含20表项和真实ACL）、安装依赖定向检查通过。
+
+真实Chrome默认诊断已通过：当前profile原生`ja-JP/ja`、`Asia/Tokyo`与启动配置分别取证，外部访问disabled、WebRTC未授权和实际Secure DNS不可见均保持unknown；无网络容器online=false、原生webdriver=true如实报告，不修改这些值或宣称防检测。
+
+最终schema2原生验收：冻结`/work/final-region-schema2-20261114T233157Z.oKRl5H/source`构建helper SHA256 `754ad58c6e2a609267a5d5e01e2e12b2c7e7d34a9a948227a9db94146307ad35`。Ubuntu resolved255.4、Debian resolvconf1.91/openresolv3.12三个新断网容器均通过普通UID sudo六动作、非法调用拒绝、JP→US→JP代际链与旧A回滚拒绝、逆序归属恢复、guard重启与35秒无helper调用下的30秒自动恢复、确认保持、外部编辑冲突保留和root安全恢复。实际DNS与证书验证TLS共20次握手，HTTP应用字节为0，不访问公网。resolved短时密集事务触发原生5次/10秒限制，真实记录rollback_failed后由守卫自动恢复；未弱化unit或添加隐式重试。结束时原系统状态逐字恢复、授权disabled，再停止夹具。私有证据归档：`local://final-region-schema2-{resolved,resolvconf,openresolv}-evidence.tar`。
+
+最终宿主/安装增量：`TestBrowserProfileAuthorizationAndPersistence`定向race通过，含真实TLS→daemon→gRPC子进程的未授权上传、空闲发送者接收worker错误、部分上传取消/临时文件清理及无发布；集成artifact补齐真实browser manifest和双端声明，未删失败场景。真实sync保护与GTK依赖/凭据ACL回归通过。冻结`/work/final-integration-20261115-r3/source`的959文件manifest SHA256为`17c78e72faa51aa6d1988f24a1fea6b7f09c8f97d3735033180d6ecefdae72c1`，普通UID离线构建10个可执行文件和发行工具，20文件私有Ed25519签名包独立验签。归档SHA256 `705d00d24535b23a68f7630adfd5618131ba7e9d20c4d8dbaa4198c87e50f3d4`，SUMS pin `cfc6a8622ef12e8650f8360271fad2cdeef0e3e6dbbfbae33b75fb87720eacf0`。
+
+该最终包实际Ubuntu setup通过，安装helper/runtime分别匹配签名与receipt，Chrome157及观察到的18个runtime/Chrome/Fcitx进程均为UID1001，专用加密collection解锁、gnome-libsecret参数、Fcitx私有配置及选定总线名称归属均有实证。离线维护保持同一实例，6个凭据/档案/哨兵/源摘要和原系统默认不变。空、已撤权schema1夹具先按设计拒绝；经明确授权逐字归档后才新建schema2，未迁移或推断归属。最后显式停止Chrome、网络保持none。证据：`local://final-integration-installation-evidence.json`、`local://final-host-integration-evidence.json`、`local://final-integration-source-sha256.json`。
+
+真实查看器最终增量：服务端原生文件选择框上传48字节多语言文件并显示收到的内容；多个查看器显式接管后旧控制者降为只读，控制者关闭不会自动提升观察者；显式resize实际得到1600×374 framebuffer。查看器本机上传45字节成功，但下载最初HTTP500：Connect v2正常终态包装EOF，`== io.EOF`误判。改用`errors.Is`，保留finish/长度/hash检查，新增包装EOF及缺finish回归；最初测试误用v1错误构造签名，改为v2 `WithCause`后定向race通过1.069s。冻结`/work/browser-download-final-20261115`独立构建插件SHA256 `de1ca27063c0ef32f63af4e30e3db90a4c38c0cf3b7cfed7f9c3b405e917e4f8`；恢复生产错误脱敏后真实网页下载完成，本机实际文件45字节、SHA256 `fc99965f92140121a7b6884216e9f631cde707723f0eb2fbf20f1cede50e68b2`，正文与原上传完全一致。诊断用原始错误输出仅存在隔离临时源码/客户端，未进入仓库或签名包，已撤下。
+
+证据边界：上述签名包关闭在包装EOF修复之前，不能声称包含该后续两文件增量；其实际客户端构建/UI证据单列。原生ARM/macOS/WSL2、真实账号、公网地区观察、物理重启与官方公开包未验，完整操作清单见27；未发布新版本。
+
+
 <a id="evidence-first-beta-candidate"></a>
 ## 首个 beta 候选修复与验证（2026-11-13—14，发布前验收通过）
 

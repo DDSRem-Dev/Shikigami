@@ -20,7 +20,9 @@ import (
 
 var pluginIDPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}[a-z0-9]$|^[a-z]$`)
 
-func builtinID(id string) bool { return id == "sync" || id == "port" }
+func builtinID(id string) bool {
+	return id == "sync" || id == "port" || id == "region" || id == "browser"
+}
 
 type artifactIntegrity struct {
 	ManifestSHA256 string `json:"manifest_sha256"`

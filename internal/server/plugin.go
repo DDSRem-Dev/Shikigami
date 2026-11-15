@@ -3,14 +3,17 @@ package server
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"connectrpc.com/connect/v2"
 	"github.com/DDSRem-Dev/Shikigami/internal/plugin"
 	sdk "github.com/DDSRem-Dev/Shikigami/pkg/plugin"
 	schema "github.com/DDSRem-Dev/Shikigami/pkg/plugin/config"
 	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
+	epb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/extensions"
 	ppb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/plugin"
 	rpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/protocolconnect"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -28,7 +31,7 @@ func (r *Runtime) startPlugins(options DaemonOptions) error {
 		Validate:   validateServerPluginConfig,
 		Config: func(id string, values *structpb.Struct) (plugin.Config, error) {
 			var manifest plugin.Manifest
-			if id == "sync" || id == "port" {
+			if plugin.BuiltinAvailable(id, "server") {
 				var e error
 				manifest, e = plugin.ResolveBuiltinManifest(r.cfg.PluginsDir, id, "server", r.Service.Build)
 				if e != nil {
@@ -36,8 +39,22 @@ func (r *Runtime) startPlugins(options DaemonOptions) error {
 				}
 			}
 			core := &daemonPluginCore{service: r.Service, id: id}
-			return plugin.Config{Manifest: manifest, RunDir: filepath.Join(r.cfg.StateDir, "run", "p"), StateDir: filepath.Join(r.cfg.StateDir, "plugin-data", id), HostInstanceID: hostID, Values: values, Core: core, CredentialLifetime: options.PluginCredentialLifetime, Policy: plugin.Policy{Side: "server", Capabilities: []string{"core.projects.read", "core.sessions.read", "core.config.read", "core.log"}, Scopes: []*ppb.Scope{{}}, AuthorizeScope: core.authorizeScope}}, nil
+			callbacks := []string{"core.projects.read", "core.sessions.read", "core.config.read", "core.log"}
+			var region *browserRegionCore
+			if id == "browser" {
+				callbacks = []string{"core.config.read", "core.log", "region.read"}
+				region = &browserRegionCore{service: r.Service}
+			} else if id == "region" {
+				callbacks = []string{"core.config.read", "core.log"}
+			}
+			cfg := plugin.Config{Manifest: manifest, RunDir: filepath.Join(r.cfg.StateDir, "run", "p"), StateDir: filepath.Join(r.cfg.StateDir, "plugin-data", id), HostInstanceID: hostID, Values: values, Core: core, CredentialLifetime: options.PluginCredentialLifetime, Policy: plugin.Policy{Side: "server", Capabilities: callbacks, Scopes: []*ppb.Scope{{}}, AuthorizeScope: core.authorizeScope}}
+			if region != nil {
+				cfg.Region = region
+				cfg.StartupTimeout = 120 * time.Second
+			}
+			return cfg, nil
 		},
+		Disable: stopDisabledBrowser,
 		Ready: func(ctx context.Context, _ string, worker sdk.Lifecycle) error {
 			health, e := worker.Health(ctx)
 			if e != nil {
@@ -113,6 +130,10 @@ func (s *Service) capabilities() []string {
 					capability = sdk.FileCapability
 				} else if status.PluginId == "port" {
 					capability = sdk.PortCapability
+				} else if status.PluginId == "region" {
+					capability = sdk.RegionCapability
+				} else if status.PluginId == "browser" {
+					capability = sdk.BrowserCapability
 				}
 				for _, offered := range status.Protocol.GetCapabilities() {
 					if (offered == capability && capability != "") || (status.PluginId == "port" && (offered == sdk.PortCheckCapability || offered == sdk.PortAutoCapability)) {
@@ -128,4 +149,33 @@ func (s *Service) capabilities() []string {
 	}
 	sort.Strings(result)
 	return result
+}
+
+// Normal worker Stop deliberately leaves independent browser runtime services
+// alive. Only a durable explicit disable invokes this typed stop operation.
+func stopDisabledBrowser(ctx context.Context, id string, lifecycle sdk.Lifecycle) error {
+	if id != "browser" {
+		return nil
+	}
+	extensions, ok := lifecycle.(sdk.ExtensionLifecycle)
+	var client sdk.BrowserClient
+	if ok {
+		client = extensions.Browser()
+	}
+	if client == nil {
+		return connect.NewError(connect.CodeFailedPrecondition, "BROWSER_DISABLE_SERVICE_UNAVAILABLE")
+	}
+	profiles, err := client.ListBrowserProfiles(ctx, &epb.BrowserScope{})
+	if err != nil {
+		return err
+	}
+	if profiles == nil {
+		return connect.NewError(connect.CodeDataLoss, "BROWSER_DISABLE_PROFILES_UNAVAILABLE")
+	}
+	var failures error
+	for _, profile := range profiles.GetProfiles() {
+		_, err := client.StopBrowser(ctx, &epb.BrowserActionRequest{ProfileId: profile.Id, RequestId: "disable_" + rand.Text(), Confirm: true})
+		failures = errors.Join(failures, err)
+	}
+	return failures
 }

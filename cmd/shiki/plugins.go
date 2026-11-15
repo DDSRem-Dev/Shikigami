@@ -148,7 +148,11 @@ func (a *app) pluginCommands() *cobra.Command {
 				if e != nil {
 					return e
 				}
-				ctx, cancel := context.WithTimeout(cmd.Context(), wait)
+				waitBudget := wait
+				if side == "remote" && args[0] == "browser" && !cmd.Flags().Changed("wait-timeout") {
+					waitBudget = 150 * time.Second
+				}
+				ctx, cancel := context.WithTimeout(cmd.Context(), waitBudget)
 				defer cancel()
 				final, e := waitForPlugin(ctx, accepted, func(ctx context.Context) (*pb.PluginStatus, error) { return pluginStatus(ctx, c, target, args[0]) })
 				if final != nil {
@@ -160,7 +164,7 @@ func (a *app) pluginCommands() *cobra.Command {
 			})
 		}}
 		command.Flags().StringVar(&revision, "expected-revision", "", "Require this observed revision; defaults to a fresh status read")
-		command.Flags().DurationVar(&wait, "wait-timeout", 30*time.Second, "Maximum time to wait for ready, stopped, or failed")
+		command.Flags().DurationVar(&wait, "wait-timeout", 30*time.Second, "Maximum wait for ready, stopped, or failed (remote browser defaults to 2m30s)")
 		if operation.action == pb.ManagePluginRequest_SET_CONFIG {
 			command.Flags().StringVar(&configFile, "file", "", "JSON object with the complete plugin configuration")
 		}

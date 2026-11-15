@@ -27,7 +27,7 @@ func releaseFixture(t *testing.T) (string, string, string) {
 			t.Fatal(err)
 		}
 	}
-	for _, name := range []string{"shiki", "shiki-agent", "shiki-daemon", "shiki-install", "shiki-plugin-sync", "shiki-plugin-port", "sync.manifest.json", "port.manifest.json"} {
+	for _, name := range []string{"shiki", "shiki-agent", "shiki-daemon", "shiki-install", "shiki-plugin-sync", "shiki-plugin-port", "sync.manifest.json", "port.manifest.json", "shiki-plugin-region", "region.manifest.json", "shiki-plugin-browser", "browser.manifest.json", "shiki-region-helper", "shiki-browser-runtime"} {
 		if err := os.WriteFile(filepath.Join(bin, name), []byte("opaque fixture "+name+"\n"), 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -110,6 +110,7 @@ func TestReleaseSidecarsDescribeCompletedArchive(t *testing.T) {
 	defer gz.Close()
 	archive := tar.NewReader(gz)
 	var sums []byte
+	members := map[string]bool{}
 	for {
 		header, err := archive.Next()
 		if err == io.EOF {
@@ -118,11 +119,17 @@ func TestReleaseSidecarsDescribeCompletedArchive(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		members[header.Name] = true
 		if header.Name == "SHA256SUMS" {
 			sums, err = io.ReadAll(archive)
 			if err != nil {
 				t.Fatal(err)
 			}
+		}
+	}
+	for _, name := range []string{"shiki-plugin-region", "region.manifest.json", "shiki-plugin-browser", "browser.manifest.json", "shiki-region-helper", "shiki-browser-runtime"} {
+		if !members[name] {
+			t.Fatalf("optional signed payload missing from archive: %s", name)
 		}
 	}
 	if len(sums) == 0 {
@@ -188,5 +195,41 @@ func TestReleaseCleanupPreservesReplacedPaths(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "moved")); err != nil {
 		t.Fatal("cleanup followed moved file", err)
+	}
+}
+
+func TestDarwinArchiveOmitsEveryLinuxOnlySupportArtifact(t *testing.T) {
+	bin, dist, _ := releaseFixture(t)
+	if err := run(bin, dist, "v1.2.3", "darwin", "arm64"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dist, "shikigami-v1.2.3-darwin-arm64.tar.gz"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	compressed, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer compressed.Close()
+	archive := tar.NewReader(compressed)
+	browser := false
+	for {
+		entry, err := archive.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch entry.Name {
+		case "shiki-plugin-region", "region.manifest.json", "shiki-region-helper", "shiki-browser-runtime":
+			t.Fatalf("Darwin archive advertised a stale Linux-only artifact: %s", entry.Name)
+		case "browser.manifest.json":
+			browser = true
+		}
+	}
+	if !browser {
+		t.Fatal("Darwin client browser artifact missing")
 	}
 }

@@ -22,6 +22,9 @@ ORIGIN = "https://github.com/DDSRem-Dev/Shikigami"
 MEMBERS = {"shiki", "shiki-agent", "shiki-daemon", "shiki-install", "shiki-plugin-sync",
            "shiki-plugin-port", "sync.manifest.json", "port.manifest.json", "install.sh",
            "install-client.sh", "uninstall.sh", "LICENSE", "release.json", "SHA256SUMS"}
+OPTIONAL_PLUGINS = {"shiki-plugin-region", "region.manifest.json",
+                    "shiki-plugin-browser", "browser.manifest.json"}
+LINUX_SUPPORT = {"shiki-region-helper", "shiki-browser-runtime"}
 
 
 def digest(path):
@@ -93,8 +96,15 @@ def verify_bundle(bundle, envelope, version, system, arch):
     metadata = json.loads(base64.b64decode(envelope["payload"], validate=True))
     if (metadata["version"], metadata["os"], metadata["arch"]) != (version, system, arch):
         raise ValueError("signed bundle target differs from native runner")
-    if {p.name for p in bundle.iterdir()} != MEMBERS:
-        raise ValueError("installed bundle must preserve exactly fourteen authenticated members")
+    members = {p.name for p in bundle.iterdir()}
+    optional = OPTIONAL_PLUGINS | LINUX_SUPPORT if system == "linux" else {"shiki-plugin-browser", "browser.manifest.json"}
+    allowed = MEMBERS | optional
+    if not MEMBERS <= members or not members <= allowed:
+        raise ValueError("installed bundle membership differs from supported authenticated payloads")
+    for plugin, support in (("region", "shiki-region-helper"), ("browser", "shiki-browser-runtime")):
+        present = f"shiki-plugin-{plugin}" in members
+        if present != (f"{plugin}.manifest.json" in members) or (system == "linux" and present != (support in members)):
+            raise ValueError("incomplete installed optional plugin group")
     if any(p.is_symlink() or not p.is_file() for p in bundle.iterdir()):
         raise ValueError("installed bundle contains a non-regular member")
     if digest(bundle / "SHA256SUMS") != metadata["checksums_sha256"]:
@@ -102,12 +112,12 @@ def verify_bundle(bundle, envelope, version, system, arch):
     observed = {}
     for line in (bundle / "SHA256SUMS").read_text().splitlines():
         match = re.fullmatch(r"([a-f0-9]{64})  ([A-Za-z0-9._-]+)", line)
-        if not match or match[2] not in MEMBERS or match[2] in observed:
+        if not match or match[2] not in members or match[2] in observed:
             raise ValueError("invalid installed checksums")
         observed[match[2]] = digest(bundle / match[2])
         if observed[match[2]] != match[1]:
             raise ValueError("installed payload differs from authenticated checksum")
-    if set(observed) != MEMBERS - {"SHA256SUMS"}:
+    if set(observed) != members - {"SHA256SUMS"}:
         raise ValueError("incomplete installed payload checksums")
     manifest = json.loads((bundle / "release.json").read_text())
     if (manifest["version"], manifest["os"], manifest["arch"]) != (version, system, arch):

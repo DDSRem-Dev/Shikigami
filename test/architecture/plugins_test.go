@@ -19,7 +19,7 @@ const module = "github.com/DDSRem-Dev/Shikigami"
 func TestPluginPlacementAndDependencyBoundary(t *testing.T) {
 	_, source, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(source), "../.."))
-	for _, name := range []string{"sync", "port"} {
+	for _, name := range []string{"sync", "port", "region", "browser"} {
 		if _, err := os.Stat(filepath.Join(root, "plugins", name, "main.go")); err != nil {
 			t.Errorf("plugins/%s must own its executable entrypoint: %v", name, err)
 		}

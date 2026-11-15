@@ -69,6 +69,7 @@ func (m *Manager) finishDelete(ctx context.Context, id string) error {
 		delete(state.Buckets[storage.SessionsBucket], id)
 		delete(state.Buckets[restartBucket], id)
 		delete(state.Buckets[cleanupBucket], id)
+		delete(state.Buckets[environmentBucket], id)
 		return nil
 	})
 }
@@ -156,6 +157,13 @@ func (m *Manager) processActionLocked(ctx context.Context, request *pb.SessionAc
 			return nil, rpcError(connect.CodeResourceExhausted, "Claude process quota reached")
 		}
 	}
+	command := m.opts.ClaudeCommand
+	if restart {
+		command, err = m.launchCommand(ctx, value.Id, command, !automatic)
+		if err != nil {
+			return nil, err
+		}
+	}
 	// Persist intent before the external process operation. A crash leaves an
 	// honest unknown/starting state for reconciliation, never a stale PID signal.
 	if restart {
@@ -170,12 +178,12 @@ func (m *Manager) processActionLocked(ctx context.Context, request *pb.SessionAc
 	}
 	if restart {
 		if automatic {
-			err = m.tmux.RespawnDead(ctx, value.Id, value.TmuxPane, m.opts.ClaudeCommand)
+			err = m.tmux.RespawnDead(ctx, value.Id, value.TmuxPane, command)
 		} else {
-			err = m.tmux.Respawn(ctx, value.Id, m.opts.ClaudeCommand)
+			err = m.tmux.Respawn(ctx, value.Id, command)
 		}
 		if errors.Is(err, tmux.ErrNotFound) && !automatic {
-			_, err = m.tmux.Create(ctx, value.Id, value.WorkingDir, m.opts.ClaudeCommand)
+			_, err = m.tmux.Create(ctx, value.Id, value.WorkingDir, command)
 		}
 	} else {
 		err = m.tmux.Stop(ctx, value.Id)

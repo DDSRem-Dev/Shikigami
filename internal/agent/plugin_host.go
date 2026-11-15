@@ -54,7 +54,7 @@ func (r *Resources) openPlugins(cfg *config.Client, build string, runtimeOptions
 	}
 	options.Config = func(id string, values *structpb.Struct) (host.Config, error) {
 		var manifest host.Manifest
-		if id == "sync" || id == "port" {
+		if host.BuiltinAvailable(id, "client") {
 			var err error
 			manifest, err = host.ResolveBuiltinManifest(cfg.PluginsDir, id, "client", build)
 			if err != nil {
@@ -79,7 +79,17 @@ func (r *Resources) openPlugins(cfg *config.Client, build string, runtimeOptions
 			scopes = nil
 			core.RemoteCore.AuthorizeForward = core.authorizeForward
 		}
-		return host.Config{
+		var remoteExtensions *host.RemoteExtensions
+		if id == "browser" {
+			capabilities = []string{"core.config.read", "core.log", "browser.remote"}
+			remoteExtensions = &host.RemoteExtensions{Resolve: func(ctx context.Context, serverID string) (*connect.Client, error) {
+				if err := core.authorize(ctx, &ppb.Scope{ServerId: serverID}); err != nil {
+					return nil, err
+				}
+				return r.Resolve(ctx, serverID)
+			}}
+		}
+		workerConfig := host.Config{
 			Manifest:           manifest,
 			RunDir:             filepath.Join(cfg.Agent.StateDir, "plugin-run"),
 			StateDir:           filepath.Join(cfg.Agent.StateDir, "plugin-state", id),
@@ -93,7 +103,11 @@ func (r *Resources) openPlugins(cfg *config.Client, build string, runtimeOptions
 				Scopes:         scopes,
 				AuthorizeScope: core.authorize,
 			},
-		}, nil
+		}
+		if remoteExtensions != nil {
+			workerConfig.RegisterExtensions = remoteExtensions.Register
+		}
+		return workerConfig, nil
 	}
 	options.Ready = func(ctx context.Context, id string, lifecycle sdk.Lifecycle) error {
 		if id == "port" {
@@ -151,6 +165,17 @@ func (c *pluginCore) mapping(scope *ppb.Scope) (*ppb.Mapping, error) {
 }
 func (c *pluginCore) authorize(ctx context.Context, scope *ppb.Scope) error {
 	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if c.id == "browser" {
+		if scope == nil || scope.ServerId == "" || scope.ProjectId != "" || scope.SessionId != "" || scope.MappingId != "" {
+			return rpcError(connect.CodePermissionDenied, "PLUGIN_SCOPE_DENIED")
+		}
+		snapshot, err := c.resources.store.View()
+		if err != nil {
+			return stateError(err)
+		}
+		_, err = storedServer(snapshot, scope.ServerId)
 		return err
 	}
 	if c.id == "port" {

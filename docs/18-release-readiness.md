@@ -16,7 +16,7 @@
 | 当前源码 | 本批安装、签名 marketplace、插件运行时与发行工具的发布前验收通过 | 固定提交 `a5032c112ffdace9b9ab6455f7280480223a8482` 的 [CI 43484685340](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43484685340) 为57/57；本地真实安装/旧 helper 兼容及历史失败范围见[15](15-implementation-status.md#evidence-first-beta-candidate)，不代表新公开包已发布 |
 | 认证生命周期、长稳/资源/性能 | 2026-11-01按用户确认测试通过关闭 | 既有实测证据分别见23、20；用户确认与独立实测分别记录，不补造官方URL到期现场或生产heap/object归因结果 |
 | 公开安装包 | 本仓库安装入口及Formula固定为 `v0.0.1-alpha.2`，来源 `fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2` | 本轮重新核对公开 Release：只有 alpha.1/alpha.2，alpha.2 的22个资产没有 `bootstrap.sh`；其后 master 修复不在旧包内 |
-| 下一发行版 | 目标 `v0.0.1-beta.1`，本轮不创建 tag 或 Release | 发布准备、发布执行及公开包验收分开；只有下方发布前门槛全部有证据时才可宣布候选就绪 |
+| 下一发行版 | 用户于2026-11-15指定 `v0.0.1-alpha.3`，先 commit/push 并修复至完整 CI 通过，再执行 tag 自动预发布 | 当前发布执行以08/15/16的alpha.3段落及[发行说明](releases/v0.0.1-alpha.3.md)为准；下方beta候选记录保留历史证据，不代表已发布beta |
 
 ### 功能支持矩阵
 

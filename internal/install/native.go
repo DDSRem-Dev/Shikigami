@@ -164,7 +164,11 @@ func (n *Native) Prepare(ctx context.Context, plan Plan, release string) error {
 				return err
 			}
 		}
-		for _, name := range append(names(), ManifestName, ChecksumsName) {
+		payloads := []string{ManifestName, ChecksumsName}
+		for _, entry := range manifest.Files {
+			payloads = append(payloads, entry.Name)
+		}
+		for _, name := range payloads {
 			mode := os.FileMode(0644)
 			if executable(name) {
 				mode = 0755
@@ -351,6 +355,9 @@ func (n *Native) RemoveService(ctx context.Context, plan Plan) error {
 	}
 	_, exists, err := readManagedFile(plan.ServiceFile)
 	if err != nil {
+		return err
+	}
+	if err := n.removeInstalledExtensions(ctx, plan); err != nil {
 		return err
 	}
 	if exists {

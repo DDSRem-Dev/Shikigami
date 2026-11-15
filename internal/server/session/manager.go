@@ -26,6 +26,7 @@ const createNamespace = "session.create"
 type ManagerOptions struct {
 	User                   string
 	ClaudeCommand          []string
+	Environment            func(context.Context) (*LaunchEnvironment, error)
 	MaxSessions, MaxClaude int
 	Terminal               TerminalOptions
 	AutoRestart            RestartPolicy
@@ -198,7 +199,11 @@ func (m *Manager) Create(ctx context.Context, request *pb.CreateSessionRequest) 
 	if result.GetAutoStartClaude() {
 		command = m.opts.ClaudeCommand
 	}
-	pane, createErr := m.tmux.Create(ctx, result.Id, result.WorkingDir, command)
+	command, createErr := m.launchCommand(ctx, result.Id, command, true)
+	var pane tmux.Pane
+	if createErr == nil {
+		pane, createErr = m.tmux.Create(ctx, result.Id, result.WorkingDir, command)
+	}
 	if createErr != nil {
 		result.Lifecycle, result.ClaudeStatus = "failed", "stopped"
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
@@ -216,7 +221,7 @@ func (m *Manager) Create(ctx context.Context, request *pb.CreateSessionRequest) 
 		if err := m.completeCreation(request.RequestId, result, code.String(), errors.Is(inspectErr, tmux.ErrNotFound)); err != nil {
 			return nil, storageError(err)
 		}
-		return nil, connect.NewError(code, "tmux session creation failed").WithCause(createErr)
+		return nil, connect.NewError(code, "session process startup failed").WithCause(createErr)
 	}
 	result.Lifecycle = "ready"
 	applyPane(result, pane)
@@ -232,6 +237,7 @@ func (m *Manager) completeCreation(requestID string, value *pb.Session, errorCod
 	return m.store.Update(func(state *storage.Snapshot) error {
 		if cleanupConfirmed {
 			delete(state.Buckets[storage.SessionsBucket], value.Id)
+			delete(state.Buckets[environmentBucket], value.Id)
 		} else if err := state.Put(storage.SessionsBucket, value.Id, value); err != nil {
 			return err
 		}

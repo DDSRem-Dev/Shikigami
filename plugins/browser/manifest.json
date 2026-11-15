@@ -1,0 +1,24 @@
+{
+  "schema_version": "1",
+  "id": "browser",
+  "version": "${BUILD_VERSION}",
+  "display_name": "远程浏览器",
+  "description": "持久 Chrome profile、服务端中日文输入法、单控制者远程查看和显式暂存文件传输",
+  "capabilities": ["core.scope.v1", "browser.remote.v1", "browser.viewer.v1"],
+  "sides": ["client", "server"],
+  "binary": "shiki-plugin-browser",
+  "binary_flags": ["--side=${side}"],
+  "config_schema": [
+    {"key":"max_file_size_mb","type":"int","label":"单文件上限 MiB","default_json":"256","constraints":{"min":1,"max":1024}},
+    {"key":"max_staging_size_mb","type":"int","label":"Profile 暂存配额 MiB","default_json":"1024","constraints":{"min":1,"max":8192}},
+    {"key":"max_attachments","type":"int","label":"同时查看连接上限","default_json":"8","constraints":{"min":1,"max":64}},
+    {"key":"file_transfer_seconds","type":"int","label":"单次文件传输最长秒数","default_json":"600","constraints":{"min":5,"max":3600}},
+    {"key":"width","type":"int","label":"初始画面宽度","default_json":"1440","constraints":{"min":640,"max":4096}},
+    {"key":"height","type":"int","label":"初始画面高度","default_json":"900","constraints":{"min":480,"max":2160}},
+    {"key":"viewer_max_sessions","type":"int","label":"本地查看器上限","default_json":"8","constraints":{"min":1,"max":64}},
+    {"key":"viewer_bootstrap_seconds","type":"int","label":"一次性引导有效秒数","default_json":"120","constraints":{"min":15,"max":600}},
+    {"key":"viewer_session_seconds","type":"int","label":"查看器会话有效秒数","default_json":"28800","constraints":{"min":300,"max":86400}},
+    {"key":"viewer_max_file_bytes","type":"int","label":"本地文件传输字节上限","default_json":"67108864","constraints":{"min":1,"max":1073741824}},
+    {"key":"viewer_operation_seconds","type":"int","label":"本地文件操作超时秒数","default_json":"30","constraints":{"min":5,"max":300}}
+  ]
+}

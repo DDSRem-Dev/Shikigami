@@ -4,11 +4,11 @@
 
 保留 HashiCorp go-plugin，每个插件是独立子进程；本地宿主为 shiki-agent，远端宿主为 shiki-daemon。CLI/TUI 不启动另一份插件。插件崩溃可隔离，插件仍具备同一 OS 用户的文件与进程权限，不是安全沙箱。
 
-内置插件 ID 统一为 `sync`、`port`，二进制 `shiki-plugin-sync`、`shiki-plugin-port`。显示名称可描述为“文件同步”“端口转发”，不能把另一个名字作为配置 ID。
+内置插件 ID 为 `sync`、`port`，以及[27](27-region-browser-plugins.md)新增的 `region`、`browser`；二进制统一为 `shiki-plugin-<id>`。显示名称不能替代配置 ID。新增插件的平台、side和验收范围以27及08/15/16为准，不能据此扩大公开alpha.2的能力。
 
-同一二进制显式使用 `--side=client|server` 启动；两端分别构建对应 OS/arch 的产物，不能把 macOS 插件复制到 Linux。非 Go 插件还需实现 go-plugin 的握手、启动协议和 RPC，只有同名 gRPC service 不够。
+双端插件通过同一入口显式使用 `--side=client|server` 启动；region仅提供Linux server侧，browser在Linux提供双端、macOS仅提供client侧。两端分别构建对应 OS/arch 的产物，不能把 macOS 插件复制到 Linux。非 Go 插件还需实现 go-plugin 的握手、启动协议和 RPC，只有同名 gRPC service 不够。
 
-第三方包使用配置中的 `plugins_dir/<id>/manifest.json` 与相邻的 `shiki-plugin-<id>`；agent 只接纳 `client` side，daemon 只接纳 `server` side。第三方自身版本不必等于宿主版本，但必须与实际子进程 `GetInfo` 返回值逐字一致；manifest schema 1 使用 SDK protocol 1.0，协商还要求进程实现其声明的全部 capabilities。`sync` / `port` 保留独立的发行版/内嵌产物校验，不允许第三方同名目录覆盖。
+第三方包使用配置中的 `plugins_dir/<id>/manifest.json` 与相邻的 `shiki-plugin-<id>`；agent 只接纳 `client` side，daemon 只接纳 `server` side。第三方自身版本不必等于宿主版本，但必须与实际子进程 `GetInfo` 返回值逐字一致；manifest schema 1 使用 SDK protocol 1.0，协商还要求进程实现其声明的全部 capabilities。内置ID保留发行版/内嵌产物校验，不允许第三方同名目录覆盖。
 
 用户已确认：无法替换的 go-plugin 内部通道继续使用原生 gRPC；可独立替换的远端通信、本地 IPC、CoreAPI 回调使用 ConnectRPC。go-plugin 的 GRPCServer/GRPCClient 接口绑定 `*grpc.Server` / `*grpc.ClientConn`，不能将 Connect handler 塞入这两个接口。
 
@@ -29,6 +29,8 @@ CoreAPI 固定使用宿主提供的独立 Unix socket 上 Connect/h2c，不使�
 
 远端 ShikiDaemon 中的文件/端口 RPC 是受认证的路由门面；实际 I/O 转交对应服务端插件。插件禁用返回 FailedPrecondition。未来新插件若要新增跨机数据面，必须声明、版本化并注册协议，不能宣称任意插件自动可远程调用。
 
+新增 `region` / `browser` 的契约见[27](27-region-browser-plugins.md)：region 为服务端插件，browser 为双端插件，业务实现分别位于 `plugins/region/`、`plugins/browser/`。跨机能力使用 `proto/extensions.proto` 中固定用途的 RegionService/BrowserService；BrowserLocalService 仅本地，插件回调沿用私有实例鉴权。它们不开放远端通用 InvokeAction、任意命令或任意网络转发。新增 SDK/宿主接口只在真实服务就绪后准入，不把本设计声明当作已实现能力。
+
 ## SDK 与协议
 
 公共 SDK 放在 `pkg/plugin/`，管理器放在 `internal/plugin/`。公共 SDK 不暴露 grpc.ClientConn 或 connect.Client；内部 adapter 封装两种协议并提供类型化业务接口。公共 SDK 定义：
@@ -36,7 +38,7 @@ CoreAPI 固定使用宿主提供的独立 Unix socket 上 Connect/h2c，不使�
 - 插件元信息、协议版本范围、side、capabilities。
 - 生命周期 Init/Start/Stop/Health。
 - 显式 scope 的 CoreAPI、订阅句柄、结构化事件和日志。
-- sync/port 功能 stub 与取消语义。
+- sync/port及region/browser固定用途功能stub与取消语义；扩展消息由`proto/extensions.proto`定义。
 
 [09](./09-protocol-definition.md) 提供生命周期、完整 CoreAPI、客户端 worker 和服务端数据面的 protobuf 草案；本篇末尾定义双端路由。Phase 0 落盘生成并做真实进程集成测试，定义存在不代表服务已经实现。
 

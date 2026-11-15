@@ -58,6 +58,7 @@ type Result struct {
 	ClaudeLoginState       string   `json:"claude_login_state,omitempty"`
 	TokenIssued            bool     `json:"token_issued,omitempty"`
 	TokenDestination       string   `json:"token_destination,omitempty"`
+	Preserved              []string `json:"preserved,omitempty"`
 }
 
 // Lifecycle implementations must stop and join hosts before Backup. They may
@@ -371,5 +372,5 @@ func (a *Artifacts) Uninstall(ctx context.Context, lifecycle Lifecycle) (*Result
 	if err = a.writeJSON("installation.json", r); err != nil {
 		return nil, err
 	}
-	return &Result{State: "uninstalled", Prefix: a.Prefix, Reason: "CONFIG_STATE_PROJECTS_TMUX_AND_RELEASE_BACKUPS_PRESERVED"}, nil
+	return &Result{State: "uninstalled", Prefix: a.Prefix, Reason: "CONFIG_STATE_PROJECTS_TMUX_RELEASE_BACKUPS_BROWSER_PROFILES_AND_REGION_EVIDENCE_PRESERVED", Preserved: []string{"configuration, state, projects, tmux and release backups", "browser profiles, encrypted keyrings and enrolled encrypted credential", "root-owned region journal and rollback snapshots", "installed distribution/Chrome packages, explicit APT source, existing user linger policy and permanent non-executable runtime installation lock"}}, nil
 }

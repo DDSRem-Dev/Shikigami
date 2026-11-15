@@ -121,7 +121,7 @@ func StartDaemon(parent context.Context, cfg *config.Daemon, options DaemonOptio
 	}
 	r.info.AdminSocket = socket
 	r.info.TailscaleState = "disabled"
-	r.Service.Projects, err = project.New(state, copy.ProjectsDir, copy.RunUser)
+	r.Service.Projects, err = project.New(state, copy.ProjectsDir, copy.RunUser, copy.StateDir)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +137,7 @@ func StartDaemon(parent context.Context, cfg *config.Daemon, options DaemonOptio
 		// shell-only sessions and diagnostics must still be available.
 		command = filepath.Join(copy.StateDir, "missing-dependencies", command)
 	}
-	r.Service.Sessions, err = session.NewManager(ctx, state, mux, session.ManagerOptions{User: copy.RunUser, ClaudeCommand: append([]string{command}, copy.Claude.Args...), MaxSessions: copy.ResourceLimits.MaxSessions, MaxClaude: copy.ResourceLimits.MaxConcurrentClaude, AutoCleanup: session.CleanupPolicy{Enabled: copy.AutoCleanup.Enabled, IdleThreshold: time.Duration(copy.AutoCleanup.IdleThreshold), WarnBefore: time.Duration(copy.AutoCleanup.WarnBeforeCleanup)}, AutoRestart: session.RestartPolicy{Enabled: copy.Claude.AutoRestart.Enabled, MaxAttempts: copy.Claude.AutoRestart.MaxAttempts, Backoff: time.Duration(copy.Claude.AutoRestart.Backoff), StableWindow: time.Duration(copy.Claude.AutoRestart.StableWindow)}})
+	r.Service.Sessions, err = session.NewManager(ctx, state, mux, session.ManagerOptions{User: copy.RunUser, ClaudeCommand: append([]string{command}, copy.Claude.Args...), Environment: r.Service.sessionEnvironment, MaxSessions: copy.ResourceLimits.MaxSessions, MaxClaude: copy.ResourceLimits.MaxConcurrentClaude, AutoCleanup: session.CleanupPolicy{Enabled: copy.AutoCleanup.Enabled, IdleThreshold: time.Duration(copy.AutoCleanup.IdleThreshold), WarnBefore: time.Duration(copy.AutoCleanup.WarnBeforeCleanup)}, AutoRestart: session.RestartPolicy{Enabled: copy.Claude.AutoRestart.Enabled, MaxAttempts: copy.Claude.AutoRestart.MaxAttempts, Backoff: time.Duration(copy.Claude.AutoRestart.Backoff), StableWindow: time.Duration(copy.Claude.AutoRestart.StableWindow)}})
 	if err != nil {
 		return nil, err
 	}

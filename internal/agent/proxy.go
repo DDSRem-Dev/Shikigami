@@ -7,6 +7,7 @@ import (
 
 	"connectrpc.com/connect/v2"
 	"github.com/DDSRem-Dev/Shikigami/internal/connection"
+	host "github.com/DDSRem-Dev/Shikigami/internal/plugin"
 	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
 	rpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/protocolconnect"
 	"google.golang.org/protobuf/proto"
@@ -31,7 +32,9 @@ var proxyMethods = map[string]bool{
 	rpc.ShikiDaemonWatchStatsProcedure: true,
 }
 
-func ProxyAllowed(procedure string) bool { return proxyMethods[procedure] }
+func ProxyAllowed(procedure string) bool {
+	return proxyMethods[procedure] || host.ExtensionCapability(procedure) != ""
+}
 
 func (s *Service) registerProxy(server *connect.Server) {
 	// Use generated method metadata, retaining its exact schema and stream shape.
@@ -41,6 +44,7 @@ func (s *Service) registerProxy(server *connect.Server) {
 	for spec := range metadata.Specs() {
 		server.Register(connect.Method{Spec: spec, Handler: s.proxy})
 	}
+	host.RegisterExtensionProxy(server, s.proxy)
 }
 func newMessage(descriptor protoreflect.MessageDescriptor) (proto.Message, error) {
 	messageType, err := protoregistry.GlobalTypes.FindMessageByName(descriptor.FullName())
@@ -53,6 +57,9 @@ func (s *Service) proxy(ctx context.Context, spec connect.Spec, upstream connect
 	client, ok := ctx.Value(remoteClientKey{}).(*connect.Client)
 	if !ok {
 		return connect.NewError(connect.CodeFailedPrecondition, "SERVER_CLIENT_REQUIRED")
+	}
+	if host.ExtensionCapability(spec.Procedure) != "" {
+		return host.ProxyExtension(ctx, spec, upstream, client, func() { cancelRead(ctx) })
 	}
 	if spec.Procedure == rpc.ShikiDaemonTerminalStreamProcedure {
 		return s.terminalProxy(ctx, spec, upstream, client)

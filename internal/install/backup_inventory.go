@@ -51,10 +51,10 @@ func (n *Native) collectBackup(ctx context.Context, plan Plan, lockWriters bool)
 	if plan.TailscaleDir != "" && !within(plan.StateDir, plan.TailscaleDir) {
 		sources = append(sources, source{"tailscale", plan.TailscaleDir, true})
 	}
-	// Package stores are retained in place across upgrades and legacy rollback.
-	// Copying their hard-linked ownership marker as host state would break that
-	// identity on restore; plugin-owned durable state outside these exact paths
-	// remains part of the ordinary state backup.
+	// Package stores and private browser state are retained in place, not copied
+	// into ordinary host snapshots. Browser profiles include account cookies and
+	// are owned by an independent runtime that survives normal host upgrades.
+	// Other plugin-owned durable state remains in the ordinary state backup.
 	var pluginDirectory, parkedPlugins, pluginOwner string
 	if plan.PluginsDir != "" {
 		pluginDirectory = filepath.Clean(plan.PluginsDir)
@@ -63,6 +63,12 @@ func (n *Native) collectBackup(ctx context.Context, plan Plan, lockWriters bool)
 		parkedPlugins = filepath.Join(parent, parked)
 		pluginOwner = filepath.Join(parent, owner)
 	}
+	browserState := filepath.Join(plan.StateDir, "plugin-data", "browser")
+	if plan.Role == "client" {
+		browserState = filepath.Join(plan.StateDir, "plugin-state", "browser")
+	}
+	userKeyring := filepath.Join(plan.Home, ".local", "share", "keyrings")
+	dedicatedKeyring := filepath.Join(plan.Home, ".local", "share", "shikigami", "browser-keyring")
 	b := &backupInventory{bytes: 1024}
 	defer func() {
 		if err != nil {
@@ -116,7 +122,8 @@ func (n *Native) collectBackup(ctx context.Context, plan Plan, lockWriters bool)
 			}
 			absolute := filepath.Join(base, filepath.FromSlash(relative))
 			if (plan.ProjectsDir != "" && absolute == filepath.Clean(plan.ProjectsDir)) ||
-				absolute == pluginDirectory || absolute == parkedPlugins || absolute == pluginOwner {
+				absolute == pluginDirectory || absolute == parkedPlugins || absolute == pluginOwner || absolute == browserState ||
+				absolute == userKeyring || absolute == dedicatedKeyring {
 				if entry.IsDir() {
 					return fs.SkipDir
 				}

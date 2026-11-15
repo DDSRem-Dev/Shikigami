@@ -1,6 +1,7 @@
 package agent
 
 import (
+	host "github.com/DDSRem-Dev/Shikigami/internal/plugin"
 	sdk "github.com/DDSRem-Dev/Shikigami/pkg/plugin"
 	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
 	rpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/protocolconnect"
@@ -47,6 +48,9 @@ func (p *remotePool) setCapabilities(agreement *pb.ProtocolAgreement) {
 }
 func (p *remotePool) requireCapability(procedure string) error {
 	required := remoteMethodCapabilities[procedure]
+	if required == "" {
+		required = host.ExtensionCapability(procedure)
+	}
 	if required == "" {
 		return nil
 	}

@@ -10,6 +10,7 @@ import (
 
 	"connectrpc.com/connect/v2"
 	connection "github.com/DDSRem-Dev/Shikigami/pkg/plugin/internal/coretransport"
+	erpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/extensions/extensionsconnect"
 	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/plugin"
 	rpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/plugin/pluginconnect"
 )
@@ -21,6 +22,8 @@ type CoreAPI interface{ rpc.CoreAPIClient }
 type coreClient struct {
 	rpc.CoreAPIClient
 	endpoint *connection.Endpoint
+	region   RegionClient
+	browser  BrowserClient
 }
 
 func (c *coreClient) Close() { c.endpoint.Close() }
@@ -46,5 +49,11 @@ func newCoreClient(req *pb.InitRequest) (*coreClient, error) {
 			return next(ctx, spec)
 		}
 	}
-	return &coreClient{CoreAPIClient: rpc.NewCoreAPIClient(connection.NewRPCClient(endpoint, credentials)), endpoint: endpoint}, nil
+	client := connection.NewRPCClient(endpoint, credentials)
+	return &coreClient{
+		CoreAPIClient: rpc.NewCoreAPIClient(client),
+		endpoint:      endpoint,
+		region:        &coreRegionClient{stub: erpc.NewRegionServiceClient(client), localInspect: req.Side == "server"},
+		browser:       &coreBrowserClient{stub: erpc.NewBrowserServiceClient(client), client: client},
+	}, nil
 }

@@ -28,9 +28,12 @@ type SupervisorOptions struct {
 	PluginsDir string
 	Side       string
 	Config     func(string, *structpb.Struct) (Config, error)
-	Validate   func(string, *structpb.Struct) error
-	Ready      func(context.Context, string, sdk.Lifecycle) error
-	Changed    func(string)
+	// Disable is an explicit durable disable operation, never normal shutdown
+	// or worker restart. It may be retried after a crash until it succeeds.
+	Disable  func(context.Context, string, sdk.Lifecycle) error
+	Validate func(string, *structpb.Struct) error
+	Ready    func(context.Context, string, sdk.Lifecycle) error
+	Changed  func(string)
 	// PluginRegistered is called after a plugin reaches "ready" state and its
 	// SettingsRegistry entry has been populated from the manifest/Info response.
 	// Called without the supervisor lock; safe to call back into the supervisor.
@@ -39,10 +42,11 @@ type SupervisorOptions struct {
 	PluginStopped func(id string)
 }
 type desiredPlugin struct {
-	ID       string           `json:"id"`
-	Enabled  bool             `json:"enabled"`
-	Revision string           `json:"revision"`
-	Values   *structpb.Struct `json:"values,omitempty"`
+	ID             string           `json:"id"`
+	Enabled        bool             `json:"enabled"`
+	Revision       string           `json:"revision"`
+	Values         *structpb.Struct `json:"values,omitempty"`
+	DisablePending bool             `json:"disable_pending,omitempty"`
 }
 type supervised struct {
 	logs        []*pb.LogRecord
@@ -80,8 +84,18 @@ func NewSupervisor(parent context.Context, opts SupervisorOptions) (*Supervisor,
 		return nil, err
 	}
 	err = store.Update(func(state *storage.Snapshot) error {
-		for _, id := range []string{"sync", "port"} {
+		for _, id := range builtinIDs(opts.Side) {
 			if _, exists := state.Buckets["plugins"][id]; !exists {
+				// Optional built-ins were not shipped by older signed releases.
+				// Do not invent installed entries for an absent artifact group.
+				// Saved intent is retained above, including pending disable.
+				if id == "region" || id == "browser" {
+					if _, err := opts.Config(id, nil); errors.Is(err, os.ErrNotExist) {
+						continue
+					} else if err != nil {
+						return err
+					}
+				}
 				if err := state.Put("plugins", id, &desiredPlugin{ID: id, Revision: "rev_" + rand.Text()}); err != nil {
 					return err
 				}
@@ -182,8 +196,10 @@ func (m *Supervisor) Manage(ctx context.Context, request *pb.ManagePluginRequest
 				return err
 			}
 			want.Enabled = true
+			want.DisablePending = false
 		case pb.ManagePluginRequest_DISABLE:
 			want.Enabled = false
+			want.DisablePending = request.PluginId == "browser" && m.options.Side == "server" && m.options.Disable != nil
 		case pb.ManagePluginRequest_RESTART:
 			if !want.Enabled {
 				return connect.NewError(connect.CodeFailedPrecondition, "enable plugin before restarting")
@@ -393,11 +409,20 @@ func (m *Supervisor) run(id string, slot *supervised) {
 			m.stop(slot)
 			instance = nil
 		}
-		if !want.Enabled {
+		if !want.Enabled && !want.DisablePending {
 			if m.options.PluginStopped != nil {
 				m.options.PluginStopped(id)
 			}
 			m.publish(id, slot, want, nil, "stopped", "")
+			select {
+			case <-m.ctx.Done():
+				return
+			case <-slot.wake:
+				continue
+			}
+		}
+		if want.DisablePending && m.options.Disable == nil {
+			m.publish(id, slot, want, nil, "failed", "PLUGIN_DISABLE_UNSUPPORTED")
 			select {
 			case <-m.ctx.Done():
 				return
@@ -420,7 +445,11 @@ func (m *Supervisor) run(id string, slot *supervised) {
 		}
 		if instance == nil {
 			if attempts >= 4 {
-				m.publish(id, slot, want, nil, "failed", "PLUGIN_RESTART_LIMIT")
+				reason := "PLUGIN_RESTART_LIMIT"
+				if want.DisablePending {
+					reason = "PLUGIN_DISABLE_RETRY_LIMIT"
+				}
+				m.publish(id, slot, want, nil, "failed", reason)
 				select {
 				case <-m.ctx.Done():
 					return
@@ -445,6 +474,9 @@ func (m *Supervisor) run(id string, slot *supervised) {
 			launchErr := m.validate(id, want.Values)
 			if launchErr == nil {
 				cfg, launchErr = m.options.Config(id, want.Values)
+				if launchErr == nil && want.DisablePending && id == "browser" {
+					cfg.Env = append(cfg.Env, "SHIKI_BROWSER_DISABLE_ONLY=1")
+				}
 				if launchErr == nil && artifact != nil {
 					cfg.Manifest = *artifact
 					cfg.Policy.Capabilities = thirdPartyCallbacks(artifact.PluginManifest)
@@ -453,7 +485,7 @@ func (m *Supervisor) run(id string, slot *supervised) {
 			if launchErr == nil {
 				instance, launchErr = Launch(m.ctx, cfg)
 			}
-			if launchErr == nil && m.options.Ready != nil {
+			if launchErr == nil && m.options.Ready != nil && !want.DisablePending {
 				ready, cancel := context.WithTimeout(m.ctx, 10*time.Second)
 				launchErr = m.options.Ready(ready, id, instance.lifecycle)
 				cancel()
@@ -489,6 +521,33 @@ func (m *Supervisor) run(id string, slot *supervised) {
 			if err != nil || current.Revision != want.Revision || latestGeneration != generation {
 				_ = instance.Stop(context.Background())
 				instance = nil
+				continue
+			}
+			if want.DisablePending {
+				stopCtx, stopCancel := context.WithTimeout(m.ctx, 30*time.Second)
+				disableErr := m.options.Disable(stopCtx, id, instance.lifecycle)
+				stopCancel()
+				_ = instance.Stop(context.Background())
+				instance = nil
+				if disableErr != nil {
+					attempts++
+					m.publish(id, slot, want, nil, "failed", "PLUGIN_DISABLE_FAILED")
+					continue
+				}
+				if err := m.store.Update(func(state *storage.Snapshot) error {
+					var current desiredPlugin
+					if err := state.Get("plugins", id, &current); err != nil {
+						return err
+					}
+					if current.Revision == want.Revision && !current.Enabled {
+						current.DisablePending = false
+						return state.Put("plugins", id, &current)
+					}
+					return nil
+				}); err != nil {
+					m.publish(id, slot, want, nil, "failed", "PLUGIN_DISABLE_COMMIT_FAILED")
+					return
+				}
 				continue
 			}
 			started = time.Now()

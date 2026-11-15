@@ -178,12 +178,32 @@ class ChannelTests(unittest.TestCase):
         (bundle / "SHA256SUMS").write_text(checksums)
         payload = {"version": "v0.0.1-alpha.2", "os": "linux", "arch": "arm64", "checksums_sha256": hashlib.sha256(checksums.encode()).hexdigest()}
         envelope = {"payload": base64.b64encode(json.dumps(payload).encode()).decode()}
-        self.assertEqual(len(channel.verify_bundle(bundle, envelope, "v0.0.1-alpha.2", "linux", "arm64")), 13)
+        self.assertEqual(len(channel.verify_bundle(bundle, envelope, "v0.0.1-alpha.2", "linux", "arm64")), len(channel.MEMBERS) - 1)
         with self.assertRaisesRegex(ValueError, "native runner"):
             channel.verify_bundle(bundle, envelope, "v0.0.1-alpha.2", "linux", "amd64")
         (bundle / "shiki").write_text("corrupt")
         with self.assertRaisesRegex(ValueError, "payload"):
             channel.verify_bundle(bundle, envelope, "v0.0.1-alpha.2", "linux", "arm64")
+
+    def test_additive_platform_payloads_are_preserved_but_partial_groups_fail(self):
+        for system in ("linux", "darwin"):
+            bundle = self.root / ("optional-" + system)
+            bundle.mkdir()
+            optional = (channel.OPTIONAL_PLUGINS | channel.LINUX_SUPPORT
+                        if system == "linux" else {"shiki-plugin-browser", "browser.manifest.json"})
+            members = channel.MEMBERS | optional
+            for name in members - {"SHA256SUMS"}:
+                (bundle / name).write_text(name)
+            (bundle / "release.json").write_text(json.dumps({"version": "v0.0.1-alpha.2", "os": system, "arch": "arm64"}))
+            checksums = "".join(f"{channel.digest(bundle / name)}  {name}\n" for name in sorted(members - {"SHA256SUMS"}))
+            (bundle / "SHA256SUMS").write_text(checksums)
+            payload = {"version": "v0.0.1-alpha.2", "os": system, "arch": "arm64",
+                       "checksums_sha256": hashlib.sha256(checksums.encode()).hexdigest()}
+            envelope = {"payload": base64.b64encode(json.dumps(payload).encode()).decode()}
+            self.assertEqual(set(channel.verify_bundle(bundle, envelope, "v0.0.1-alpha.2", system, "arm64")), members - {"SHA256SUMS"})
+            (bundle / "browser.manifest.json").unlink()
+            with self.assertRaisesRegex(ValueError, "optional plugin"):
+                channel.verify_bundle(bundle, envelope, "v0.0.1-alpha.2", system, "arm64")
 
 
 if __name__ == "__main__":

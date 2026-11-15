@@ -8,6 +8,7 @@
 - 公共 socket 名必须在 0600 权限和所有者确认后原子发布，不能让并发前端观察到 bind 后 chmod 前的中间权限。当前 Darwin/Linux 在同一私有目录以短随机名 bind，设定权限后用不覆盖目标的 hard link 发布，随后移除临时名；不修改进程全局 umask，发布/临时名清理失败即报错。Close 在宿主生命周期锁范围内检查 inode，仅移除本实例仍拥有的公共名字；不是抵御任意同 UID rename 的通用原子 CAS。
 - 服务端每次接受连接验证 OS peer UID（Linux SO_PEERCRED、macOS getpeereid 或等价方式）等于运行用户；客户端校验目录/socket 所有者、权限及 peer UID。不接受 TCP 回退、浏览器跨域或仅凭路径名建立信任。
 - socket 内不另加 TLS，安全依赖同用户 IPC。它不是同一 UID 下恶意进程之间的隔离；frontend_id 只是窗口资源归属，不能作为认证凭据。
+- [27 浏览器插件](27-region-browser-plugins.md)增加的是 client 插件拥有的专用 loopback 查看器，不是本 agent socket 的 TCP/CORS 回退。网页只能持有短期查看凭据，不能获得 daemon Token 或完整 agent API；Host/Origin/CSRF/WebSocket、目标 profile/instance 和控制权均单独校验。跨机仍通过认证的 agent/daemon 固定用途代理。
 - `shiki agent start` 由 CLI 调用用户服务管理器或启动后台进程，不是向尚不存在的进程发送 RPC。所有竞争启动者使用同一个状态目录锁，最多一个实例可创建 tsnet 节点。
 - stale socket 只有在确认属于本用户、没有活进程且成功持有实例锁后才可删除；不能仅凭 dial 失败 unlink。启动 10 秒内未 ready 返回明确错误，输出日志位置，不循环拉起。
 - agent 启动生成新的 instance_id；磁盘存储 schema/凭据/节点损坏时仍可提供诊断，但不启动写文件或转发任务。
@@ -16,10 +17,12 @@ UDS transport 固定拨号该 socket，使用合成 base URL `http://shiki-agent
 
 ## 2. 服务与调用身份
 
-同一个 agent socket 注册两个业务 service：
+同一个 agent socket 注册两个基础业务 service：
 
 1. `shiki.agent.v1.Agent`：本地后台、服务器配置、映射、冲突、监听和插件管理。
 2. `shiki.v1.ShikiDaemon`：**受限代理**，复用 09 的项目/会话/终端消息；agent 负责注入远端 Token 和连接管理。
+
+地区/浏览器扩展另注册`shiki.extensions.v1.RegionService`、`BrowserService`受限远端代理，以及只在本机调用的`BrowserLocalService`；schema复用`proto/extensions.proto`，不增加通用远端action。远端扩展同样检查frontend/instance与显式server路由，请求中的server_id须与header一致；host派生身份和权限，忽略调用者自报owner/grant。`BrowserLocalService`创建查看器，不把agent IPC暴露给网页。
 
 此外注册 `NodeControl`，用于内嵌 tsnet 的本地引导。daemon 在自己的 `/var/lib/shiki/run/admin.sock` 上注册 NodeControl 与独立只读 DaemonReadiness，安装器以 daemon 用户访问；不在该 socket 暴露 agent 业务或远端文件 RPC。NodeControl 独立协商，登录尚未完成也必须可调用。GetStatus 属于基础只读诊断，不要求 node.login.v1；关闭节点或身份状态不可用的端点仍以兼容协议与自己的 instance_id 提供实际状态。BeginLogin/CancelLogin 及需要登录的连接流程继续要求 node.login.v1，不能因诊断可读而开放登录。前端读取状态仍须校验同 UID socket、协议 major/minor、实例与截止，不能根据当前磁盘配置猜运行中节点状态。DaemonReadiness 不增加 NodeControl 方法，不注册在远端 listener 或 agent 代理。
 
@@ -29,11 +32,13 @@ UDS transport 固定拨号该 socket，使用合成 base URL `http://shiki-agent
 |---|---|
 | `shiki-agent-instance-id` | 必须匹配当前进程，旧值返回 FailedPrecondition/AGENT_RESTARTED |
 | `shiki-frontend-id` | Handshake 分配；用于窗口归属，未登记返回 FailedPrecondition/HANDSHAKE_REQUIRED |
-| `shiki-server-id` | 仅 ShikiDaemon 代理必填；空、未知 ID 拒绝，不读取全局“当前服务器” |
+| `shiki-server-id` | ShikiDaemon及Region/Browser远端代理必填；空、未知ID拒绝，不读取全局“当前服务器” |
 
 Agent 业务操作的 server_id 来自请求自身；若还携带路由 header，必须与请求一致。NodeControl.Negotiate/GetStatus/BeginLogin/CancelLogin 使用独立 `shiki-node-control-instance-id`（Negotiate 返回），不依赖 agent frontend_id。所有字段都不能替代 OS peer 身份检查。
 
 前端退出调用 ReleaseFrontend，关闭该 frontend 的终端流/订阅；后台 sync/listener 继续。崩溃时以流取消清理 attachment；不持有活动流、10 分钟无调用的 frontend 登记可回收，客户端重新 Handshake。
+
+浏览器查看会话由client插件生命周期持有，创建它的CLI退出不关闭查看器或Chrome。网页的专用凭据、attachment和控制权独立校验；关闭查看器只取消该查看会话，停止Chrome须显式生命周期命令。client插件/agent停止取消查看连接，但独立远端Chrome保活。
 
 ### daemon 本地安装就绪诊断
 

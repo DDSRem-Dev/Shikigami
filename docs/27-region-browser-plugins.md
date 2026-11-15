@@ -1,0 +1,109 @@
+# 地区环境与远程浏览器插件
+
+状态：2026-11-15 用户批准的实现与授权范围内本地/隔离amd64容器验收已完成，精确冻结源码、产物与修复证据见08/15/16。本文仍是行为基线，不代表全平台通过。原Phase0–5的42项不包含本批；原生平台、真实账号、物理重启、公网及公开发行保持下方未验清单，公开alpha.2不含这两个扩展。
+
+## 已确认产品契约
+
+- 单用户 VPS：Ubuntu24.04/Debian12，amd64/arm64，systemd。客户端沿用macOS/Linux/WSL2；不承诺原生Windows/移动端或无agent客户端。
+- 新插件ID为region、browser。独立可选启用，不改变sync/port的既有功能。生产业务在plugins/region、plugins/browser；SDK在pkg/plugin；宿主在internal/plugin，不建立host到插件业务的import。
+- region修改整机IANA时区、UTF-8 locale、语言和区域格式。首批JP/US；JP建议Asia/Tokyo/ja_JP.UTF-8；US必须明确时区/语言。选择国家不是身份、居住地或服务资格证明。
+- 系统真实时钟/NTP、VPN/代理出口、路由不由本批修改。用户自行准备出口。DNS是独立显式授权的扩展，用户指定系统解析器和Chrome安全DNS；不得按国家暗选供应商。
+- 普通用户daemon/插件/Chrome保持不变。管理员一次安装并预授权root拥有的受限helper，普通用户不可替换；不接受任意命令、路径、下载源或可执行文件。授权意味着同UID程序也可能使用该白名单权限，不是插件沙箱。
+- 设置先检查/计划，再显式确认应用。版本竞争拒绝。保存旧配置，报告实际生效和待重启；不自动重启现有Claude、tmux、Chrome或第三方服务。
+- DNS由脱离客户端连接的恢复守卫保护；应用后新解析与连接检查，通过后用户确认；超时尝试恢复，恢复失败真实报告。不能保证所有失联都能自动救回。包安装不能承诺完整事务回滚。
+- Chrome官方稳定版，有界面、保留sandbox。虚拟显示+VNC+noVNC，本机浏览器仅承载画面与输入；不提供完整桌面、音视频、摄像头或安全密钥转发。
+- 多持久profile，同机同时只允许一个运行、最多一个显式开机目标；切换要确认停止旧实例。新profile默认不开机启动。禁用插件停止所有受管实例但保留数据。
+- 独立systemd用户服务持有运行实例；客户端断线、agent/daemon/plugin重启不结束Chrome。主机开机只有已校验并启用的插件可以启动指定profile。Chrome崩溃标crashed，人工重启，不自动循环拉起。
+- 一个控制者，其余只读；显式版本化接管，断线不自动提升其他人。输入/resize/剪贴板的权限在服务端实施。
+- 服务端中文/日文输入法，远程显示候选框，本机英文键盘传递按键。显式剪贴板；独立授权的上传和下载取回。文件通道只访问profile暂存区，但Chrome同UID文件选择框不是整机文件沙箱。
+- 保留Cookie，不提供密码保存/Chrome同步。用户追加确认采用整机Chrome托管策略：管理员安装`/etc/opt/chrome/policies/managed/shikigami-browser.json`，设置`PasswordManagerEnabled=false`、`SyncDisabled=true`、`BrowserSignin=0`；安装计划必须说明影响同机所有官方Chrome，已有冲突策略不得覆盖。网站账号登录不受此浏览器账号登录策略禁止。profile偏好只是补充，不能冒充不可修改的限制。密钥环问题真实报告，不静默使用明文密码存储。profile不进入项目同步、日志、普通诊断和配置快照。持久profile不保证登录永久有效或恢复未保存内容。
+- 用户追加确认无人值守开机解锁：管理员显式配置systemd加密凭据与解锁服务，运行时仍以普通用户使用加密密钥环；解锁口令仅经stdin传递，不进入命令参数、日志、配置快照或诊断。不得重置已有密钥环。无TPM时允许本机root密钥保护的凭据，必须披露无法抵御整盘与root密钥一并失窃。解锁失败明确阻止Chrome启动，不静默退回明文存储。
+- Claude Code由用户通过远程Chrome人工完成官方授权，不复制Cookie、不抓取密码、不承诺自动回调集成。
+- Chrome/系统依赖首次安装与维护更新展示清单和来源，管理员确认。不静默重启、不关闭系统既有更新策略。
+
+## 诊断与证据边界
+
+官方披露IP/地区、设备、OS/浏览器、网络/ISP、时区、Cookie及使用信息，但未公开完整风控项、权重或阈值。产品验收目标是可观测一致性，不是保证规避风控。不得伪造Canvas/WebGL/TLS/设备身份，不修补Claude，不改变用户既有遥测选择。
+
+主机、指定远程Chrome profile、外部观察点是三个不同vantage。不得用本机noVNC页面或daemon出口冒充远程Chrome。结果包含check/state/value/expected/source/vantage/observed_at/limitation；unknown不等于pass。外部检测默认关闭，可逐项显式授权自建或公开HTTPS服务，披露供应商和外发字段，不暗中回退，不提交账号/Cookie/Token，不上传综合指纹或分享报告。差异只警告，不终止现有进程。
+
+DNS配置、浏览器Secure DNS、权威DNS观察到的递归出口、HTTPS出口分别报告；公共DNS anycast/注册国不能作为固定出口国家。IP地理库、信誉数据库、众包封禁记录和社区启发式分数不是Claude认可或封禁概率。不提供自创防封分数。
+
+原生Chrome的诊断保持当前profile和网络路径，不为测量临时设置代理。仅访问显式授权的HTTPS供应商，禁止凭据、重定向和未授权URL；公开DNS预检及连接后IP观察不能保证阻止连接前DNS重绑定。域名供应商必须受用户信任，此残余风险在报告中披露，缺少远端IP证据记unknown，不宣称具备主机探测的IP固定保障。
+
+原始资料：
+- https://www.anthropic.com/legal/privacy
+- https://privacy.claude.com/en/articles/11186740-does-claude-use-my-location
+- https://developer.mozilla.org/en-US/docs/Web/API/Navigator/languages
+- https://www.rfc-editor.org/rfc/rfc7871
+- https://developers.google.com/speed/public-dns/faq
+- https://github.com/stormzhang/ipcheck/tree/50018243a5699df10c6b46617f3fe4bd73b35dab
+- https://github.com/TZZ520/claude-environment-check/tree/39fe2f3d19eb2b9b474a348c6d5e6ee1ab2b757f
+- https://github.com/Nooobhh/claude-analysis/tree/a245653756f8d7c41bae8f81f67b35ffc8fd22cd
+- https://github.com/misakaikato/exitlens/tree/05eccb39e11c9faf71537fed15b55006493a033c
+
+## 协议与所有权
+
+新增proto/extensions.proto定义RegionService、BrowserService和仅本地的BrowserLocalService。远端与IPC使用Connect HTTP/2；宿主到插件仍用go-plugin gRPC；插件回调在私有CoreAPI socket注册受实例鉴权的专用服务。禁止用通用action或任意字节的执行接口绕过类型化服务。
+
+agent继续持有连接和scope；CLI不得启动插件或拥有loopback listener。browser client插件持有loopback Web查看器。daemon只路由，region/browser server插件持有业务；browser runtime由systemd用户服务持有，插件重连认领时核对实例身份，不凭旧PID杀进程。
+
+新权限使用显式method映射：region.read/plan/apply/dns/rollback、browser.list/manage/view/write/control/files.read/files.write/diagnose。调用者不得自行填写owner/grant；宿主覆盖认证派生字段，未知方法默认拒绝。远端流撤销/过期关闭attachment，但独立Chrome实例继续运行。插件未ready不广告能力。
+
+本地查看入口只loopback，短期单次引导凭据，Host/Origin/CSRF/WebSocket校验，不暴露daemon Token、完整agent API、VNC/CDP公网端口。静态资源本地分发。画面协议仅固定受管实例，不是通用WSS回退或任意TCP隧道。
+
+状态持久化原子写与revision/request_id去重；runtime连接、PID、listener不当作持久真相。配置生效版本和进程启动版本分开。stop/disable与正常宿主shutdown须区分，避免重启误杀浏览器。
+
+## 实现与验证取舍
+
+优先系统发行版TigerVNC、Fcitx5及中文/日文引擎、官方Chrome、随包固定版本noVNC；安装前按平台检查来源和依赖。具体兼容版本以产物及验收记录为准。未测性能不宣传，配额/确认窗口必须可配置且有有界安全默认，记录实测依据后才宣称容量。
+
+Linux Chrome固定使用GTK3及发行版`fcitx5-frontend-gtk3`，不使用XIM或另起IBus daemon。受管Fcitx与Chrome使用选定的加密密钥环总线，同时保留受管私有显示与输入法配置；GTK前端需要在会话总线上发现输入法服务。若该总线上已有`org.fcitx.Fcitx5`则启动失败并要求用户显式处理冲突，不替换现有输入法。此总线仍属于同一OS用户，不构成同UID安全沙箱。
+
+本批必须完成真实CLI→agent→daemon→插件调用、真实浏览器画面、输入/控制权/文件/取消行为，并验证helper白名单、计划竞争与DNS回滚。Ubuntu/Debian两架构、macOS/Linux/WSL2实际表面、真实账号授权及物理重启分别登记；无法在授权环境完成的外部门槛列出具体用户操作，不伪装成功。
+
+## 当前源码命令流程
+
+以下使用已构建的新源码，不适用于公开alpha.2；系统支持安装及平台验收状态以08/15/16为准。先按[11](11-automated-installation.md)完成可信bundle安装、管理员依赖/策略/密钥环配置，再通过既有连接命令登记服务器。
+
+```sh
+shiki --server my-vps plugins --side remote enable region
+shiki --server my-vps region inspect
+shiki --server my-vps region plan --file jp.json
+# 核对返回的changes、warnings、id及revision后，再显式提交：
+shiki --server my-vps region apply <plan-id> --expected-revision <revision> --yes
+shiki --server my-vps region operation <operation-id>
+```
+
+`jp.json`可使用完整配置`{"country":"JP","timezone":"Asia/Tokyo","locale":"ja_JP.UTF-8","languages":["ja_JP","ja"]}`。US须明确选择时区和语言，例如`America/New_York`、`en_US.UTF-8`、`["en_US","en"]`，不是整个美国的唯一正确值。未提供系统DNS变更时保持原解析器；不要把国家选择当作DNS供应商选择。
+
+应用超时或响应丢失先运行`region inspect`，读取`pending_operation_id`及`confirm_before`，再查询操作。系统DNS变更必须在新的解析/连接检查成功后于截止前显式`region confirm <operation-id> --yes`；否则独立root守卫尝试恢复。`region rollback <operation-id> --yes`用于显式回滚；冲突不覆盖外部修改，需管理员复核后恢复，不可盲目重试或删除守卫。
+
+```sh
+shiki --server my-vps plugins --side remote enable browser
+shiki plugins --side local enable browser
+shiki --server my-vps browser profile create jp-work --name "JP work" --file jp.json --yes
+shiki --server my-vps browser start jp-work --yes
+shiki --server my-vps browser open jp-work --read-only=false --launch
+shiki --server my-vps browser diagnose jp-work
+```
+
+查看URL是短时单次凭据，仅保留在私有stdout，不复制到日志或分享。默认只读；允许写入的查看器仍须在页面点击Take control显式接管。关闭CLI/查看页面不停止远端Chrome；`browser close-viewer <viewer-id>`只关闭本机查看会话，`browser stop <profile-id> --yes`才停止Chrome。
+
+`browser profile boot <profile-id> --yes`选择唯一开机目标；已有目标时须显式`--replace-boot`，`--enabled=false`清除。仅切换保存的配置不重启现有Chrome。`browser profile delete`会删除Cookie及暂存数据，不能与停止实例混为一谈。
+
+上传使用`browser files upload <profile-id> <local-file> --yes`；取回使用`browser files download <profile-id> <name> --output <local-path> --yes`，覆盖还需显式`--overwrite`。网页也提供独立文件面板及显式剪贴板操作；实际服务端权限仍单独检查。
+
+诊断默认不访问外部服务。只有显式`--allow-external --providers <providers.json>`才授权指定供应商；供应商协议见`pkg/plugin/diagnostics/doc.go`。WebRTC还需独立`--allow-webrtc`，没有隐式STUN/TURN。诊断不会把配置值、主机结果或本机查看器环境冒充指定远程Chrome的实测值。
+
+## 尚需真实环境验证的项目
+
+以下不计入本地容器通过，也不是要求提供账号或密钥给开发工具：
+
+| 项目 | 用户环境中的验证步骤 | 当前边界 |
+|---|---|---|
+| Claude人工授权 | 在远程Chrome打开官方授权页面，手动完成登录；回到远程终端核对Claude Code授权状态与一次实际调用 | 未使用真实账号；Cookie持久化夹具不等于授权闭环 |
+| 物理重启与无人值守恢复 | 配置加密凭据并选择唯一boot profile；在具备带外恢复手段的主机自行重启，检查普通UID服务、唯一实例、密钥环解锁及profile保留；显式stop后同次开机不得自动复活 | 容器服务重启与模拟boot ID不是断电/物理重启 |
+| 原生平台 | 在Ubuntu24.04/Debian12的amd64/arm64与macOS/Linux/WSL2实际客户端运行安装、查看器、输入法、文件、断线/重连；记录精确包版本与架构 | 本批容器amd64和交叉编译证据不扩大为ARM/macOS/WSL2运行通过 |
+| 真实网络观察 | 用户自行确认出口及供应商授权后，分别查看主机、目标Chrome与权威DNS/HTTPS观察结果；不把解析器注册国当作出口国 | 隔离DNS/TLS夹具不代表公网地区、信誉或服务资格 |
+| 公开发行 | 发布新固定版本后，独立验签并完成公开包安装/升级/回滚 | 当前公开alpha.2不含这两个扩展；私有验收签名不是官方发行信任 |

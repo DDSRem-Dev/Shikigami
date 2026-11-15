@@ -23,7 +23,7 @@ var ErrIncompatible = errors.New("incompatible plugin build or protocol")
 // binary. Installer/release verification owns provenance and signatures.
 func ReadInstalledManifest(directory, id, side, build string) (Manifest, error) {
 	var manifest Manifest
-	if !filepath.IsAbs(directory) || (id != "sync" && id != "port") || (side != "client" && side != "server") {
+	if !filepath.IsAbs(directory) || !BuiltinAvailable(id, side) {
 		return manifest, errors.New("invalid plugin artifact location or side")
 	}
 	file, err := os.OpenFile(filepath.Join(directory, id+".manifest.json"), os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)

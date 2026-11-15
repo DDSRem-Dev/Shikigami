@@ -1,0 +1,39 @@
+:root { color-scheme: dark; font-family: system-ui, sans-serif; color: #e5e9f0; background: #171c24; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+body.viewer { height: 100vh; display: flex; flex-direction: column; }
+body.bootstrap main { max-width: 48rem; margin: 10vh auto; padding: 2rem; }
+header, footer { padding: .65rem 1rem; background: #222a36; }
+header { border-bottom: 1px solid #4c566a; }
+footer { max-height: 42vh; overflow: auto; border-top: 1px solid #4c566a; }
+p { margin: .45rem 0; line-height: 1.45; }
+a { color: #9dd5ff; }
+.heading, .toolbar { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.heading { margin-bottom: .5rem; }
+#scope { color: #b4c0d4; overflow-wrap: anywhere; }
+button, select, input { font: inherit; }
+button, select { border: 1px solid #6b7b94; color: inherit; background: #34435a; border-radius: .25rem; padding: .35rem .6rem; }
+button { cursor: pointer; }
+button:hover:not(:disabled) { background: #465c7c; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid #88c0ff; outline-offset: 2px; }
+label { display: inline-flex; align-items: center; gap: .4rem; }
+.badge { border: 1px solid #69778b; border-radius: .3rem; padding: .25rem .5rem; }
+.badge.controller { background: #16472d; border-color: #66b77f; }
+#screen { flex: 1; min-height: 12rem; overflow: hidden; background: #111; }
+#message { padding: .55rem; border: 1px solid #e8ac65; background: #543516; overflow-wrap: anywhere; }
+#message.info { border-color: #76a7d7; background: #213b57; }
+.hint { color: #b4c0d4; font-size: .85rem; }
+.panels { display: flex; gap: .7rem; flex-wrap: wrap; }
+details { flex: 1 1 26rem; border: 1px solid #4c566a; border-radius: .25rem; margin: .4rem 0; }
+summary { padding: .45rem; cursor: pointer; }
+.panel-content { padding: 0 .7rem .7rem; }
+.panel-content > label { display: block; margin-top: .6rem; }
+textarea { display: block; width: 100%; resize: vertical; background: #171c24; color: inherit; border: 1px solid #69778b; border-radius: .2rem; padding: .45rem; margin: .3rem 0 .5rem; }
+.file-table { overflow: auto; max-height: 14rem; margin: .5rem 0; }
+table { width: 100%; border-collapse: collapse; text-align: left; }
+th, td { padding: .4rem; vertical-align: top; border-bottom: 1px solid #4c566a; }
+td { overflow-wrap: anywhere; }
+td.checksum { font: .75rem ui-monospace, monospace; max-width: 16rem; }
+input[type=file] { max-width: 19rem; }
+@media (max-height: 600px) { footer { max-height: 28vh; } header { font-size: .85rem; } }

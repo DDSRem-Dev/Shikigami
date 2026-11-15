@@ -15,11 +15,21 @@ const UIActionCapability = "ui.action.v1"
 // A dual-side artifact advertises the union; a host requires only its own side.
 func BuiltinProtocol(id, side string) (*pb.ProtocolOffer, error) {
 	var client, server string
+	actionClient := false
 	switch id {
 	case "sync":
 		client, server = "sync.worker.v1", "sync.revision.v1"
+		actionClient = true
 	case "port":
 		client, server = "port.worker.v1", "port.tcp-half-close.v1"
+		actionClient = true
+	case "region":
+		if side == "client" {
+			return nil, errors.New("region requires server side")
+		}
+		server = RegionCapability
+	case "browser":
+		client, server = BrowserViewerCapability, BrowserCapability
 	default:
 		return nil, errors.New("unknown built-in plugin")
 	}
@@ -27,13 +37,21 @@ func BuiltinProtocol(id, side string) (*pb.ProtocolOffer, error) {
 	switch side {
 	case "client":
 		offer.Capabilities = append(offer.Capabilities, client)
-		offer.Capabilities = append(offer.Capabilities, UIActionCapability)
+		if actionClient {
+			offer.Capabilities = append(offer.Capabilities, UIActionCapability)
+		}
 		offer.RequiredCapabilities = append(offer.RequiredCapabilities, client)
 	case "server":
 		offer.Capabilities = append(offer.Capabilities, server)
 		offer.RequiredCapabilities = append(offer.RequiredCapabilities, server)
 	case "both":
-		offer.Capabilities = append(offer.Capabilities, client, server, UIActionCapability)
+		if client != "" {
+			offer.Capabilities = append(offer.Capabilities, client)
+		}
+		offer.Capabilities = append(offer.Capabilities, server)
+		if actionClient {
+			offer.Capabilities = append(offer.Capabilities, UIActionCapability)
+		}
 	default:
 		return nil, errors.New("invalid plugin side")
 	}

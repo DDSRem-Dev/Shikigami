@@ -4,6 +4,8 @@
 
 首个 beta 候选的安装、签名 marketplace、第三方插件运行时与发行资产一致性已完成本批发布前验收，固定候选 CI 为57/57。新增路径以[本批证据](15-implementation-status.md#evidence-first-beta-candidate)和[beta 发布门槛](18-release-readiness.md#beta-readiness)为准，不用历史42/42或旧 CI 替代；当前未创建新 tag 或 Release，公开包验收仍待实际发布。
 
+**新增地区/浏览器扩展（2026-11-15）：** [27 地区环境与远程浏览器](27-region-browser-plugins.md)的实现与授权范围内本地/隔离amd64容器验收已完成。新增功能不包含在历史42项或beta57项证据中；08/15/16单列精确源码、产物与发现/修复。原生平台、真实账号、物理重启、公网及公开发行仍未验；公开alpha.2不含本批。
+
 ## 文档清单
 
 共 15 份设计文档（00–14）、实施记录（15）、一致性检查（16）、原型复盘（17）、发布准备（18）、本地验收收敛（19）、资源审查（20）、密钥轮换（21）、Homebrew分发（22）、外部tsnet验收（23）、公开包升级兼容（24）、双主机验收（25）、原生平台验收（26）及本索引。
@@ -32,6 +34,8 @@
 
 公开包升级、回滚与兼容证据：[24 公开包验收](24-public-package-compatibility.md)。双客户端与硬崩溃验收：[25 双主机验收](25-multihost-acceptance.md)。完整产品的原生平台及WSL矩阵：[26 原生平台验收](26-native-platform-acceptance.md)。
 
+地区环境与远程 Chrome 的新增契约：[27 地区环境与远程浏览器插件](27-region-browser-plugins.md)。
+
 实施进展：[15 实施与验收记录](./15-implementation-status.md)。每批架构检查：[16 架构与文档一致性](./16-architecture-conformance.md)。
 
 ## 建议阅读顺序
@@ -54,7 +58,7 @@
 | 身份 | 一个 daemon 对应一个 OS 用户；Token 不得切换 OS 用户 |
 | 资源 ID | `proj_<随机ID>`、`sess_<随机ID>`；不可变，不编码显示名 |
 | tmux | socket 名 `shiki-<uid>`，会话名 `shiki-<session_id>`；所有操作使用同一 socket |
-| 命令 | `shiki-daemon token …`；`shiki @ <session>`（有空格）；插件名 `sync` / `port` |
+| 命令 | `shiki-daemon token …`；`shiki @ <session>`（有空格）；插件名 `sync` / `port`，新增 `region` / `browser` 的范围与进度见27及08/15/16 |
 | 客户端配置 | `~/.shiki/config.yaml`，0600；本地路径映射仅存在客户端 |
 | 本地后台 | `~/.shiki/run/agent.sock`（Unix，0600），状态目录 0700 |
 | 服务端配置 | `/etc/shiki/daemon.yaml`；包含运行用户和显式状态目录 |

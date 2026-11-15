@@ -48,7 +48,7 @@ func ResolveBuiltinManifest(directory, id, side, build string) (Manifest, error)
 }
 func extractBuiltin(assets fs.FS, directory, id, side, build string) (Manifest, error) {
 	var manifest Manifest
-	if (id != "sync" && id != "port") || (side != "client" && side != "server") || !filepath.IsAbs(directory) || build == "" || build == "." || build == ".." || filepath.Base(build) != build || strings.ContainsAny(build, "\\\x00") {
+	if !BuiltinAvailable(id, side) || !filepath.IsAbs(directory) || build == "" || build == "." || build == ".." || filepath.Base(build) != build || strings.ContainsAny(build, "\\\x00") {
 		return manifest, errors.New("invalid embedded plugin request")
 	}
 	file, err := assets.Open(id + ".manifest.json")
@@ -66,7 +66,7 @@ func extractBuiltin(assets fs.FS, directory, id, side, build string) (Manifest, 
 	if err = strictjson.Decode(data, &manifest); err != nil {
 		return manifest, err
 	}
-	if manifest.Name != id || manifest.Version != build || manifest.Side != "both" || manifest.Executable != "shiki-plugin-"+id || len(manifest.SHA256) != 64 {
+	if manifest.Name != id || manifest.Version != build || (manifest.Side != "both" && manifest.Side != side) || manifest.Executable != "shiki-plugin-"+id || len(manifest.SHA256) != 64 {
 		return Manifest{}, errors.New("embedded plugin build does not match host")
 	}
 	if _, err = hex.DecodeString(manifest.SHA256); err != nil {

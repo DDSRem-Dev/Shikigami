@@ -35,7 +35,7 @@ func TestHelpPrecedesAccountCredentialAndInstallationAccess(t *testing.T) {
 }
 
 func TestHelpRoutesAndVersionRejectUnknownArguments(t *testing.T) {
-	for _, args := range [][]string{{"--help"}, {"-h"}, {"help"}, {"help", "version"}, {"help", "install"}, {"version", "--help"}} {
+	for _, args := range [][]string{{"--help"}, {"-h"}, {"help"}, {"help", "version"}, {"help", "install"}, {"help", "setup"}, {"help", "maintenance"}, {"version", "--help"}} {
 		var out, diagnostics bytes.Buffer
 		code, err := execute(t.Context(), args, &out, &diagnostics)
 		if code != 0 || err != nil || !strings.Contains(out.String(), "Usage:") || diagnostics.Len() != 0 || strings.Contains(out.String(), "_user-") {

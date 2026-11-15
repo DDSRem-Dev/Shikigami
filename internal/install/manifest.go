@@ -32,6 +32,8 @@ const MaxArtifactBytes = 1 << 30
 var releaseVersion = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,79}$`)
 var binaryNames = []string{"shiki", "shiki-agent", "shiki-daemon", "shiki-install", "shiki-plugin-sync", "shiki-plugin-port"}
 var auxiliaryNames = []string{"sync.manifest.json", "port.manifest.json", "install.sh", "install-client.sh", "uninstall.sh", "LICENSE"}
+var optionalPluginIDs = []string{"region", "browser"}
+var linuxSupportNames = []string{"shiki-region-helper", "shiki-browser-runtime"}
 
 type File struct {
 	Name       string `json:"name"`
@@ -56,7 +58,62 @@ type Bundle struct {
 }
 
 func names() []string { return append(append([]string{}, binaryNames...), auxiliaryNames...) }
+
+// Optional additions are authenticated when present, but old signed releases
+// remain installable. A plugin is never advertised without its executable and
+// matching manifest; Linux support binaries belong to that same payload group.
+func payloadNames(goos string) []string {
+	out := names()
+	for _, id := range optionalPluginIDs {
+		if id == "region" && goos != "linux" {
+			continue
+		}
+		out = append(out, "shiki-plugin-"+id, id+".manifest.json")
+	}
+	if goos == "linux" {
+		out = append(out, linuxSupportNames...)
+	}
+	return out
+}
+
+func validatePayloadSet(files []File, goos string) error {
+	present := make(map[string]bool, len(files))
+	allowed := make(map[string]bool)
+	for _, name := range payloadNames(goos) {
+		allowed[name] = true
+	}
+	for _, entry := range files {
+		if !allowed[entry.Name] || present[entry.Name] {
+			return errors.New("unexpected or duplicate release file")
+		}
+		present[entry.Name] = true
+	}
+	for _, name := range names() {
+		if !present[name] {
+			return fmt.Errorf("missing required release file: %s", name)
+		}
+	}
+	for index, id := range optionalPluginIDs {
+		binary, manifest := present["shiki-plugin-"+id], present[id+".manifest.json"]
+		if binary != manifest || (goos == "linux" && binary != present[linuxSupportNames[index]]) {
+			return fmt.Errorf("incomplete optional %s payload group", id)
+		}
+	}
+	return nil
+}
+
+func (m Manifest) Has(name string) bool {
+	for _, entry := range m.Files {
+		if entry.Name == name {
+			return true
+		}
+	}
+	return false
+}
 func executable(name string) bool {
+	if name == "shiki-plugin-region" || name == "shiki-plugin-browser" || name == "shiki-region-helper" || name == "shiki-browser-runtime" {
+		return true
+	}
 	for _, n := range binaryNames {
 		if n == name {
 			return true
@@ -150,12 +207,15 @@ func Verify(directory, expectedVersion, trustedChecksums string) (*Bundle, error
 	if m.Format != 1 || m.Version != expectedVersion || m.OS != runtime.GOOS || m.Arch != runtime.GOARCH || m.ProtocolMajor != 1 || m.ConfigSchema != 1 || m.StateSchema != 1 {
 		return nil, errors.New("release version, platform or schema is incompatible")
 	}
-	expected := map[string]bool{}
-	for _, name := range names() {
-		expected[name] = true
+	if err = validatePayloadSet(m.Files, m.OS); err != nil {
+		return nil, err
 	}
-	if len(m.Files) != len(expected) || len(checksums) != len(expected)+1 {
-		return nil, errors.New("incomplete or unexpected release files")
+	expected := make(map[string]bool, len(m.Files))
+	for _, entry := range m.Files {
+		expected[entry.Name] = true
+	}
+	if len(checksums) != len(expected)+1 {
+		return nil, errors.New("incomplete or unexpected release checksums")
 	}
 	for _, entry := range m.Files {
 		if !expected[entry.Name] || entry.Executable != executable(entry.Name) || entry.Size < 1 || entry.Size > MaxArtifactBytes || checksums[entry.Name] != entry.SHA256 {
@@ -166,7 +226,10 @@ func Verify(directory, expectedVersion, trustedChecksums string) (*Bundle, error
 			return nil, err
 		}
 	}
-	for _, id := range []string{"sync", "port"} {
+	for _, id := range append([]string{"sync", "port"}, optionalPluginIDs...) {
+		if !m.Has(id + ".manifest.json") {
+			continue
+		}
 		data, err := readRegular(directory, id+".manifest.json", 64<<10)
 		if err != nil {
 			return nil, err
@@ -175,13 +238,21 @@ func Verify(directory, expectedVersion, trustedChecksums string) (*Bundle, error
 		if err = decode(data, &p); err != nil {
 			return nil, err
 		}
-		if p.Name != id || p.Version != m.Version || p.Side != "both" || p.Executable != "shiki-plugin-"+id || p.SHA256 != checksums[p.Executable] {
+		side := "both"
+		sides := []string{"client", "server"}
+		if id == "region" {
+			side, sides = "server", []string{"server"}
+		}
+		if id == "browser" && m.OS == "darwin" {
+			side, sides = "client", []string{"client"}
+		}
+		if p.Name != id || p.Version != m.Version || p.Side != side || p.Executable != "shiki-plugin-"+id || p.SHA256 != checksums[p.Executable] {
 			return nil, errors.New("plugin manifest mismatch")
 		}
 		if err := host.ValidateBuiltinMetadata(p); err != nil {
 			return nil, err
 		}
-		for _, side := range []string{"client", "server"} {
+		for _, side := range sides {
 			contract, _ := sdk.BuiltinProtocol(id, side)
 			if _, err = version.Negotiate(contract, p.Protocol, m.Version); err != nil {
 				return nil, err
@@ -231,7 +302,14 @@ func CreateManifest(directory, build, goos, goarch string) (string, error) {
 	}
 	m := Manifest{Format: 1, Version: build, OS: goos, Arch: goarch, ProtocolMajor: 1, ConfigSchema: 1, StateSchema: 1}
 	sums := map[string]string{}
-	for _, name := range names() {
+	for _, name := range payloadNames(goos) {
+		if !containsRequiredName(name) {
+			if _, err := os.Lstat(filepath.Join(directory, name)); errors.Is(err, os.ErrNotExist) {
+				continue
+			} else if err != nil {
+				return "", err
+			}
+		}
 		file, err := os.OpenFile(filepath.Join(directory, name), os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 		if err != nil {
 			return "", err
@@ -254,6 +332,9 @@ func CreateManifest(directory, build, goos, goarch string) (string, error) {
 		hash := hex.EncodeToString(h.Sum(nil))
 		sums[name] = hash
 		m.Files = append(m.Files, File{Name: name, SHA256: hash, Size: n, Executable: executable(name)})
+	}
+	if err := validatePayloadSet(m.Files, goos); err != nil {
+		return "", err
 	}
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
@@ -278,4 +359,13 @@ func CreateManifest(directory, build, goos, goarch string) (string, error) {
 		return "", err
 	}
 	return digest(data), nil
+}
+
+func containsRequiredName(name string) bool {
+	for _, required := range names() {
+		if name == required {
+			return true
+		}
+	}
+	return false
 }

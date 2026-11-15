@@ -27,7 +27,7 @@ func Initialize(cfg *config.Daemon) (daemonID string, err error) {
 	if err = storage.EnsurePrivateDir(filepath.Join(cfg.StateDir, "run")); err != nil {
 		return "", err
 	}
-	projects, err := project.New(state, cfg.ProjectsDir, cfg.RunUser)
+	projects, err := project.New(state, cfg.ProjectsDir, cfg.RunUser, cfg.StateDir)
 	if err != nil {
 		return "", err
 	}

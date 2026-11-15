@@ -2,3 +2,5 @@
 test/diagnostics/loadcapacity/workload/testdata/*.raw binary
 # Release license authentication requires the canonical bytes on every checkout.
 LICENSE text eol=lf
+# Shell sources execute on Linux/WSL and enter authenticated release payloads.
+*.sh text eol=lf

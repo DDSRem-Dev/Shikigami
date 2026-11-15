@@ -7,13 +7,16 @@ import (
 	ppb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/plugin"
 )
 
-// Services are explicit server-side data planes. Client plugins cannot register
-// these services; their local worker APIs are separately versioned.
+// Services declares native data planes explicitly. Remote services belong to
+// server plugins; local workers and BrowserLocal belong to client plugins.
 type Services struct {
-	Files FileWorkerService
-	Ports PortService
-	Sync  SyncWorker
-	Port  PortWorker
+	Files        FileWorkerService
+	Ports        PortService
+	Sync         SyncWorker
+	Port         PortWorker
+	Region       RegionService
+	Browser      BrowserService
+	BrowserLocal BrowserLocalService
 }
 
 const FileCapability = "sync.revision.v1"

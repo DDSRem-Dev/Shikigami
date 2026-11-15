@@ -5,59 +5,57 @@ import (
 	"errors"
 	"io"
 	"sync"
-
-	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
 )
 
-type fileReceiveResult struct {
-	message *pb.WriteFileRequest
+type messageReceiveResult[T any] struct {
+	message *T
 	err     error
 }
 
-// fileReceiver owns one transport reader. Cancellation is terminal: no new
+// messageReceiver owns one transport reader. Cancellation is terminal: no new
 // Recv can start after a canceled Receive. Returning from the gRPC handler
 // cancels its transport context and releases an in-flight Recv; close does not
 // claim to have joined that transport operation before the handler returns.
-type fileReceiver struct {
+type messageReceiver[T any] struct {
 	mu       sync.Mutex
-	recv     func() (*pb.WriteFileRequest, error)
-	requests chan chan fileReceiveResult
+	recv     func() (*T, error)
+	requests chan chan messageReceiveResult[T]
 	stop     chan struct{}
 	terminal error
 	started  bool
 	closed   bool
 }
 
-func newFileReceiver(recv func() (*pb.WriteFileRequest, error)) *fileReceiver {
-	return &fileReceiver{recv: recv, requests: make(chan chan fileReceiveResult), stop: make(chan struct{})}
+func newMessageReceiver[T any](recv func() (*T, error)) *messageReceiver[T] {
+	return &messageReceiver[T]{recv: recv, requests: make(chan chan messageReceiveResult[T]), stop: make(chan struct{})}
 }
 
-func (r *fileReceiver) run() {
+func (r *messageReceiver[T]) run() {
 	for {
 		select {
 		case <-r.stop:
 			return
 		case result := <-r.requests:
 			message, err := r.recv()
-			result <- fileReceiveResult{message, err}
+			result <- messageReceiveResult[T]{message, err}
 		}
 	}
 }
 
-func (r *fileReceiver) closeLocked() {
+func (r *messageReceiver[T]) closeLocked() {
 	if !r.closed {
 		r.closed = true
 		close(r.stop)
 	}
 }
 
-func (r *fileReceiver) close() {
+func (r *messageReceiver[T]) close() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.closeLocked()
 }
 
-func (r *fileReceiver) failure() error {
+func (r *messageReceiver[T]) failure() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if errors.Is(r.terminal, io.EOF) {
@@ -66,7 +64,7 @@ func (r *fileReceiver) failure() error {
 	return r.terminal
 }
 
-func (r *fileReceiver) receive(ctx context.Context) (*pb.WriteFileRequest, error) {
+func (r *messageReceiver[T]) receive(ctx context.Context) (*T, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.terminal != nil {
@@ -84,7 +82,7 @@ func (r *fileReceiver) receive(ctx context.Context) (*pb.WriteFileRequest, error
 		r.started = true
 		go r.run()
 	}
-	result := make(chan fileReceiveResult, 1)
+	result := make(chan messageReceiveResult[T], 1)
 	select {
 	case r.requests <- result:
 	case <-ctx.Done():

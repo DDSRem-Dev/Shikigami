@@ -159,7 +159,7 @@ func dial(ctx context.Context, path string, cfg *config.Client, timeout time.Dur
 	defer stop()
 	probe, _ = connect.NewClientContext(probe)
 	device, _ := os.Hostname()
-	hello, e := raw.Handshake(probe, &apb.HandshakeRequest{Protocol: &pb.ProtocolOffer{Major: 1, Capabilities: []string{"agent.control.v1", "agent.events.v1", "agent.startup.v1"}, RequiredCapabilities: []string{"agent.control.v1"}}, ClientBuild: buildinfo.Version, DeviceName: device})
+	hello, e := raw.Handshake(probe, &apb.HandshakeRequest{Protocol: &pb.ProtocolOffer{Major: 1, Capabilities: []string{"agent.control.v1", "agent.events.v1", "agent.startup.v1", "region.host.v1", "browser.remote.v1", "browser.viewer.v1"}, RequiredCapabilities: []string{"agent.control.v1"}}, ClientBuild: buildinfo.Version, DeviceName: device})
 	if e != nil {
 		cancel()
 		endpoint.Close()
@@ -229,8 +229,12 @@ func (c *Client) identity(server string) connect.ClientInterceptor {
 			var cancel context.CancelFunc
 			if spec.StreamType == connect.StreamTypeUnary {
 				timeout := c.timeout
-				if timeout == 5*time.Second && lifecycleProcedure(spec.Procedure) {
-					timeout = 15 * time.Second
+				if timeout == 5*time.Second {
+					if extensionTimeout := extensionProcedureTimeout(spec.Procedure); extensionTimeout != 0 {
+						timeout = extensionTimeout
+					} else if lifecycleProcedure(spec.Procedure) {
+						timeout = 15 * time.Second
+					}
 				}
 				ctx, cancel = context.WithTimeout(ctx, timeout)
 			} else {

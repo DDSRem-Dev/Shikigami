@@ -15,6 +15,26 @@ TARGETS = [(system, arch) for system in ("linux", "darwin") for arch in ("amd64"
 PAYLOADS = {"shiki", "shiki-agent", "shiki-daemon", "shiki-install", "shiki-plugin-sync",
             "shiki-plugin-port", "sync.manifest.json", "port.manifest.json", "install.sh",
             "install-client.sh", "uninstall.sh", "LICENSE", "release.json", "SHA256SUMS"}
+OPTIONAL_PLUGINS = {"shiki-plugin-region", "region.manifest.json",
+                    "shiki-plugin-browser", "browser.manifest.json"}
+LINUX_SUPPORT = {"shiki-region-helper", "shiki-browser-runtime"}
+
+
+def optional_payloads(system):
+    if system == "linux":
+        return OPTIONAL_PLUGINS | LINUX_SUPPORT
+    return {"shiki-plugin-browser", "browser.manifest.json"}
+
+
+def validate_payload_members(members, system):
+    members = set(members)
+    allowed = PAYLOADS | optional_payloads(system)
+    if not PAYLOADS <= members or not members <= allowed:
+        raise ValueError("bundle membership mismatch")
+    for plugin, support in (("region", "shiki-region-helper"), ("browser", "shiki-browser-runtime")):
+        present = f"shiki-plugin-{plugin}" in members
+        if present != (f"{plugin}.manifest.json" in members) or (system == "linux" and present != (support in members)):
+            raise ValueError("incomplete optional plugin payload")
 
 
 def validate_version(version):
@@ -101,9 +121,10 @@ def validate_bundle(directory, version, system, arch):
     if not re.fullmatch(r"[0-9a-f]{64}\n", pin):
         raise ValueError("invalid checksum pin")
     hashes, metadata = {}, {}
+    allowed = PAYLOADS | optional_payloads(system)
     with tarfile.open(archive, "r|gz") as bundle:
         for member in bundle:
-            if (member.name not in PAYLOADS or member.name in hashes or not member.isfile()
+            if (member.name not in allowed or member.name in hashes or not member.isfile()
                     or member.size < 0 or member.size > (1 << 30)):
                 raise ValueError("unexpected, duplicate, unsafe or oversized archive member")
             stream = bundle.extractfile(member)
@@ -115,8 +136,9 @@ def validate_bundle(directory, version, system, arch):
                 hashes[member.name] = hashlib.sha256(data).hexdigest()
             else:
                 hashes[member.name] = stream_digest(stream)
-    if set(hashes) != PAYLOADS or hashes["SHA256SUMS"] != pin.strip():
-        raise ValueError("bundle membership or checksum pin mismatch")
+    validate_payload_members(hashes, system)
+    if hashes["SHA256SUMS"] != pin.strip():
+        raise ValueError("bundle checksum pin mismatch")
     expected = {}
     for line in metadata["SHA256SUMS"].decode().splitlines():
         match = re.fullmatch(r"([0-9a-f]{64})  ([A-Za-z0-9._-]+)", line)

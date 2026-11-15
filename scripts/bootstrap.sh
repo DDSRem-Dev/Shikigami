@@ -447,11 +447,19 @@ rm -f -- "$shiki_archive"
 # set before extracting. A single legacy top-level directory is still accepted.
 shiki_members="${shiki_tmp}/members"
 shiki_capture "$shiki_members" "$SHIKI_MAX_META" tar -tf "$shiki_tar"
+export SHIKI_BUNDLE_OS="$shiki_os"
 /usr/bin/perl -e '
   my %expected = map { $_ => 1 } qw(shiki shiki-agent shiki-daemon shiki-install
     shiki-plugin-sync shiki-plugin-port sync.manifest.json port.manifest.json
     install.sh install-client.sh uninstall.sh LICENSE release.json SHA256SUMS);
-  my ($prefix, $directory);
+  my %optional = map { $_ => 1 } qw(shiki-plugin-browser browser.manifest.json);
+  if ($ENV{SHIKI_BUNDLE_OS} eq "linux") {
+    $optional{"shiki-plugin-region"} = 1;
+    $optional{"region.manifest.json"} = 1;
+    $optional{"shiki-region-helper"} = 1;
+    $optional{"shiki-browser-runtime"} = 1;
+  }
+  my (%seen, $prefix, $directory);
   while (<>) {
     chomp;
     if (m{\A([A-Za-z0-9][A-Za-z0-9._-]*)/\z}) {
@@ -463,11 +471,21 @@ shiki_capture "$shiki_members" "$SHIKI_MAX_META" tar -tf "$shiki_tar"
       or die "Unsafe bundle path\n";
     my ($root, $name) = ($1 // "", $2);
     $prefix = $root unless defined($prefix);
-    $prefix eq $root && delete($expected{$name})
+    $prefix eq $root && !$seen{$name}++ &&
+      (delete($expected{$name}) || delete($optional{$name}))
       or die "Unexpected or duplicate bundle member\n";
   }
   !keys(%expected) && (!defined($directory) || $directory eq $prefix)
     or die "Incomplete or inconsistent bundle membership\n";
+  for my $id ("region", "browser") {
+    !!$seen{"shiki-plugin-$id"} == !!$seen{"$id.manifest.json"}
+      or die "Incomplete optional plugin\n";
+    if ($ENV{SHIKI_BUNDLE_OS} eq "linux") {
+      my $support = $id eq "region" ? "shiki-region-helper" : "shiki-browser-runtime";
+      !!$seen{"shiki-plugin-$id"} == !!$seen{$support}
+        or die "Incomplete optional Linux support\n";
+    }
+  }
 ' "$shiki_members"
 shiki_bundle="${shiki_tmp}/bundle"
 mkdir -p "$shiki_bundle"

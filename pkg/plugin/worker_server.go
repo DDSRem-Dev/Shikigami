@@ -61,7 +61,7 @@ func (f *fileServer) WatchFiles(r *pb.WatchFilesRequest, s grpc.ServerStreamingS
 }
 func (f *fileServer) WriteFile(s grpc.ClientStreamingServer[pb.WriteFileRequest, pb.FileInfo]) error {
 	var receivedHeader atomic.Bool
-	reader := newFileReceiver(func() (*pb.WriteFileRequest, error) {
+	reader := newMessageReceiver(func() (*pb.WriteFileRequest, error) {
 		r, err := s.Recv()
 		if err != nil {
 			return nil, FromGRPC(err)

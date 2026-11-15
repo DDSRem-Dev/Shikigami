@@ -112,6 +112,7 @@ func TestDaemonInstalledSyncPluginTLSLifecycle(t *testing.T) {
 	cfg.Tailscale.Enabled = false
 	cfg.Claude.Executable = "/bin/sh"
 	cfg.Server.DirectTLS = config.DirectTLS{Enabled: true, Address: address, CertFile: certPath, KeyFile: keyPath}
+	legacyBrowser := seedLegacyBrowserAssociation(t, cfg)
 	ctx, cancel := context.WithTimeout(t.Context(), 35*time.Second)
 	defer cancel()
 	runtime, e := server.StartDaemon(ctx, cfg, server.DaemonOptions{Build: buildinfo.Version})
@@ -199,6 +200,26 @@ func TestDaemonInstalledSyncPluginTLSLifecycle(t *testing.T) {
 	stream.Close()
 	if !bytes.Equal(read, content) {
 		t.Fatalf("file bytes changed: %q", read)
+	}
+	checkProtectedBrowserFileAdmission(t, ctx, client, legacyBrowser)
+	// A tree was already cached for this ordinary project. Redirecting its
+	// stored root must still fail fresh host admission before any cached I/O.
+	savedRoot := project.Path + "-saved"
+	if e = os.Rename(project.Path, savedRoot); e != nil {
+		t.Fatal(e)
+	}
+	if e = os.Symlink(legacyBrowser.Path, project.Path); e != nil {
+		t.Fatal(e)
+	}
+	checkProtectedBrowserFileAdmission(t, ctx, client, project)
+	if e = os.Remove(project.Path); e != nil {
+		t.Fatal(e)
+	}
+	if e = os.Rename(savedRoot, project.Path); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = client.DeleteProject(ctx, &pb.DeleteProjectRequest{Id: legacyBrowser.Id}); e != nil {
+		t.Fatal("unregister legacy protected association", e)
 	}
 	restricted, _, e := runtime.Service.Auth.Create(account.Username, []string{"file.read"}, time.Hour)
 	if e != nil {

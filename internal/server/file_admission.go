@@ -5,6 +5,7 @@ import (
 
 	"connectrpc.com/connect/v2"
 	"github.com/DDSRem-Dev/Shikigami/pkg/plugin/limits"
+	erpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/extensions/extensionsconnect"
 	rpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/protocolconnect"
 )
 
@@ -19,11 +20,11 @@ type fileAdmission struct {
 
 func (a *fileAdmission) budget(procedure string) (*atomic.Int32, int32) {
 	switch procedure {
-	case rpc.ShikiDaemonListFilesProcedure, rpc.ShikiDaemonStatFileProcedure, rpc.ShikiDaemonDeleteFileProcedure:
+	case rpc.ShikiDaemonListFilesProcedure, rpc.ShikiDaemonStatFileProcedure, rpc.ShikiDaemonDeleteFileProcedure, erpc.BrowserServiceListBrowserFilesProcedure:
 		return &a.metadata, limits.FileMetadataCalls
-	case rpc.ShikiDaemonReadFileProcedure, rpc.ShikiDaemonWriteFileProcedure:
+	case rpc.ShikiDaemonReadFileProcedure, rpc.ShikiDaemonWriteFileProcedure, erpc.BrowserServiceReadBrowserFileProcedure, erpc.BrowserServiceWriteBrowserFileProcedure:
 		return &a.transfers, limits.FileTransfers
-	case rpc.ShikiDaemonWatchFilesProcedure:
+	case rpc.ShikiDaemonWatchFilesProcedure, erpc.BrowserServiceBrowserStreamProcedure:
 		return &a.watches, limits.FileWatches
 	default:
 		return nil, 0

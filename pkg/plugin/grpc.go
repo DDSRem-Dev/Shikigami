@@ -8,13 +8,12 @@ import (
 
 	"github.com/DDSRem-Dev/Shikigami/pkg/plugin/limits"
 	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
+	epb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/extensions"
 	ppb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/plugin"
 	hclog "github.com/hashicorp/go-hclog"
 	goplugin "github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 )
 
 const DispenseName = "shiki"
@@ -41,6 +40,15 @@ func (a *adapter) GRPCServer(_ *goplugin.GRPCBroker, s *grpc.Server) error {
 	if a.services.Port != nil {
 		ppb.RegisterPortWorkerServer(s, &portWorkerServer{impl: a.services.Port})
 	}
+	if a.services.Region != nil {
+		epb.RegisterRegionServiceServer(s, &regionServer{impl: a.services.Region})
+	}
+	if a.services.Browser != nil {
+		epb.RegisterBrowserServiceServer(s, &browserServer{impl: a.services.Browser})
+	}
+	if a.services.BrowserLocal != nil {
+		epb.RegisterBrowserLocalServiceServer(s, &browserLocalServer{impl: a.services.BrowserLocal})
+	}
 	return nil
 }
 func (a *adapter) GRPCClient(ctx context.Context, _ *goplugin.GRPCBroker, c *grpc.ClientConn) (any, error) {
@@ -49,6 +57,9 @@ func (a *adapter) GRPCClient(ctx context.Context, _ *goplugin.GRPCBroker, c *grp
 	client.ports = &portClient{owner: client, stub: ppb.NewPortServiceClient(c)}
 	client.sync = &syncClient{owner: client, stub: ppb.NewSyncWorkerClient(c)}
 	client.port = &portWorkerClient{owner: client, stub: ppb.NewPortWorkerClient(c)}
+	client.region = &regionClient{owner: client, stub: epb.NewRegionServiceClient(c)}
+	client.browser = &browserClient{owner: client, stub: epb.NewBrowserServiceClient(c)}
+	client.browserLocal = &browserLocalClient{owner: client, stub: epb.NewBrowserLocalServiceClient(c)}
 	return client, nil
 }
 
@@ -70,53 +81,10 @@ func Serve(side string, impl Implementation, available ...Services) error {
 	if len(available) == 1 {
 		services = available[0]
 	}
-	if side != "server" && (services.Files != nil || services.Ports != nil) {
-		return errors.New("server data services cannot run on a client plugin")
+	if err := validateServiceRegistration(side, impl.Info(), services); err != nil {
+		return err
 	}
-	if side != "client" && (services.Sync != nil || services.Port != nil) {
-		return errors.New("local worker requires client side")
-	}
-	info := impl.Info()
-	if info == nil || info.Protocol == nil {
-		return errors.New("plugin protocol offer is required")
-	}
-	capabilities := map[string]bool{}
-	for _, capability := range info.Protocol.Capabilities {
-		capabilities[capability] = true
-	}
-	if side == "server" && ((services.Files != nil) != capabilities[FileCapability] || (services.Ports != nil) != capabilities[PortCapability]) {
-		return errors.New("server worker capabilities must match registered services")
-	}
-	if side == "client" && (services.Sync != nil) != capabilities[SyncCapability] {
-		return errors.New("client sync capability must match registered worker")
-	}
-	if side == "client" && (services.Port != nil) != capabilities[PortWorkerCapability] {
-		return errors.New("client port capability must match registered worker")
-	}
-	workerMethods := map[string]bool{
-		// InvokeAction is always permitted on authenticated plugins.
-		ppb.Plugin_InvokeAction_FullMethodName: true,
-	}
-	if services.Port != nil {
-		for _, method := range []string{ppb.PortWorker_DiscoverForwards_FullMethodName, ppb.PortWorker_StartForward_FullMethodName, ppb.PortWorker_StopForward_FullMethodName, ppb.PortWorker_ListForwards_FullMethodName} {
-			workerMethods[method] = true
-		}
-	}
-	if services.Files != nil {
-		for _, method := range []string{ppb.FileService_ListFiles_FullMethodName, ppb.FileService_StatFile_FullMethodName, ppb.FileService_ReadFile_FullMethodName, ppb.FileService_WriteFile_FullMethodName, ppb.FileService_DeleteFile_FullMethodName, ppb.FileService_WatchFiles_FullMethodName} {
-			workerMethods[method] = true
-		}
-	}
-	if services.Ports != nil {
-		for _, method := range []string{ppb.PortService_CheckPort_FullMethodName, ppb.PortService_ListPorts_FullMethodName, ppb.PortService_WatchPorts_FullMethodName, ppb.PortService_ForwardPort_FullMethodName} {
-			workerMethods[method] = true
-		}
-	}
-	if services.Sync != nil {
-		for _, method := range []string{ppb.SyncWorker_ConfigureMapping_FullMethodName, ppb.SyncWorker_GetSyncState_FullMethodName, ppb.SyncWorker_ListConflicts_FullMethodName, ppb.SyncWorker_ResolveConflict_FullMethodName, ppb.SyncWorker_ReadConflictFile_FullMethodName} {
-			workerMethods[method] = true
-		}
-	}
+	workerMethods := registeredServiceMethods(services)
 	runtime := &runtime{impl: impl, side: side}
 	parent := os.Getppid()
 	watchDone := make(chan struct{})
@@ -149,37 +117,8 @@ func Serve(side string, impl Implementation, available ...Services) error {
 	goplugin.Serve(&goplugin.ServeConfig{HandshakeConfig: Handshake, Plugins: goplugin.PluginSet{DispenseName: &adapter{runtime: runtime, services: services}}, Logger: hclog.NewNullLogger(),
 		GRPCServer: func(options []grpc.ServerOption) *grpc.Server {
 			options = append(options, grpc.MaxRecvMsgSize(limits.MaxMessageBytes), grpc.MaxSendMsgSize(limits.MaxMessageBytes),
-				grpc.UnaryInterceptor(func(ctx context.Context, req any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
-					switch info.FullMethod {
-					case "/grpc.health.v1.Health/Check", "/plugin.GRPCController/Shutdown", ppb.Plugin_GetInfo_FullMethodName, ppb.Plugin_Init_FullMethodName:
-					case ppb.Plugin_Start_FullMethodName, ppb.Plugin_Stop_FullMethodName, ppb.Plugin_Health_FullMethodName:
-						if !runtime.authorized(ctx) {
-							return nil, status.Error(codes.Unauthenticated, "plugin instance authentication required")
-						}
-					default:
-						if !workerMethods[info.FullMethod] {
-							return nil, status.Error(codes.PermissionDenied, "plugin method not permitted")
-						}
-						if !runtime.authorized(ctx) {
-							return nil, status.Error(codes.Unauthenticated, "plugin instance authentication required")
-						}
-					}
-					return next(ctx, req)
-				}),
-				grpc.StreamInterceptor(func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, next grpc.StreamHandler) error {
-					switch info.FullMethod {
-					case "/plugin.GRPCBroker/StartStream", "/plugin.GRPCStdio/StreamStdio":
-						return next(srv, stream)
-					default:
-						if !workerMethods[info.FullMethod] {
-							return status.Error(codes.PermissionDenied, "plugin stream not permitted")
-						}
-						if !runtime.authorized(stream.Context()) {
-							return status.Error(codes.Unauthenticated, "plugin instance authentication required")
-						}
-						return next(srv, stream)
-					}
-				}))
+				grpc.UnaryInterceptor(runtime.unaryAuthorization(workerMethods)),
+				grpc.StreamInterceptor(runtime.streamAuthorization(workerMethods)))
 			return grpc.NewServer(options...)
 		},
 	})
@@ -194,6 +133,9 @@ type lifecycleClient struct {
 	ports           PortClient
 	sync            SyncClient
 	port            PortWorkerClient
+	region          RegionClient
+	browser         BrowserClient
+	browserLocal    BrowserLocalClient
 }
 
 func (c *lifecycleClient) context(ctx context.Context) context.Context {
@@ -239,4 +181,9 @@ func (c *lifecycleClient) Files() FileClient { return c.files }
 func (c *lifecycleClient) Ports() PortClient { return c.ports }
 func (c *lifecycleClient) Sync() SyncClient  { return c.sync }
 
-func (c *lifecycleClient) Port() PortWorkerClient { return c.port }
+func (c *lifecycleClient) Port() PortWorkerClient           { return c.port }
+func (c *lifecycleClient) Region() RegionClient             { return c.region }
+func (c *lifecycleClient) Browser() BrowserClient           { return c.browser }
+func (c *lifecycleClient) BrowserLocal() BrowserLocalClient { return c.browserLocal }
+
+var _ ExtensionLifecycle = (*lifecycleClient)(nil)

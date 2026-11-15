@@ -124,6 +124,7 @@ class Shikigami < Formula
   PEM
   RELEASE_FINGERPRINT = "@FINGERPRINT@".freeze
   BUNDLE_MEMBERS = @MEMBERS@.freeze
+  OPTIONAL_MEMBERS = ["shiki-plugin-browser", "browser.manifest.json"].freeze
 
   def release_target
     "#{OS.mac? ? 'darwin' : 'linux'}-#{Hardware::CPU.arm? ? 'arm64' : 'amd64'}"
@@ -156,15 +157,24 @@ class Shikigami < Formula
     end
     odie "Release checksum pin mismatch" unless Digest::SHA256.file("SHA256SUMS").hexdigest == metadata.fetch("checksums_sha256")
     names = []
+    allowed = BUNDLE_MEMBERS + OPTIONAL_MEMBERS
+    allowed += ["shiki-plugin-region", "region.manifest.json", "shiki-region-helper", "shiki-browser-runtime"] unless OS.mac?
     File.readlines("SHA256SUMS", chomp: true).each do |line|
       match = /\\A([a-f0-9]{64})  ([A-Za-z0-9._-]+)\\z/.match(line)
-      odie "Invalid release checksums" unless match && BUNDLE_MEMBERS.include?(match[2]) && !names.include?(match[2])
+      odie "Invalid release checksums" unless match && allowed.include?(match[2]) && !names.include?(match[2])
+      member = buildpath/match[2]
+      odie "Non-regular optional member" unless member.file? && !member.symlink?
       odie "Release payload checksum mismatch" unless Digest::SHA256.file(match[2]).hexdigest == match[1]
       names << match[2]
     end
-    odie "Incomplete release checksums" unless names.sort == BUNDLE_MEMBERS - ["SHA256SUMS"]
+    odie "Incomplete release checksums" unless (BUNDLE_MEMBERS - ["SHA256SUMS"] - names).empty?
+    [["region", "shiki-region-helper"], ["browser", "shiki-browser-runtime"]].each do |id, support|
+      present = names.include?("shiki-plugin-#{id}")
+      odie "Incomplete optional plugin" unless present == names.include?("#{id}.manifest.json")
+      odie "Incomplete Linux support" unless OS.mac? || present == names.include?(support)
+    end
     bundle = libexec/"bundle"
-    bundle.install BUNDLE_MEMBERS
+    bundle.install (names + ["SHA256SUMS"])
     # Homebrew 4/7 move top-level libexec metafiles. A nested complete bundle
     # preserves LICENSE and every authenticated member across those versions.
     cp bundle/"LICENSE", prefix/"LICENSE"

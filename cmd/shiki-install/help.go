@@ -17,6 +17,8 @@ Commands:
   uninstall  Remove managed activation and links; retain configuration, state and projects
   status     Print the installation receipt; not an application readiness check
   probe      Check local node and application readiness; plain probe issues no Token
+  setup      Plan/confirm signed Linux region helper and browser dependency setup
+  maintenance Inspect installed versions; explicitly confirm stable dependency updates
   version    Print the helper build version
   help       Show this help or help for one command
 
@@ -28,7 +30,7 @@ Local checksums are not publisher signatures. External peer acceptance remains s
 
 func publicOperation(operation string) bool {
 	switch operation {
-	case "install", "rollback", "uninstall", "status", "probe", "version":
+	case "install", "rollback", "uninstall", "status", "probe", "setup", "maintenance", "version":
 		return true
 	default:
 		return false

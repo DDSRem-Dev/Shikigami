@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shikigami remote browser</title>
+  <link rel="stylesheet" href="/assets/viewer.css">
+  <script type="module" src="/assets/viewer.js"></script>
+</head>
+<body class="viewer">
+  <header>
+    <div class="heading"><strong>Remote Chrome</strong><span id="scope">Loading viewer session…</span></div>
+    <div class="toolbar">
+      <span id="connection-status" class="badge">Disconnected</span>
+      <span id="control-status" class="badge">Read-only</span>
+      <button id="take-control" disabled>Take control</button>
+      <label><input id="resize-session" type="checkbox" disabled> Resize remote screen to this window</label>
+      <button id="refresh-status">Refresh status</button>
+      <button id="reconnect" disabled>Reconnect screen</button>
+      <button id="close-viewer">Close viewer</button>
+    </div>
+    <p id="remote-status" role="status">Remote browser status is unknown.</p>
+    <p id="message" role="alert" hidden></p>
+  </header>
+  <main id="screen" aria-label="Remote browser screen"></main>
+  <footer>
+    <p class="hint">Chrome and the Chinese/Japanese IME run on the server; candidate windows appear in the remote screen. Use your local English keyboard layout and the remote IME switch shortcut. Closing this viewer does not stop Chrome.</p>
+    <div class="panels">
+      <details id="clipboard-panel">
+        <summary>Explicit clipboard</summary>
+        <div class="panel-content">
+          <p>Clipboard contents are never automatically read from or written to your local clipboard. Remote clipboard actions require control.</p>
+          <label for="remote-clipboard">Remote clipboard received while controlling</label>
+          <textarea id="remote-clipboard" rows="3" readonly spellcheck="false"></textarea>
+          <button id="copy-clipboard" disabled>Copy remote text to local clipboard</button>
+          <label for="local-clipboard">Text to send to the remote clipboard</label>
+          <textarea id="local-clipboard" rows="3" maxlength="65536" spellcheck="false"></textarea>
+          <div class="toolbar">
+            <button id="read-clipboard">Read local clipboard into this box</button>
+            <button id="paste-clipboard" disabled>Send this text to remote clipboard</button>
+          </div>
+          <p class="hint">If local clipboard permission is unavailable, use the text boxes and your browser's normal copy/paste shortcuts. Clipboard text is bounded to 64 KiB in this UI.</p>
+        </div>
+      </details>
+      <details id="files-panel">
+        <summary>Profile staging files</summary>
+        <div class="panel-content">
+          <p>Files require separate server permissions. Uploads and downloads only use this profile's staging areas; Chrome's same-UID file chooser is not an OS file sandbox.</p>
+          <div class="toolbar">
+            <label>Area <select id="file-area"><option value="downloads">Downloads</option><option value="uploads">Uploads</option></select></label>
+            <button id="refresh-files">List staging files</button>
+          </div>
+          <p id="file-status" role="status">No file listing requested.</p>
+          <div class="file-table"><table><thead><tr><th>Name</th><th>Bytes</th><th>SHA-256</th><th>Action</th></tr></thead><tbody id="file-list"></tbody></table></div>
+          <div class="toolbar">
+            <label>Choose a file to upload <input id="upload-file" type="file"></label>
+            <label>Staging filename <input id="upload-name" type="text" maxlength="240" autocomplete="off" spellcheck="false"></label>
+            <button id="upload">Upload selected file</button>
+          </div>
+          <p id="file-limit" class="hint"></p>
+          <p class="hint">Downloads are released only after remote terminal status, byte count, and SHA-256 validation. Interrupted uploads are never retried automatically; refresh the uploads list before repeating an uncertain action.</p>
+        </div>
+      </details>
+    </div>
+    <a href="/assets/novnc/UPSTREAM.json" target="_blank" rel="noreferrer">Pinned noVNC source provenance</a>
+    <span> · </span><a href="/assets/novnc/LICENSE.txt" target="_blank" rel="noreferrer">Upstream licenses</a>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "id": "region",
+  "version": "${BUILD_VERSION}",
+  "display_name": "地区环境",
+  "description": "检查与计划整机时区、UTF-8 locale 和语言；系统 DNS 独立授权并由 root 恢复守卫保护",
+  "capabilities": ["core.scope.v1", "region.host.v1"],
+  "sides": ["server"],
+  "binary": "shiki-plugin-region",
+  "binary_flags": ["--side=${side}"],
+  "config_schema": []
+}

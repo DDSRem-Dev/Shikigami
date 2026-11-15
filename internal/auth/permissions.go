@@ -3,6 +3,8 @@ package auth
 import (
 	"sort"
 	"strings"
+
+	erpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/extensions/extensionsconnect"
 )
 
 // Explicit mappings are deliberately independent of generated service names:
@@ -21,12 +23,36 @@ var methodPermissions = map[string][]string{
 	"CreateSnapshot": {"session.create"}, "RestoreSnapshot": {"session.create"}, "ListSnapshots": {"session.list"}, "DeleteSnapshot": {"session.delete"},
 }
 
-var permissionNamespaces = map[string]bool{"project": true, "session": true, "file": true, "port": true, "system": true, "plugin": true}
+var extensionPermissions = map[string][]string{
+	erpc.RegionServiceInspectRegionProcedure:         {"region.read"},
+	erpc.RegionServicePlanRegionProcedure:            {"region.plan"},
+	erpc.RegionServiceApplyRegionProcedure:           {"region.apply"},
+	erpc.RegionServiceConfirmRegionProcedure:         {"region.apply", "region.dns"},
+	erpc.RegionServiceRollbackRegionProcedure:        {"region.rollback"},
+	erpc.RegionServiceGetRegionOperationProcedure:    {"region.read"},
+	erpc.RegionServiceDiagnoseRegionProcedure:        {"region.read"},
+	erpc.BrowserServiceListBrowserProfilesProcedure:  {"browser.list"},
+	erpc.BrowserServicePutBrowserProfileProcedure:    {"browser.manage"},
+	erpc.BrowserServiceDeleteBrowserProfileProcedure: {"browser.manage"},
+	erpc.BrowserServiceStartBrowserProcedure:         {"browser.manage"},
+	erpc.BrowserServiceStopBrowserProcedure:          {"browser.manage"},
+	erpc.BrowserServiceGetBrowserStatusProcedure:     {"browser.view"},
+	erpc.BrowserServiceTakeBrowserControlProcedure:   {"browser.control"},
+	erpc.BrowserServiceBrowserStreamProcedure:        {"browser.view"},
+	erpc.BrowserServiceListBrowserFilesProcedure:     {"browser.files.read"},
+	erpc.BrowserServiceReadBrowserFileProcedure:      {"browser.files.read"},
+	erpc.BrowserServiceWriteBrowserFileProcedure:     {"browser.files.write"},
+	erpc.BrowserServiceDiagnoseBrowserProcedure:      {"browser.diagnose"},
+}
+
+var permissionNamespaces = map[string]bool{"project": true, "session": true, "file": true, "port": true, "system": true, "plugin": true, "region": true, "browser": true}
 var knownPermissions = func() map[string]bool {
-	result := map[string]bool{}
-	for _, permissions := range methodPermissions {
-		for _, permission := range permissions {
-			result[permission] = true
+	result := map[string]bool{"browser.write": true}
+	for _, table := range []map[string][]string{methodPermissions, extensionPermissions} {
+		for _, permissions := range table {
+			for _, permission := range permissions {
+				result[permission] = true
+			}
 		}
 	}
 	return result
@@ -70,10 +96,10 @@ func Authorize(claims *Claims, procedure string) error {
 		return ErrUnauthenticated
 	}
 	const prefix = "/shiki.v1.ShikiDaemon/"
-	if !strings.HasPrefix(procedure, prefix) {
-		return ErrPermissionDenied
+	permissions, ok := extensionPermissions[procedure]
+	if strings.HasPrefix(procedure, prefix) {
+		permissions, ok = methodPermissions[strings.TrimPrefix(procedure, prefix)]
 	}
-	permissions, ok := methodPermissions[strings.TrimPrefix(procedure, prefix)]
 	if !ok {
 		return ErrPermissionDenied
 	}

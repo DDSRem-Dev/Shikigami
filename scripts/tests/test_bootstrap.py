@@ -253,6 +253,36 @@ exit "${SHIKI_TEST_STATUS:-0}"
                 self.finish(self.start(SHIKI_TEST_STATUS=str(status)), status)
                 self.assert_installer_arguments()
 
+    def test_signed_additive_plugin_payloads_and_partial_groups(self):
+        members = dict(self.members)
+        optional = ["shiki-plugin-browser", "browser.manifest.json"]
+        if self.system == "linux":
+            optional += ["shiki-plugin-region", "region.manifest.json",
+                         "shiki-region-helper", "shiki-browser-runtime"]
+        members.update({name: b"inert optional payload\n" for name in optional})
+        for complete in (True, False):
+            if not complete:
+                members.pop("browser.manifest.json")
+                self.args_file.unlink(missing_ok=True)
+            members["SHA256SUMS"] = "".join(
+                f"{hashlib.sha256(data).hexdigest()}  {name}\n"
+                for name, data in sorted(members.items()) if name != "SHA256SUMS"
+            ).encode()
+            self.pin = hashlib.sha256(members["SHA256SUMS"]).hexdigest()
+            self.pin_file.write_text(self.pin + "\n")
+            self.write_bundle(members.items())
+            self.sign_bundle()
+            if complete:
+                self.finish(self.start(), 0)
+                self.assert_installer_arguments()
+            else:
+                process = self.start()
+                stdout, stderr = process.communicate(timeout=20)
+                self.assertNotEqual(process.returncode, 0, stdout + stderr)
+                self.assertIn("Incomplete optional plugin", stderr)
+                self.assertFalse(self.args_file.exists())
+                self.assertEqual(list(self.workspaces.iterdir()), [])
+
     def test_https_redirect_and_latest_prerelease_resolution_are_supported(self):
         self.behavior = "redirect"
         self.finish(self.start(version=None), 0)

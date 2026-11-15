@@ -142,6 +142,23 @@ func artifactFailure(err error) (string, string) {
 }
 
 func (m *Supervisor) validate(id string, values *structpb.Struct) error {
+	if id == "region" || id == "browser" {
+		if !BuiltinAvailable(id, m.options.Side) {
+			return connect.NewError(connect.CodeFailedPrecondition, "plugin is unsupported on this host")
+		}
+		cfg, err := m.options.Config(id, values)
+		if err != nil {
+			return err
+		}
+		declaration := cfg.Manifest.PluginManifest
+		if declaration == nil {
+			return connect.NewError(connect.CodeFailedPrecondition, "plugin config schema is unavailable")
+		}
+		if err := sdk.ValidateConfig(declaration.ConfigSchema, values.AsMap()); err != nil {
+			return connect.NewError(connect.CodeInvalidArgument, err.Error())
+		}
+		return nil
+	}
 	if builtinID(id) {
 		return m.options.Validate(id, values)
 	}

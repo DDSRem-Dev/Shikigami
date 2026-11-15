@@ -12,6 +12,7 @@ shikigami/
 │   ├── shiki.proto                    # 远端 RPC
 │   ├── types.proto                    # 远端共享消息
 │   ├── plugin.proto                   # 生命周期与 CoreAPI
+│   ├── extensions.proto               # 地区/浏览器固定用途扩展，定义见文档27
 │   └── agent.proto                    # 本地 IPC，定义见文档 13
 ├── pkg/
 │   ├── protocol/                      # shiki/types 生成包
@@ -21,11 +22,13 @@ shikigami/
 │   │   │   ├── plugin.pb.go / plugin_grpc.pb.go # 仅 go-plugin 使用 gRPC
 │   │   │   ├── invoke_action.go           # PluginActionsServer/Client gRPC，非生成
 │   │   │   └── pluginconnect/plugin.connect.go
+│   │   ├── extensions/                # 扩展protobuf、go-plugin gRPC与Connect生成包
 │   │   └── agent/                     # agent.pb.go + agentconnect/
 │   │       └── agentconnect/          # agent.connect.go + agent_actions.go（非生成）
 │   ├── plugin/                        # 外部插件可导入的 SDK
 │   │   ├── interface.go / host_client.go / events.go
 │   │   ├── sync.go / port.go           # 类型化 stub 与 scope
+│   │   ├── extensions.go / diagnostics/ # 地区/浏览器类型化契约与分观察点证据采集
 │   │   ├── state/ / config/ / limits/ / buildinfo/ # 插件可用的持久化、配置契约和构建信息
 │   │   ├── manifest.go                # PluginManifest JSON 类型及 ValidateManifest
 │   │   ├── schema.go                  # ConfigField、FieldConstraints、ValidateConfig
@@ -65,10 +68,16 @@ shikigami/
 │   │   ├── main.go
 │   │   ├── client/ / server/ / filetree/ / reconcile/ # 监听、对账、冲突及受根限制 I/O
 │   │   └── manifest.json              # 静态插件声明
-│   └── port/
-│       ├── main.go
-│       ├── client/ / server/ / tunnel/ / config/ # 扫描、监听、TCP 流与配置
-│       └── manifest.json              # 静态插件声明
+│   ├── port/
+│   │   ├── main.go
+│   │   ├── client/ / server/ / tunnel/ / config/ # 扫描、监听、TCP 流与配置
+│   │   └── manifest.json              # 静态插件声明
+│   ├── region/                        # Linux server侧地区插件
+│   │   ├── main.go / server/ / helper/
+│   │   └── cmd/helper/main.go         # 受限root helper，不放在host cmd目录
+│   └── browser/                       # client查看器与Linux server业务
+│       ├── main.go / client/ / server/ / runtime/
+│       └── cmd/runtime/main.go        # 独立普通用户运行服务入口
 ├── cmd/
 │   ├── shiki/                         # CLI 命令，仅参数和展示
 │   │   └── dynamic_commands.go        # 从 manifest 在启动时注册动态 CLI 命令

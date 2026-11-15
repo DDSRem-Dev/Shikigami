@@ -16,6 +16,7 @@ import (
 	"github.com/DDSRem-Dev/Shikigami/internal/server/project"
 	"github.com/DDSRem-Dev/Shikigami/internal/server/session"
 	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
+	erpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/extensions/extensionsconnect"
 	rpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/protocolconnect"
 	"github.com/DDSRem-Dev/Shikigami/pkg/protocol/version"
 )
@@ -37,6 +38,8 @@ type Service struct {
 func (s *Service) Handler() http.Handler {
 	server := connect.NewServer(s.Auth.Interceptor(), s.fileCalls.interceptor(), s.portCalls.interceptor())
 	rpc.RegisterShikiDaemonHandler(server, s)
+	erpc.RegisterRegionServiceHandler(server, s)
+	erpc.RegisterBrowserServiceHandler(server, s)
 	return connection.NewRPCHandler(server, s.Auth.HTTPMiddleware, firstRequestTransport, terminalTransport, plugin.WithStreamCancellation)
 }
 
