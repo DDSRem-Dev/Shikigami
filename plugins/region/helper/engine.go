@@ -54,10 +54,10 @@ type OperationRecord struct {
 }
 
 type Journal struct {
-	Version          int                         `json:"version"`
-	Revoked          bool                        `json:"revoked,omitempty"`
-	Serial           uint64                      `json:"serial"`
-	Desired          *epb.RegionConfig           `json:"desired,omitempty"`
+	Version int               `json:"version"`
+	Revoked bool              `json:"revoked,omitempty"`
+	Serial  uint64            `json:"serial"`
+	Desired *epb.RegionConfig `json:"desired,omitempty"`
 	// Owner is persisted before the first mutation, not at desired publication.
 	// Equal configurations from different operations never share ownership.
 	Owner            string                      `json:"owner,omitempty"`

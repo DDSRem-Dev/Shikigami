@@ -30,7 +30,7 @@ type diskBackend struct {
 	checkErr        error
 	prepareErr      error
 	writeFault      func(string, FileState) error
-	reloadFault      func(context.Context, Transition) error
+	reloadFault     func(context.Context, Transition) error
 	crashAfterWrite bool
 }
 
@@ -752,16 +752,16 @@ func TestAdministratorRecoversPartialConflictBeforeDesiredPublication(t *testing
 
 func TestJournalRefusesMissingOrInconsistentOwnership(t *testing.T) {
 	cases := map[string]func(*Journal){
-		"legacy version": func(j *Journal) { j.Version = 1 },
-		"unversioned state": func(j *Journal) { j.Version = 0 },
-		"missing owner": func(j *Journal) { j.Owner = "" },
-		"unknown owner": func(j *Journal) { j.Owner = "operation-unknown" },
-		"self predecessor": func(j *Journal) { j.Operations[j.Owner].BeforeOwner = j.Owner },
+		"legacy version":           func(j *Journal) { j.Version = 1 },
+		"unversioned state":        func(j *Journal) { j.Version = 0 },
+		"missing owner":            func(j *Journal) { j.Owner = "" },
+		"unknown owner":            func(j *Journal) { j.Owner = "operation-unknown" },
+		"self predecessor":         func(j *Journal) { j.Operations[j.Owner].BeforeOwner = j.Owner },
 		"unowned desired snapshot": func(j *Journal) { j.Operations[j.Owner].BeforeDesired = cloneConfig(j.Desired) },
-		"mismatched publication": func(j *Journal) { j.Desired = nil },
-		"mismatched pending": func(j *Journal) { j.Pending = "operation-unknown" },
-		"mismatched recovery": func(j *Journal) { j.RecoveryProblem = "operation-unknown" },
-		"missing recovery lease": func(j *Journal) { j.Operations[j.Owner].Operation.State = "applying" },
+		"mismatched publication":   func(j *Journal) { j.Desired = nil },
+		"mismatched pending":       func(j *Journal) { j.Pending = "operation-unknown" },
+		"mismatched recovery":      func(j *Journal) { j.RecoveryProblem = "operation-unknown" },
+		"missing recovery lease":   func(j *Journal) { j.Operations[j.Owner].Operation.State = "applying" },
 	}
 	for name, corrupt := range cases {
 		t.Run(name, func(t *testing.T) {

@@ -6,6 +6,8 @@
 
 用户授权 commit/push、持续修复至 CI 全通过，再发布 `v0.0.1-alpha.3`。发布来源包括最终查看器 EOF 修复，而不是前批不含该修复的私有签名包。当前只完成待发布文件清单、工作流及签名环境配置检查；版本尚不存在，CI/公开产物验证结果待实际执行后登记。新增功能的隔离实测与外部门槛沿用下节精确范围，不因版本发布扩大支持声明。
 
+提交`dea8f77742e2af25620bd3d1a1dac577a18f8cb2`已推送master；[CI43712715128](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43712715128)未通过。四平台build/vet已执行，随后gofmt拒绝`plugins/region/helper/engine.go`、`engine_linux_test.go`和`internal/plugin/policy.go`排版；WSL的stages.json记录build-lint exit2并阻断后续维护，未将未执行项计通过。三文件格式修正经Go1.26.11规范LF输入比对通过；无语义改动。四目标compile与四平台Homebrew通过仍仅绑定原提交，新完整矩阵另验。
+
 <a id="region-browser-20261115"></a>
 ## 地区环境与远程浏览器扩展（2026-11-15，实现及本地/容器验收完成）
 

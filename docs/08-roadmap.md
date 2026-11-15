@@ -6,6 +6,8 @@
 
 用户指定发布 `v0.0.1-alpha.3` 供测试，不发布 beta。当前推进顺序：完整实现提交并推送 master → 同源 CI 全部通过（失败持续修复）→ 不可变 tag 自动构建/签名/预发布 → 公开产物独立核验。此刻尚未执行本轮 CI/tag/发行，不能沿用旧57/57；最终查看器 EOF 修复须进入同一发行源码。新增外部/原生平台与真实账号/物理重启门槛保持未验，详见[发行说明](releases/v0.0.1-alpha.3.md)。
 
+首轮候选`dea8f77`的[CI43712715128](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43712715128)失败：四平台preflight均在gofmt门禁失败，WSL公开阶段证据也停在build-lint；四目标归档及四平台Homebrew通过。修正region journal/测试与host权限map三文件排版，本地三文件gofmt比对通过；无生产语义变化，完整CI待下一提交，不提前创建tag。
+
 ## 新增扩展：地区环境与远程浏览器（2026-11-15）
 
 设计基线：[27](27-region-browser-plugins.md)。用户已授权完整实现；原Phase0–5的42/42及此前beta候选证据不覆盖以下新增项。
