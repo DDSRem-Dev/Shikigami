@@ -8,6 +8,8 @@
 
 提交`dea8f77742e2af25620bd3d1a1dac577a18f8cb2`已推送master；[CI43712715128](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43712715128)未通过。四平台build/vet已执行，随后gofmt拒绝`plugins/region/helper/engine.go`、`engine_linux_test.go`和`internal/plugin/policy.go`排版；WSL的stages.json记录build-lint exit2并阻断后续维护，未将未执行项计通过。三文件格式修正经Go1.26.11规范LF输入比对通过；无语义改动。四目标compile与四平台Homebrew通过仍仅绑定原提交，新完整矩阵另验。
 
+第二轮`d7be3ad278962921c447713f3a0f12450c1cdff4`的[CI43714541188](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43714541188)为56/57：`TestHelperClientCancellationClosesItsCallAndOwnedGroup`的`unix.Poll`返回EINTR，测试立即误报退出失败。现仅修正测试等待：按单一2秒截止重算剩余预算，EINTR继续，其余错误/超时/缺少POLLIN仍失败。冻结`/work/alpha3-poll-fix`、普通shikitest、Go1.26.11执行`go test -p=1 -race -count=1 -timeout=90s ./plugins/region/helper -run 'Test(OwnedCommand|HelperClientCancellation|NativeCommandCancellation)'`通过（4.249s）。首次启动命令因login shell重置PATH未运行测试；改用绝对Go路径后通过。生产代码未变，完整矩阵和公开发行仍待后续门禁。
+
 <a id="region-browser-20261115"></a>
 ## 地区环境与远程浏览器扩展（2026-11-15，实现及本地/容器验收完成）
 

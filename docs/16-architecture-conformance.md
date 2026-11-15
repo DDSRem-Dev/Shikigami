@@ -8,6 +8,8 @@
 
 首轮`dea8f77`/CI43712715128的失败为三处Go排版门禁，WSL停于build-lint；未降低门禁或跳过下游。修复仅对齐gofmt，不改变journal schema/事务归属、权限map或测试断言。七类架构结论不变；本地三文件格式比对通过，08/15同步记录失败及下一完整CI仍待验证。
 
+第二轮`d7be3ad`/CI43714541188为56/57，唯一失败来自测试pidfd Poll的EINTR处理。修复保持原2秒总预算、稳定pidfd及退出事件断言，不放宽进程组边界或生产清理契约。对照27及既有七类复核：目录/SDK依赖、RPC权限、持久事务、进程所有权、文件网络、CLI安装、支持声明均未改变；仅测试观测正确处理信号中断。Linux定向race通过4.249s；08/15一致记录下一完整CI及发行仍待验证。
+
 ## 地区环境与远程浏览器扩展（2026-11-15，本地/容器批次复核完成）
 
 设计基线为[27](27-region-browser-plugins.md)，原42项及beta候选不覆盖新增功能。设计复核保持七类边界：业务插件不导入host internal；类型化RPC与显式权限；期望配置/revision/request_id与运行状态分离；独立systemd用户实例跨daemon重启保活；受限root helper不接受任意命令/路径；loopback查看器不暴露agent或Token；未测与外部门槛保持pending。

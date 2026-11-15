@@ -8,6 +8,8 @@
 
 首轮候选`dea8f77`的[CI43712715128](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43712715128)失败：四平台preflight均在gofmt门禁失败，WSL公开阶段证据也停在build-lint；四目标归档及四平台Homebrew通过。修正region journal/测试与host权限map三文件排版，本地三文件gofmt比对通过；无生产语义变化，完整CI待下一提交，不提前创建tag。
 
+第二轮`d7be3ad`的[CI43714541188](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43714541188)为56/57；唯一失败是Linux插件测试的pidfd等待被信号中断（EINTR），并非已证明子进程残留。测试改为在同一2秒截止内继续等待，仍要求POLLIN证明退出；不修改生产取消/进程组逻辑。隔离Linux普通UID定向race通过（4.249s），完整CI随修复提交重新执行，通过前不创建tag。
+
 ## 新增扩展：地区环境与远程浏览器（2026-11-15）
 
 设计基线：[27](27-region-browser-plugins.md)。用户已授权完整实现；原Phase0–5的42/42及此前beta候选证据不覆盖以下新增项。

@@ -125,9 +125,20 @@ func (f *ownedCommandFixture) childHandle(t *testing.T) int {
 func assertOwnedChildExited(t *testing.T, fd int) {
 	t.Helper()
 	poll := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
-	count, err := unix.Poll(poll, 2000)
-	if err != nil || count != 1 || poll[0].Revents&unix.POLLIN == 0 {
-		t.Fatalf("owned descendant survived command cleanup: count=%d events=%d err=%v", count, poll[0].Revents, err)
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			t.Fatal("owned descendant survived command cleanup deadline")
+		}
+		count, err := unix.Poll(poll, int((remaining+time.Millisecond-1)/time.Millisecond))
+		if errors.Is(err, unix.EINTR) {
+			continue
+		}
+		if err != nil || count != 1 || poll[0].Revents&unix.POLLIN == 0 {
+			t.Fatalf("owned descendant survived command cleanup: count=%d events=%d err=%v", count, poll[0].Revents, err)
+		}
+		return
 	}
 }
 
