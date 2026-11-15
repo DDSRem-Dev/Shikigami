@@ -2,6 +2,8 @@
 
 当前源码验收清单已闭环（42/42），平台支持范围统一见[18 支持声明](18-release-readiness.md#current-support)。以下按原日期和源码保存平台批次结果及当时待办。
 
+2026-11-15维护分片修正：独立job不能把另一runner的preflight运行身份当作本机身份；`ubuntu-24.04`等标签不保证相同内核。维护job在本机重新冻结源码/身份并执行build-lint、tool-tests、platform-tool-tests，成功后才进入原严格准入；不删除kernel或源码一致性检查，不把跨job前置通过当作本机通过。原失败与新CI证据见08/15/16的alpha.3记录。
+
 ## 历史平台批次状态（2026-10-31）
 
 最终045b463的[CI41125907702](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41125907702)已completed/success、13/13任务成功，同源五平台完整通过；此前c1e5ece的[CI41119194452](https://github.com/DDSRem-Dev/Shikigami/actions/runs/41119194452)亦完整通过。主代理独立核验五平台各730文件源码摘要、全部必需阶段、来源一致性及清理；平台兼容原项已关闭，路线图37/42。实际3CPU/7GiB已验证p2/GOMAX1策略，整轮46分51秒→36分09秒，详细耗时及冷暖缓存边界见[最终记录](#ci-045-final-20261031)。历史失败和未验外部账号、真实Claude、物理重启登录/自然切网与长稳范围保持。

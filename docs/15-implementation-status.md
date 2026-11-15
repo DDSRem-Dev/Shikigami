@@ -10,6 +10,8 @@
 
 第二轮`d7be3ad278962921c447713f3a0f12450c1cdff4`的[CI43714541188](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43714541188)为56/57：`TestHelperClientCancellationClosesItsCallAndOwnedGroup`的`unix.Poll`返回EINTR，测试立即误报退出失败。现仅修正测试等待：按单一2秒截止重算剩余预算，EINTR继续，其余错误/超时/缺少POLLIN仍失败。冻结`/work/alpha3-poll-fix`、普通shikitest、Go1.26.11执行`go test -p=1 -race -count=1 -timeout=90s ./plugins/region/helper -run 'Test(OwnedCommand|HelperClientCancellation|NativeCommandCancellation)'`通过（4.249s）。首次启动命令因login shell重置PATH未运行测试；改用绝对Go路径后通过。生产代码未变，完整矩阵和公开发行仍待后续门禁。
 
+第三轮`9575ec00dfaac42cfc0141ae180270a9ae311d35`的[CI43718718959](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43718718959)为56/57，插件测试已通过。唯一失败`maintenance (linux, amd64)`在准入返回`runtime_identity_changed`；下载的preflight记录为Linux/amd64、Go1.26.11、kernel `7.0.0-1014-aws`，日志未输出当前runner的具体差异字段，不推断其内核值。独立runner间复用了要求完全一致的runtime身份；维护尚未执行，不记通过。工作流改为维护runner本机重新执行preflight及三项前置检查，各项成功后才mark；不移除严格身份/源码/取消检查、不复用其他runner资源测量。`python3 -B scripts/test-platform-ci.py`30项通过（4.179s）；本地actionlint未运行，隔离容器不能联网下载工具。下一完整CI负责实际工作流及原生维护验收。
+
 <a id="region-browser-20261115"></a>
 ## 地区环境与远程浏览器扩展（2026-11-15，实现及本地/容器验收完成）
 

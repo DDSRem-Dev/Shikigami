@@ -10,6 +10,8 @@
 
 第二轮`d7be3ad`的[CI43714541188](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43714541188)为56/57；唯一失败是Linux插件测试的pidfd等待被信号中断（EINTR），并非已证明子进程残留。测试改为在同一2秒截止内继续等待，仍要求POLLIN证明退出；不修改生产取消/进程组逻辑。隔离Linux普通UID定向race通过（4.249s），完整CI随修复提交重新执行，通过前不创建tag。
 
+第三轮`9575ec0`的[CI43718718959](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43718718959)仍为56/57；插件取消回归已通过，唯一失败为Linux维护准入`runtime_identity_changed`，未执行原生维护。维护job复用了另一runner的preflight身份，不能保证内核等字段一致。现改为在维护runner本机重新冻结源码/身份并执行build-lint、tool-tests和platform-tool-tests；保留26规定的全部身份、源码和取消门禁，不重写旧证据。30项平台工具回归通过，真实维护及完整矩阵由下一CI验证。
+
 ## 新增扩展：地区环境与远程浏览器（2026-11-15）
 
 设计基线：[27](27-region-browser-plugins.md)。用户已授权完整实现；原Phase0–5的42/42及此前beta候选证据不覆盖以下新增项。
