@@ -2,13 +2,13 @@
 
 通过本地 CLI/TUI 和常驻 agent，使用远端 VPS 上的 tmux / Claude Code。核心链路采用 Connect/protobuf over HTTP/2；文件同步和 TCP 转发由双端插件执行。
 
-**当前源码的 Phase 0–5 验收清单已闭环（42/42）。** 功能、已验平台、证据来源及未支持范围见[支持声明](docs/18-release-readiness.md#current-support)，逐项进度见[路线图](docs/08-roadmap.md)。认证生命周期及长稳、资源与性能按用户确认测试通过关闭；真实 Claude 登录/推理、物理主机重启和生产 heap/object 归因仍保留未实测边界。公开安装入口仍为 alpha.2，不包含其后 master 修复；本轮未发布新版本。
+**当前源码的 Phase 0–5 验收清单已闭环（42/42）。** 功能、已验平台、证据来源及未支持范围见[支持声明](docs/18-release-readiness.md#current-support)，逐项进度见[路线图](docs/08-roadmap.md)。认证生命周期及长稳、资源与性能按用户确认测试通过关闭；真实 Claude 登录/推理、物理主机重启和生产 heap/object 归因仍保留未实测边界。当前公开安装入口为 alpha.3，包含新增可选地区环境与远程浏览器插件；不是 beta 或稳定版。
 
-首个 beta 候选的安装、签名 marketplace、插件运行时和发行工具已完成本批发布前验收，固定候选 CI 为57/57。实际 tag 发布和公开包验收仍是独立门槛，状态见 [beta 发布准备](docs/18-release-readiness.md#beta-readiness)；本轮未发布 beta，旧版本没有 `bootstrap.sh` Release 资产，不要套用尚未发布的新版本下载地址。
+alpha.3 固定源码的发布前 CI 为57/57；自动构建、签名、公开发布和 Homebrew 更新成功，23资产及 Linux amd64 首次/重复暂存已独立核验，见[公开发行证据](docs/15-implementation-status.md#evidence-public-alpha3-release-20261115)。新增功能的原生体验、真实账号、公网与物理重启边界见[发行说明](docs/releases/v0.0.1-alpha.3.md)。历史 beta 候选证据保留，不表示已发布 beta。
 
 ## 安装
 
-当前公开预发布为 [v0.0.1-alpha.2](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.2)。通过 Homebrew 安装：
+当前公开预发布为 [v0.0.1-alpha.3](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.3)。通过 Homebrew 安装：
 
 ```bash
 brew tap ddsrem-dev/shikigami https://github.com/DDSRem-Dev/Shikigami

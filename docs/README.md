@@ -1,10 +1,10 @@
 # Shikigami 设计文档导航
 
-**状态：当前源码 Phase 0–5 验收清单已闭环（42/42）。** [当前支持声明](18-release-readiness.md#current-support)统一功能、平台、证据和未支持范围；[08 路线图](08-roadmap.md)、[15 实施记录](15-implementation-status.md)与[16 架构复核](16-architecture-conformance.md)记录关闭依据。认证生命周期和长稳、资源与性能按用户确认通过；真实 Claude 登录/推理、物理主机重启及生产 heap/object 归因仍保留未实测边界。公开安装入口仍为 v0.0.1-alpha.2，未包含后续 master 修复，本轮未发布新版本。00–14 保留设计契约，不能仅凭示例认定功能已经可用。
+**状态：当前源码 Phase 0–5 验收清单已闭环（42/42）。** [当前支持声明](18-release-readiness.md#current-support)统一功能、平台、证据和未支持范围；[08 路线图](08-roadmap.md)、[15 实施记录](15-implementation-status.md)与[16 架构复核](16-architecture-conformance.md)记录关闭依据。认证生命周期和长稳、资源与性能按用户确认通过；真实 Claude 登录/推理、物理主机重启及生产 heap/object 归因仍保留未实测边界。当前公开安装入口为 v0.0.1-alpha.3，不是beta或稳定版。00–14保留设计契约，不能仅凭示例认定功能已通过所有平台验收。
 
-首个 beta 候选的安装、签名 marketplace、第三方插件运行时与发行资产一致性已完成本批发布前验收，固定候选 CI 为57/57。新增路径以[本批证据](15-implementation-status.md#evidence-first-beta-candidate)和[beta 发布门槛](18-release-readiness.md#beta-readiness)为准，不用历史42/42或旧 CI 替代；当前未创建新 tag 或 Release，公开包验收仍待实际发布。
+alpha.3固定源CI57/57通过，自动发行及Homebrew更新完成；23公开资产、四目标签名/成员/来源和Linux amd64首次/重复暂存已独立核验，见[公开证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)。历史[beta候选证据](15-implementation-status.md#evidence-first-beta-candidate)及[beta发布门槛](18-release-readiness.md#beta-readiness)仍保留，不表示发布了beta。
 
-**新增地区/浏览器扩展（2026-11-15）：** [27 地区环境与远程浏览器](27-region-browser-plugins.md)的实现与授权范围内本地/隔离amd64容器验收已完成。新增功能不包含在历史42项或beta57项证据中；08/15/16单列精确源码、产物与发现/修复。原生平台、真实账号、物理重启、公网及公开发行仍未验；公开alpha.2不含本批。
+**新增地区/浏览器扩展（2026-11-15）：** [27 地区环境与远程浏览器](27-region-browser-plugins.md)实现与授权范围内本地/隔离amd64容器验收已完成，并纳入公开alpha.3。新增功能不包含在历史42项或beta57项证据中；08/15/16单列精确源码、产物与发现/修复。新增原生体验、真实账号、物理重启及公网仍未验。
 
 ## 文档清单
 
@@ -71,4 +71,4 @@
 
 09 是远端与插件消息形状的唯一来源，13 是本地 agent IPC 的来源；02/03/04/10 规定行为。修改接口时必须同步相关行为、UX 和验收。09 的代码块可用于协议语法验证，但未表示服务已经实现。待实现能力必须列在路线图，不能通过界面示例宣称完成。
 
-实际 module 为 `github.com/DDSRem-Dev/Shikigami`，当前根目录采用[GPL-3.0-only](../LICENSE)，从v0.0.1-alpha.2起随发行包分发；已公开alpha.1及其冻结源码保留原MIT许可证。当前发行源为 [v0.0.1-alpha.2 GitHub Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.2)，公开问题反馈入口为 [GitHub Issues](https://github.com/DDSRem-Dev/Shikigami/issues)，不承诺响应时限；来源及下载验证结果见[公开发行证据](./15-implementation-status.md#evidence-public-alpha2-release-20261030)。文档中的 `yourusername`、`shiki.dev`、其余示例版本/下载地址、未关联22的 Homebrew 示例包名和邮箱仍是占位示例；真实 Homebrew 安装命令和平台边界见[22 分发与安装](22-homebrew-distribution.md)，其余占位地址不得当作实际安装源。
+实际 module 为 `github.com/DDSRem-Dev/Shikigami`，当前根目录采用[GPL-3.0-only](../LICENSE)，从v0.0.1-alpha.2起随发行包分发；已公开alpha.1及其冻结源码保留原MIT许可证。当前发行源为 [v0.0.1-alpha.3 GitHub Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.3)，公开问题反馈入口为 [GitHub Issues](https://github.com/DDSRem-Dev/Shikigami/issues)，不承诺响应时限；来源及下载验证结果见[公开发行证据](./15-implementation-status.md#evidence-public-alpha3-release-20261115)。文档中的 `yourusername`、`shiki.dev`、其余示例版本/下载地址、未关联22的Homebrew示例包名和邮箱仍是占位示例；真实Homebrew安装命令和平台边界见[22分发与安装](22-homebrew-distribution.md)，其余占位地址不得当作实际安装源。

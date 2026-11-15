@@ -1,8 +1,8 @@
 # 自动化安装与运维契约
 
-**本文保留安装流程契约。仓库已实现本地固定版本 bundle 校验、事务安装/回滚、服务渲染、异步登录引导与本地就绪诊断；真实 systemd 容器与原生 macOS LaunchAgent 已有下述限定环境生命周期证据；当前公开预发布 v0.0.1-alpha.2 已由 tag 自动构建、签名、发布并更新 Homebrew Formula，实际分发与平台证据见[22](22-homebrew-distribution.md)。五平台本地完整产品/服务验收已通过；真实外部身份跨安装器升级、服务恢复替代验收及卸载保持已通过，见[24终态](24-public-package-compatibility.md#installer-final-20261031)；两项安装门槛已关闭，路线图39/42；真实Claude登录/推理不纳入当前交付验收且未实测，见[验收范围](#claude-acceptance-scope-20261031)；按用户约束不重启实际Mac/VPS，方案见[替代验收](#no-host-reboot-acceptance-20261031)。**
+**本文保留安装流程契约。仓库已实现固定版本bundle校验、事务安装/回滚、服务渲染、异步登录引导与就绪诊断。当前公开预发布v0.0.1-alpha.3已由tag自动构建、签名、发布并更新Homebrew Formula，公开验签及Linux amd64首次/重复暂存证据见[15](15-implementation-status.md#evidence-public-alpha3-release-20261115)。下文既有systemd/LaunchAgent、五平台产品及升级/恢复验收保持各自历史源码与环境范围，不冒充全部在新公开包重跑。真实Claude登录/推理不纳入原Phase0–5交付验收且未实测，见[验收范围](#claude-acceptance-scope-20261031)；物理Mac/VPS重启仍未实测，见[替代验收](#no-host-reboot-acceptance-20261031)。**
 
-`scripts/install.sh`、`install-client.sh`、`uninstall.sh` 与短时运维 helper `shiki-install` 已存在；已完成专用公钥的四目标签名及验签。[当前公开 Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.2) 来自提交 `fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2`、成功自动发布运行 `40912019720`，公开资产的下载验证结果见[发行证据](./15-implementation-status.md#evidence-public-alpha2-release-20261030)。安装只接受本地 bundle、固定版本及调用者从独立可信渠道取得的 checksum pin。可信源码工具 `scripts/release-trust.go fetch` 提供显式HTTPS归档/签名地址、独立可信公钥和固定版本/平台的下载验签入口，先认证签名再下载归档，成功后生成私有副本/pin/receipt；解包与安装仍是显式后续步骤，工具不指定正式来源或建立公钥信任。GitHub下载地址会重定向，现有 `fetch` 拒绝重定向；应使用 `gh release download v0.0.1-alpha.2 --repo DDSRem-Dev/Shikigami` 取回资产，再用可信源码 verifier 和独立可信公钥离线验签。命令与限制见发布认证，本批验收进度见16。下列完整就绪和运维要求不因预发布成功而降低。
+`scripts/install.sh`、`install-client.sh`、`uninstall.sh`及短时运维helper `shiki-install`已存在。[当前公开Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.3)来自固定源`d9056c3ffed86b2bbac9cd5e89c433eaa3093cb2`及成功运行`43727419792`，四目标独立验签见[发行证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)。安装接受本地bundle、固定版本和独立可信checksum pin；`scripts/release-trust.go fetch`可从显式HTTPS地址使用独立可信公钥认证归档，并生成私有副本/pin/receipt，但不建立公钥信任。GitHub下载会重定向，而`fetch`拒绝重定向；可用`gh release download v0.0.1-alpha.3 --repo DDSRem-Dev/Shikigami`取回资产，再由可信verifier和预置信任公钥离线验签。解包、安装和服务激活仍须显式执行；预发布成功不降低完整就绪与运维要求。
 
 ## 地区/浏览器系统支持扩展（本地/容器验收完成）
 
@@ -16,7 +16,7 @@ setup的root二进制来源须由独立可信、root拥有的公钥验证固定�
 
 卸载先停止daemon并取得宿主维护锁、持久禁用受管插件，再停止身份匹配的浏览器实例；保留profile。region在root状态锁中封闭新变更并处理待恢复事务，只有无pending且状态为`disabled`才能移除恢复守卫/helper/授权。冲突或失败保留恢复组件和证据，报告未完成，不能遗留活动root守卫却宣称卸载成功。
 
-使用已独立验证的新源码发行产物，先将`BUNDLE`、`ARCHIVE`、`SIGNATURE`、`VERSION`设为同一固定版本的真实绝对路径/版本；公钥须由独立可信渠道预置为root所有。以下不是公开alpha.2命令，也不提供新的公开下载源：
+使用已独立验证的alpha.3发行产物，将`BUNDLE`、`ARCHIVE`、`SIGNATURE`、`VERSION`设为同一固定版本的真实绝对路径/版本；公钥须从独立可信渠道预置为root所有。以下命令不适用于alpha.2：
 
 ```sh
 sudo shiki-install setup --component all --user <普通用户> \
@@ -121,18 +121,18 @@ HTTPS 限制覆盖每次重定向，下载/解包有大小、数量、时间和�
 
 ## Bootstrap 一键入口
 
-`scripts/bootstrap.sh` 是**当前源码**中的下载、Ed25519 验签、解包和安装 helper 入口。必须从可信且已审查的 checkout 取得脚本；内嵌公钥的 SPKI DER SHA-256 为 `e21f6dd671ea5042c43c492b759b933dda73985f89a823b43c651ff7c787c17d`，可对照 `configs/release-signing.pub` 独立核验。脚本本身不是独立签名的信任根。
+`scripts/bootstrap.sh`是下载、Ed25519验签、解包和安装helper入口，alpha.3也提供固定源码的公开脚本资产。必须从可信且已审查的checkout或已核对来源的固定tag取得脚本；内嵌公钥SPKI DER SHA-256为`e21f6dd671ea5042c43c492b759b933dda73985f89a823b43c651ff7c787c17d`，可与独立可信的`configs/release-signing.pub`核验。脚本本身不是独立签名的信任根。
 
-**当前公开 `v0.0.1-alpha.2`（及 alpha.1）只有原来的22个资产，没有 `bootstrap.sh`。** 不得请求这些 tag 下不存在的 bootstrap 下载 URL，也不为旧公开 Release 补传或覆盖资产。下列命令从包含本次修复的已审查源码 checkout 运行 bootstrap，目标归档仍固定为真实公开的 alpha.2。后续新 tag 将在公开前把固定源码的 bootstrap 纳入完整23资产集，并逐一核对远端大小/摘要；只有实际公开且包含脚本的 tag 才可使用它的 `/releases/download/<tag>/bootstrap.sh` URL。alpha/beta/rc 必须显式指定 tag；GitHub 的 `releases/latest` 不代表预发布。未传 `--version` 时，脚本查询最近公开 Release（可为预发布），不把它冒充稳定渠道。
+**alpha.3的23公开资产已包含`bootstrap.sh`；历史alpha.1/alpha.2仍为22资产，没有该脚本。** 不补传或覆盖旧资产。下列命令从已审查checkout执行，目标为固定公开alpha.3。公开脚本URL为`https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.3/bootstrap.sh`；下载不等于已建立脚本信任。alpha/beta/rc须显式指定tag，`releases/latest`不代表预发布；未传`--version`时查询最近公开Release（可为预发布），不把它冒充稳定渠道。
 
 运行前要求 Bash、`curl`、`gzip`、`tar`、`base64`、`/usr/bin/perl`、SHA-256 工具（`sha256sum` 或 `shasum`）及支持 Ed25519 `pkeyutl -rawin` 的 **OpenSSL 3+** CLI。macOS 自带的 LibreSSL 不足以验签；可先 `brew install openssl@3`，脚本会检查标准 Homebrew keg 路径。缺少工具时停止，不以同源 `.sha256` 替代签名，也不回退到无法保证 HTTPS 重定向约束的 wget 路径。
 
-每次下载只允许 HTTPS，最多5次 HTTPS 重定向，连接超时15秒、单次总时限300秒，持续30秒低于1 KiB/s 即失败。流式写入器在没有 Content-Length 时仍限制归档为1 GiB、签名/API元数据为64 KiB；认证后的解压 tar 流另限4 GiB，解包前要求固定14成员（兼容单个顶层目录），并以单文件1 GiB限制约束稀疏成员，避免无限临时字节或 inode 增长。API响应、签名工作文件、归档、解压内容与 helper 私有副本均位于同一个0700临时目录，正常退出、失败和取消均回收。取消先通知受管 helper 并有界等待，必要时终止；正常 helper 退出码（包括 pending 的3）原样返回，HUP/INT/TERM 分别返回129/130/143。
+每次下载只允许HTTPS，最多5次HTTPS重定向，连接超时15秒、单次总时限300秒，持续30秒低于1 KiB/s即失败。没有Content-Length时仍限制归档为1 GiB、签名/API元数据为64 KiB；认证后的解压tar流另限4 GiB。解包仅接受基础14成员及成套的平台可选插件白名单（alpha.3 Linux20成员、macOS16成员，兼容单个顶层目录），单文件限1 GiB。API响应、签名工作文件、归档、解压内容与helper私有副本均在同一0700临时目录，正常退出、失败及取消均回收。取消先通知受管helper并有界等待，必要时终止；正常helper退出码（包括pending的3）原样返回，HUP/INT/TERM分别返回129/130/143。
 
 **服务端（VPS）安装**（从已审查源码 checkout 的仓库根目录执行）：
 
 ```bash
-VERSION=v0.0.1-alpha.2
+VERSION=v0.0.1-alpha.3
 
 # 交互式；rem 必须是已存在的普通运行用户
 sudo bash scripts/bootstrap.sh --version="$VERSION" --user=rem
@@ -155,14 +155,14 @@ brew info ddsrem-dev/shikigami/shikigami
 # 检查 service review 后，显式移除 --stage-only 才会激活本地受管服务。
 
 # 或从已审查源码 checkout 执行，仍固定到真实公开包
-bash scripts/bootstrap.sh --version=v0.0.1-alpha.2 --role=client
+bash scripts/bootstrap.sh --version=v0.0.1-alpha.3 --role=client
 ```
 
 **升级或重复安装**：
 
 ```bash
 # 将 VERSION 显式设为选择的已公开版本；同版本是重复安装，不是假称跨版本升级
-VERSION=v0.0.1-alpha.2
+VERSION=v0.0.1-alpha.3
 sudo bash scripts/bootstrap.sh --version="$VERSION" --user=rem
 
 # Homebrew 先更新下载的 bundle，再按新 caveats 显式升级受管服务

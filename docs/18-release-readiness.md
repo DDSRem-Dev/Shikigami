@@ -1,22 +1,22 @@
 # 首版预发布、自动发布流程与交付门槛
 
-更新：2026-10-30。当前公开版本为[v0.0.1-alpha.2](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.2)，固定源`fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2`的[Release40912019720](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40912019720)完整成功，22资产于`2026-10-29T17:30:47Z`公开；`draft=false`、`prerelease=true`。同一运行自动生成并提交Formula，bot提交`85003591044fca15f82c9c220b2051766f1e47aa`。公开下载和平台验收范围见[alpha.2记录](15-implementation-status.md#evidence-public-alpha2-release-20261030)与[Homebrew](22-homebrew-distribution.md)。
+更新：2026-11-15。当前公开预发布为[v0.0.1-alpha.3](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.3)，固定源`d9056c3ffed86b2bbac9cd5e89c433eaa3093cb2`的[CI43723367228](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43723367228)57/57通过；[Release43727419792](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43727419792)成功（60通过、复用Homebrew分支1跳过）。23资产于`2026-11-15T15:48:03Z`公开，`draft=false`、`prerelease=true`；自动Formula提交`280db0e52a7ff7e36e8663f5873ee0a530070b2b`。四目标公开验签、来源/成员、公式一致性与Linux amd64首次/重复暂存见[发行证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)。alpha.2原22资产及[历史验收](15-implementation-status.md#evidence-public-alpha2-release-20261030)保持不变。
 
 历史首个公开预发布 [v0.0.1-alpha.1](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.1) 已通过 tag 全自动工作流发布；固定提交为 `f0b5f83dce599c8e0d715bda5e7806a0ef6aaa72`，[Actions 40895007350](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40895007350) 已完成且成功，包含同源 CI、四目标构建、签名验签和公开发布。Release 于 `2026-10-29T15:13:47Z` 公开，`draft=false`、`prerelease=true`，共22个资产；独立下载与实际产物验证结果见[公开发行证据](15-implementation-status.md#evidence-public-alpha-release-20261029)。本文件保存发布流程、验收边界与剩余门槛；[该版本说明](./releases/v0.0.1-alpha.1.md) 随 tag 冻结。完整范围仍由 [08 路线图](./08-roadmap.md) 决定，预发布不缩小交付要求。
 
 <a id="current-support"></a>
-## 当前支持声明（2026-11-14）
+## 当前支持声明（2026-11-15）
 
-本节是当前支持范围的统一入口。路线图 Phase 0–5 的原42项已完成验收登记与支持声明核对；这不表示已发布包含当前修复的新版本或稳定版。下文按日期保留的候选、失败、平台待办仅代表当时范围，不能覆盖本节。
+本节是当前支持范围的统一入口。路线图Phase0–5的原42项已完成验收登记与声明核对；alpha.3已另行完成公开发行，不是beta或稳定版。下文按日期保留的候选、失败、平台待办仅代表当时范围，不能覆盖本节。
 
 ### 版本与证据来源
 
 | 对象 | 当前结论 | 来源与限制 |
 |---|---|---|
-| 当前源码 | 本批安装、签名 marketplace、插件运行时与发行工具的发布前验收通过 | 固定提交 `a5032c112ffdace9b9ab6455f7280480223a8482` 的 [CI 43484685340](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43484685340) 为57/57；本地真实安装/旧 helper 兼容及历史失败范围见[15](15-implementation-status.md#evidence-first-beta-candidate)，不代表新公开包已发布 |
+| 当前源码 | alpha.3固定源包含安装、签名marketplace、插件运行时及新增region/browser | `d9056c3`的CI43723367228为57/57；新增功能精确本地/容器证据及失败修复见15，不以旧平台测试替代新浏览器全平台体验 |
 | 认证生命周期、长稳/资源/性能 | 2026-11-01按用户确认测试通过关闭 | 既有实测证据分别见23、20；用户确认与独立实测分别记录，不补造官方URL到期现场或生产heap/object归因结果 |
-| 公开安装包 | 本仓库安装入口及Formula固定为 `v0.0.1-alpha.2`，来源 `fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2` | 本轮重新核对公开 Release：只有 alpha.1/alpha.2，alpha.2 的22个资产没有 `bootstrap.sh`；其后 master 修复不在旧包内 |
-| 下一发行版 | 用户于2026-11-15指定 `v0.0.1-alpha.3`，先 commit/push 并修复至完整 CI 通过，再执行 tag 自动预发布 | 当前发布执行以08/15/16的alpha.3段落及[发行说明](releases/v0.0.1-alpha.3.md)为准；下方beta候选记录保留历史证据，不代表已发布beta |
+| 公开安装包 | 安装入口及Formula为`v0.0.1-alpha.3`，固定源`d9056c3ffed86b2bbac9cd5e89c433eaa3093cb2` | 23资产含bootstrap，四目标独立验签、自动公式逐字节核对及Linux amd64暂存通过；本轮未执行公开包完整服务升级/回滚 |
+| 版本性质 | alpha.3按用户要求供测试，未发布beta | [发行说明](releases/v0.0.1-alpha.3.md)与08/15/16保留真实账号、公网、物理重启和新增原生体验边界；下方beta记录保持历史含义 |
 
 ### 功能支持矩阵
 
@@ -29,6 +29,8 @@
 | tsnet与TLS | 内嵌节点登录、身份保持、P2P/DERP、Token权限/撤销、显式TLS回退 | 23及用户确认；认证失败不换路线绕过。SDK无法区分的原因保持unknown/既有回退，不承诺额外细分信号 |
 | sync双端插件 | 项目双向同步、共同基线、冲突处理、原子文件替换、watch/ignore、后台pause/resume与恢复 | 15/25；未知提交按日志恢复，不静默覆盖冲突；非备份或三方自动合并 |
 | port双端插件 | TCP发现/授权、loopback监听、双向流、半关闭、限额、后台转发 | 15/25及真实插件集成；不提供UDP业务转发、WSS隧道或无限连接 |
+| region可选插件 | JP/US时区/locale计划、显式应用/回滚，单独授权DNS及独立恢复守卫 | 27/15：Linux普通daemon调用root受限helper；Debian12/Ubuntu24.04 amd64隔离验收，不保证改变IP地区或规避风控 |
+| browser可选插件 | Linux远程Chrome、持久profile、独立systemd服务、loopback noVNC、单控制者、中文/日文输入与授权文件通道 | 27/15：真实amd64容器界面和安装证据；macOS包只含客户端，新增完整ARM/macOS/WSL2体验及真实账号/物理重启仍未验 |
 | 会话配置快照与模板 | 保存启动配置、从当前项目文件创建新会话 | `session-config-snapshot.v1`、CLI帮助及session快照测试；不恢复文件、环境、进程或Claude对话历史 |
 | 安装与维护 | 认证bundle、显式安装/升级/回滚、systemd或LaunchAgent、卸载保留数据 | 11/24/26；历史公开包和本地候选分别记录，跨schema回退受兼容性限制；Homebrew不自动启动或升级受管服务 |
 | 长稳、资源与性能 | 已记录负载下的默认12小时轮换、恢复尾部、资源回收、故障及性能回归 | 20及15专项、用户确认；c4长跑为direct-TLS/shell夹具，不是tsnet/Claude长跑。没有全环境零泄漏、最大容量、延迟SLA承诺 |
@@ -113,14 +115,14 @@ CI采用 `v0.0.0-ci`，后续预发布应从通过验收的固定提交显式构
 
 版本接受 `vX.Y.Z` 或 `vX.Y.Z-alpha.N` / `beta.N` / `rc.N`（N 从1开始）。
 代码应先合入并推送 `master`；tag 必须指向 master 可达、包含发布工作流的提交。
-后续发布只需：
+后续发布须先选择未使用的新版本；以下为alpha.3历史命令示意，已发布后不可再次执行或移动tag：
 
 ```bash
 git tag -a v0.0.1-alpha.3 -m "Release v0.0.1-alpha.3"
 git push origin v0.0.1-alpha.3
 ```
 
-上述alpha.3仅为后续版本示例，尚未创建。alpha.2的受保护tag已固定到`fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2`，由[Release40912019720](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40912019720)处理，不能再次创建或移动。推送版本 tag 即授权发布该固定版本。
+alpha.3已固定到`d9056c3ffed86b2bbac9cd5e89c433eaa3093cb2`，由Release43727419792发布；alpha.2仍固定到`fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2`，由Release40912019720发布。均不能再次创建或移动。推送新版本tag即授权发布该固定版本。
 GitHub `release-signing` 环境已按用户要求取消人工审批，只允许 `v*` tag，
 不允许分支运行取得环境密钥；管理员绕过保持关闭。规则集 `Immutable release tags`
 禁止 `refs/tags/v*` 更新或删除，没有绕过主体；不得移动旧 tag 来替换已发行版本。

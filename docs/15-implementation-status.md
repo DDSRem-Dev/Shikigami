@@ -1,16 +1,25 @@
 # 实施与验收记录
 
-**当前进度（2026-11-12）：42/42，原清单最后一项已关闭。** 当前源码的功能、平台、验收依据及未支持范围已统一到[支持声明](18-release-readiness.md#current-support)。Phase 0–5各阶段为11/11、7/7、6/6、6/6、6/6、6/6。认证生命周期和长稳/资源/性能沿用2026-11-01用户确认的关闭结论，历史实测/失败及源码范围保留；生产heap/object归因、真实Claude登录/推理及物理主机重启仍按未实测边界披露。42/42表示当前源码验收登记与声明核对完成，不表示新包或稳定版已发布；仓库公开安装入口仍为alpha.2，未包含后续master修复。
+**原清单进度（2026-11-12）：42/42，原清单最后一项已关闭。** 功能、平台、验收依据及未支持范围统一见[支持声明](18-release-readiness.md#current-support)。Phase 0–5各阶段为11/11、7/7、6/6、6/6、6/6、6/6；认证生命周期和长稳/资源/性能沿用2026-11-01用户确认，历史实测/失败及源码范围保留。生产heap/object归因、真实Claude登录/推理及物理主机重启仍未实测。2026-11-15已发布alpha.3，新增地区/浏览器及发行证据单列如下，不扩大原42项或宣称稳定版。
 
+<a id="evidence-public-alpha3-release-20261115"></a>
 ## alpha.3 发布执行（2026-11-15）
 
-用户授权 commit/push、持续修复至 CI 全通过，再发布 `v0.0.1-alpha.3`。发布来源包括最终查看器 EOF 修复，而不是前批不含该修复的私有签名包。当前只完成待发布文件清单、工作流及签名环境配置检查；版本尚不存在，CI/公开产物验证结果待实际执行后登记。新增功能的隔离实测与外部门槛沿用下节精确范围，不因版本发布扩大支持声明。
+用户授权的`v0.0.1-alpha.3`已发布。固定源`d9056c3ffed86b2bbac9cd5e89c433eaa3093cb2`包含查看器EOF及下述CI修复，[CI43723367228](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43723367228)57/57通过。不可变tag的[Release43727419792](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43727419792)成功，60项通过、复用检查Homebrew分支按工作流跳过1项；四平台Homebrew证据来自发布前同源CI，不将跳过计通过。23资产于`2026-11-15T15:48:03Z`公开，`draft=false`、`prerelease=true`。新增功能的隔离实测和外部门槛沿用下节精确范围，不因发行扩大支持声明。
 
 提交`dea8f77742e2af25620bd3d1a1dac577a18f8cb2`已推送master；[CI43712715128](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43712715128)未通过。四平台build/vet已执行，随后gofmt拒绝`plugins/region/helper/engine.go`、`engine_linux_test.go`和`internal/plugin/policy.go`排版；WSL的stages.json记录build-lint exit2并阻断后续维护，未将未执行项计通过。三文件格式修正经Go1.26.11规范LF输入比对通过；无语义改动。四目标compile与四平台Homebrew通过仍仅绑定原提交，新完整矩阵另验。
 
 第二轮`d7be3ad278962921c447713f3a0f12450c1cdff4`的[CI43714541188](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43714541188)为56/57：`TestHelperClientCancellationClosesItsCallAndOwnedGroup`的`unix.Poll`返回EINTR，测试立即误报退出失败。现仅修正测试等待：按单一2秒截止重算剩余预算，EINTR继续，其余错误/超时/缺少POLLIN仍失败。冻结`/work/alpha3-poll-fix`、普通shikitest、Go1.26.11执行`go test -p=1 -race -count=1 -timeout=90s ./plugins/region/helper -run 'Test(OwnedCommand|HelperClientCancellation|NativeCommandCancellation)'`通过（4.249s）。首次启动命令因login shell重置PATH未运行测试；改用绝对Go路径后通过。生产代码未变，完整矩阵和公开发行仍待后续门禁。
 
 第三轮`9575ec00dfaac42cfc0141ae180270a9ae311d35`的[CI43718718959](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43718718959)为56/57，插件测试已通过。唯一失败`maintenance (linux, amd64)`在准入返回`runtime_identity_changed`；下载的preflight记录为Linux/amd64、Go1.26.11、kernel `7.0.0-1014-aws`，日志未输出当前runner的具体差异字段，不推断其内核值。独立runner间复用了要求完全一致的runtime身份；维护尚未执行，不记通过。工作流改为维护runner本机重新执行preflight及三项前置检查，各项成功后才mark；不移除严格身份/源码/取消检查、不复用其他runner资源测量。`python3 -B scripts/test-platform-ci.py`30项通过（4.179s）；本地actionlint未运行，隔离容器不能联网下载工具。下一完整CI负责实际工作流及原生维护验收。
+
+公开产物独立验收：通过`gh release download`取回全部23资产，在隔离Linux普通UID下使用固定tag源码构建的可信verifier及仓库预置信任公钥，四目标Ed25519签名、归档/payload摘要、版本/平台、PROVENANCE、验证收据、公开资产名称/大小/digest及固定源bootstrap全部匹配。SPKI SHA-256为`e21f6dd671ea5042c43c492b759b933dda73985f89a823b43c651ff7c787c17d`。Linux两架构各20成员，包含region/browser及helper/runtime；macOS两架构各16成员，包含browser客户端，不包含region/helper/runtime。Linux amd64实际执行9个公开二进制版本命令，版本/commit一致；region/browser/files帮助及首次/重复client stage-only安装通过，均为`staged / NOT_STARTED_OR_READY`，未激活服务。受限helper无version入口，其身份由签名成员校验覆盖。
+
+自动Homebrew提交`280db0e52a7ff7e36e8663f5873ee0a530070b2b`已推进master；从GitHub读取该提交的Formula，与从上述公开认证资产独立生成的公式逐字节一致，SHA-256为`17f55ab49d5c5a8e851ede92952bcb08b22329beaefed2c95227960741e8039c`。这证明公开公式来源与内容，不替代本轮未执行的公开tap全平台安装或公开包实际升级/回滚。
+
+验收工具失败保留：Windows默认`git archive`产生CRLF公钥（116字节），公开与Git规范LF公钥为113字节；采用`git -c core.autocrlf=false archive`导出同一tag后精确比较通过，未放宽产品验签。容器Python不支持`tarfile.extractall(filter=...)`，在全部成员已认证且严格限制为已知普通文件后修正临时解包调用，只续跑尚未完成的smoke；不重复已通过签名检查，不修改发行产物。
+
+发布后清理（2026-11-16）：按用户授权移除本项目16个容器、7个镜像和2个命名缓存卷，BuildKit按事先登记的缓存ID回收9.702 GB。随后`docker ps -a`、image/volume清单均为空，`docker buildx du`为0 B。删除本机`.ci-artifacts/`（含公开包下载副本）、`.tools/`、已登记的Go临时构建目录、两份浏览器下载目录、测试日志与OpenSSL临时目录，以及12份会话验收脚本；检查两个仓库临时目录均不存在，匹配的测试进程和命名测试目录均为0。源码、验收文档、GitHub日志与正式发行资产保留；未清空共享Go模块/宿主工具缓存。四个DNS监督进程退出0；两个浏览器监督进程在主动停止/删除容器后报告143/137，属于此次清理终止，不重跑验收或改写此前结果。
 
 <a id="region-browser-20261115"></a>
 ## 地区环境与远程浏览器扩展（2026-11-15，实现及本地/容器验收完成）

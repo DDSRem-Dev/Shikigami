@@ -1,6 +1,6 @@
 # Homebrew 分发与自动更新
 
-更新：2026-10-30。首个 Homebrew 版本 [v0.0.1-alpha.2](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.2) 已由 tag 工作流全自动发布并生成 [Formula/shikigami.rb](../Formula/shikigami.rb)。实际远端 tap 的 Linux arm64 安装、测试、重装和卸载已通过，结果与限制见下文；22公开资产及两平台独立暂存结果见[公开alpha.2证据](15-implementation-status.md#evidence-public-alpha2-release-20261030)；四目标原生CI完整brew链已通过；用户macOS27本机仍有独立Xcode/CLT限制。完整交付门槛仍见 [08 路线图](08-roadmap.md)。
+更新：2026-11-15。当前Homebrew版本[v0.0.1-alpha.3](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.3)已由tag工作流全自动发布并更新[Formula/shikigami.rb](../Formula/shikigami.rb)，bot提交`280db0e52a7ff7e36e8663f5873ee0a530070b2b`。23公开资产独立验签、公式从认证资产重建后的逐字节一致性及Linux amd64暂存已验，见[alpha.3证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)。同源发布前CI四平台Homebrew通过；本轮未重复公开tap全平台安装。下文alpha.2远端tap及macOS工具限制保持历史范围，完整门槛见08。
 
 ## 安装与使用边界
 
@@ -19,7 +19,7 @@ brew trust --formula ddsrem-dev/shikigami/shikigami
 
 Formula 按当前 OS/架构选择固定版本的 Linux/macOS × arm64/amd64 归档，不从源码编译产品。四目标可供下载不等于全部原生平台均已验收。
 
-Homebrew 只安装经过认证的完整 bundle：14 个发行成员保存在 Cellar 的 `libexec/bundle/`，`bin/` 链接 `shiki`、`shiki-agent`、`shiki-daemon`、`shiki-install`。双插件和 manifest 随 bundle 保留，未移动到宿主代码或以内嵌业务替代。Homebrew 不初始化账号、配置和 tsnet，不启动服务，不调用安装脚本的激活路径，也不提供 `brew services` 入口。
+Homebrew只安装经过认证的完整bundle：基础14成员及该平台签名归档中的可选插件保存在Cellar的`libexec/bundle/`；alpha.3的Linux包为20成员，macOS包为16成员。`bin/`链接`shiki`、`shiki-agent`、`shiki-daemon`、`shiki-install`；插件和manifest随bundle保留，不以内嵌业务替代。Homebrew不初始化账号、配置或tsnet，不启动服务、不执行管理员地区/浏览器依赖安装，也不提供`brew services`入口。
 
 安装后先查看当前版本和服务安装说明：
 
@@ -44,7 +44,7 @@ brew info ddsrem-dev/shikigami/shikigami
 
 许可证识别采用完整文本摘要白名单，未知内容或四目标不一致立即失败。已发布 `v0.0.1-alpha.1` 的冻结归档是 MIT；`v0.0.1-alpha.2` 起的源码授权为 GPL-3.0-only。生成器按归档中的真实许可证生成 Homebrew SPDX 标签，不会用当前工作树的 LICENSE 把旧包改标。GPL 标准文本末尾的示例文字不改变项目 README 明确的 only 授权。
 
-Formula 内嵌已认证签名信封和预先可信的 SPKI 公钥/指纹。Homebrew 在解包前验证固定 SHA-256；公式在安装前使用 Homebrew Ruby OpenSSL 验证实际 Ed25519 签名、版本/目标/归档名、归档大小/hash、`SHA256SUMS` pin 及每个 payload hash。信任不来自同一次下载旁的公钥。只有固定14成员会复制至 libexec/bundle；Homebrew 自动加入 staging 目录的 `.brew_home` 等工具文件不纳入 bundle，也不执行。Formula对libexec声明skip_clean，将完整bundle放入libexec/bundle并在keg根保留独立LICENSE副本，避免Homebrew4/7的顶层metafile整理把认证bundle里的LICENSE移走。
+Formula内嵌已认证签名信封和预先可信的SPKI公钥/指纹。Homebrew在解包前验证固定SHA-256；公式在安装前使用Ruby OpenSSL验证Ed25519签名、版本/目标/归档名、归档大小/hash、`SHA256SUMS` pin及每个payload hash。信任不来自同一次下载旁的公钥。只有基础白名单及完整配对的平台可选插件成员复制至libexec/bundle；staging中的`.brew_home`等工具文件不纳入bundle，也不执行。Formula对libexec声明skip_clean，在keg根另保留LICENSE副本，避免Homebrew整理破坏认证bundle。
 
 这不提供在线密钥撤销查询，不等同 Apple 代码签名或公证。密钥轮换、历史公钥及离线撤信边界见 [21 演练说明](21-release-key-rotation.md)与[发布流程](18-release-readiness.md#github-actions-自动构建签名与发布)。
 
