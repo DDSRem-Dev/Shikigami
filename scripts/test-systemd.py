@@ -41,6 +41,31 @@ def wait_for(check, timeout=30):
     raise RuntimeError(f"condition did not settle within {timeout}s: {last}")
 
 
+def worker_processes(parent, proc=Path("/proc")):
+    """Snapshot matching workers; process exit may race either procfs read."""
+    found = []
+    for entry in proc.iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            command = (entry / "cmdline").read_bytes().split(b"\0", 1)[0]
+            if command.rsplit(b"/", 1)[-1] not in (b"shiki-plugin-sync", b"shiki-plugin-port"):
+                continue
+            # comm is arbitrary bytes and may itself contain ')' or spaces.
+            # Only the final ')' separates it from the state and parent PID.
+            prefix, separator, suffix = (entry / "stat").read_bytes().rpartition(b")")
+            fields = suffix.split()
+            if not separator or prefix.split(b" (", 1)[0] != entry.name.encode() or len(fields) < 2 or not fields[1].isdigit():
+                raise ValueError("invalid worker process stat snapshot")
+            if int(fields[1]) == parent:
+                found.append(int(entry.name))
+        except (FileNotFoundError, ProcessLookupError):
+            # ENOENT and ESRCH both mean the observed process exited. Permission
+            # failures and malformed live-worker data are not absence evidence.
+            continue
+    return found
+
+
 def phase(message):
     print(message, flush=True)
 
@@ -344,18 +369,7 @@ def inside(layout=None):
         return {"pid": pid, "uid": uid, "home": environment["HOME"], "path": environment["PATH"], "cwd": user(["readlink", f"/proc/{pid}/cwd"]).stdout.strip(), "cgroup": Path(f"/proc/{pid}/cgroup").read_text().strip()}
 
     def workers(parent):
-        found = []
-        for entry in Path("/proc").iterdir():
-            if not entry.name.isdigit():
-                continue
-            try:
-                command = (entry / "cmdline").read_bytes().split(b"\0")[0]
-                fields = (entry / "stat").read_text().split(")", 1)[1].split()
-                if command.endswith((b"shiki-plugin-sync", b"shiki-plugin-port")) and int(fields[1]) == parent:
-                    found.append(int(entry.name))
-            except FileNotFoundError:
-                pass
-        return found
+        return worker_processes(parent)
 
     def gone(pids):
         return all(not Path(f"/proc/{pid}").exists() for pid in pids)

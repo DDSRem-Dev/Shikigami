@@ -216,7 +216,8 @@ SYSTEMD_PHASES = ACCOUNT_PHASES | frozenset(("setup-account", "check-system-dire
                            "scenario-complete", "helper-result-missing", "unknown"))
 SCRIPT_NAMES = frozenset(("platform-systemd.py", "platform_support.py", "platform_resources.py", "test-systemd.py", "systemd_activity.py"))
 ERROR_KINDS = frozenset(("AssertionError", "TimeoutExpired", "RuntimeError", "ValueError", "FileNotFoundError",
-                         "PermissionError", "KeyboardInterrupt", "OSError", "CalledProcessError", "InstallerFailure", "other"))
+                         "PermissionError", "ProcessLookupError", "IndexError", "UnicodeDecodeError",
+                         "KeyboardInterrupt", "OSError", "CalledProcessError", "InstallerFailure", "other"))
 INSTALLER_ERRORS = {
     "system_prefix_ancestor_unprotected": "system prefix ancestors must be root-owned and protected from replacement",
     "system_command_ancestor_unprotected": "system binary directory and its parents must be root-owned and not writable by other users",

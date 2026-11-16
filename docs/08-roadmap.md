@@ -12,6 +12,10 @@
 
 完整本地 `make test` 复验通过：106项Python工具测试、10项查看器行为测试、全部Go race包和两组发行工具测试；其中hostrotation218.350s、插件跨进程集成65.296s。随后独立复核补齐auth key恢复中SDK处于NoState/Starting的分支，在原5秒调用预算内等待状态明确，避免接收旧身份为新登录或盲目重复注册；实际SDK身份轮换及状态/截止专项race最终三轮9.204s通过；旧逻辑overlay下三种延迟启动回归失败，真实SDK虽Running但应用15秒后仍authenticating，临时overlay已清理。正式控制面的单次key消费语义仍按SDK契约，未为本批在用户节点上重登或重置身份；最终node整包race复验74.538s通过。`make lint`、actionlint、diff检查通过。
 
+CI首轮固定源 `ccce4fa72fa3fbfd6f0cfa23bdf574219921eeda` 的 [43896776154](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43896776154) 结束为失败：49项成功、WSL2一项失败、3项macOS ARM作业取消且无执行步骤、2项后置矩阵跳过；取消/跳过不计通过。WSL2产品、E2E、embedded、terminal及发行工具全部通过，systemd-lifecycle在crash-guard阶段扫描 `/proc/*/stat` 失败（test-systemd.py原353行；error_kind=other），原异常类型无法由公开证据确认。
+
+2026-11-17补修仅涉及验收检查器：先筛选准确插件可执行名，再按字节解析stat的最终右括号；仅将ENOENT/ESRCH作为进程退出，权限错误及损坏worker数据仍失败。固定异常分类新增ProcessLookupError/IndexError/UnicodeDecodeError，不导出异常正文或私密路径。旧代码的上述三种脆弱情况均确定性复现，但不冒称已确认原WSL具体异常。工具测试112/112（24.391s）、平台工具30/30（1.234s）、最终专项6/6通过，diff检查通过。七类复核确认生产目录依赖、RPC/授权、状态/事务、进程策略、网络/文件边界、CLI/安装布局不变；仅提高进程快照检查的正确性和失败分类，崩溃恢复断言及时间限制保持。新固定源完整CI待验。
+
 - [x] 已确认问题汇总与源码回归覆盖（29记录）。
 - [ ] alpha.6固定源完整CI、签名公开发行与资产验证。
 - [ ] 两端签名升级、稳定性复验与开发产物清理。
