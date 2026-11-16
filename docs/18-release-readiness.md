@@ -1,19 +1,19 @@
 # 首版预发布、自动发布流程与交付门槛
 
-更新：2026-11-16。当前公开预发布为[v0.0.1-alpha.4](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.4)，固定源`12664aac1d5b2ae6f1d5bb81e4eb59033009f9b0`的[CI43749533031](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43749533031)57/57通过；[Release43754919496](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43754919496)成功，23资产公开，`draft=false`、`prerelease=true`，Homebrew自动更新提交`87883018623b3d78068bab208d7ec4400285a29d`。四目标公开验签、来源/成员及公式验证见[发行证据](15-implementation-status.md#evidence-public-alpha4-release-20261116)。新增[一键安装](28-quickstart.md)的真实VPS/Mac首装、账号与物理重启仍未实测。[alpha.3历史发行证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)及alpha.2原22资产保持不变。
+更新：2026-11-16。当前公开预发布为[v0.0.1-alpha.5](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.5)，固定源`21fcb5dc1406c7e47d8d12584110433aeaa773d2`的[CI43814011028](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43814011028)57/57通过；[Release43819036138](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43819036138)成功，23资产公开，`draft=false`、`prerelease=true`，Homebrew自动更新提交`62df599ad717541e4050f921347597d097567a07`。四目标公开验签、来源/成员、公式及原生提示/暂存验证见[发行证据](15-implementation-status.md#evidence-public-alpha5-release-20261116)。本版修复alpha.4用户实际反馈的确认输入、静默长操作和目录权限；用户VPS完整重跑、账号与物理重启仍未验。旧版标签与资产保持不变。
 
 历史首个公开预发布 [v0.0.1-alpha.1](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.1) 已通过 tag 全自动工作流发布；固定提交为 `f0b5f83dce599c8e0d715bda5e7806a0ef6aaa72`，[Actions 40895007350](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40895007350) 已完成且成功，包含同源 CI、四目标构建、签名验签和公开发布。Release 于 `2026-10-29T15:13:47Z` 公开，`draft=false`、`prerelease=true`，共22个资产；独立下载与实际产物验证结果见[公开发行证据](15-implementation-status.md#evidence-public-alpha-release-20261029)。本文件保存发布流程、验收边界与剩余门槛；[该版本说明](./releases/v0.0.1-alpha.1.md) 随 tag 冻结。完整范围仍由 [08 路线图](./08-roadmap.md) 决定，预发布不缩小交付要求。
 
 <a id="current-support"></a>
 ## 当前支持声明（2026-11-16）
 
-本节是当前支持范围的统一入口。路线图Phase0–5的原42项已完成验收登记与声明核对；alpha.4已另行完成公开发行，不是beta或稳定版。下文按日期保留的候选、失败、平台待办仅代表当时范围，不能覆盖本节。
+本节是当前支持范围的统一入口。路线图Phase0–5的原42项已完成验收登记与声明核对；alpha.5已另行完成公开发行，不是beta或稳定版。下文按日期保留的候选、失败、平台待办仅代表当时范围，不能覆盖本节。
 
 ### 版本与证据来源
 
 | 对象 | 当前结论 | 来源与限制 |
 |---|---|---|
-| 当前源码 | alpha.4固定源新增VPS/Mac一键安装与客户端配置向导，保留签名marketplace及四种内置插件 | `12664aac`的CI43749533031为57/57；精确本地/容器及发行证据见15，不以CI或旧平台测试替代新向导真实双机首装 |
+| 当前源码 | alpha.5修复一键向导的终端输入、进度和权限，保留签名marketplace及四种内置插件 | `21fcb5d`的CI43814011028为57/57；精确本地/容器及公开发行证据见15，不以CI或旧平台测试替代用户真实完整安装 |
 | 认证生命周期、长稳/资源/性能 | 2026-11-01按用户确认测试通过关闭 | 既有实测证据分别见23、20；用户确认与独立实测分别记录，不补造官方URL到期现场或生产heap/object归因结果 |
 | 公开安装包 | 安装入口及Formula为`v0.0.1-alpha.4`，固定源`12664aac1d5b2ae6f1d5bb81e4eb59033009f9b0` | 23资产含bootstrap，四目标独立验签及自动公式验证见15；不表示真实新向导双机首装或完整服务升级/回滚通过 |
 | 版本性质 | alpha.4按用户要求供测试，未发布beta | [发行说明](releases/v0.0.1-alpha.4.md)与08/15/16保留真实账号、公网、物理重启和新增原生体验边界；下方beta记录保持历史含义 |

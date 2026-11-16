@@ -1,6 +1,10 @@
 # 架构与文档一致性检查
 
-## alpha.4 实机反馈修复复核（2026-11-16，本地完成，发行待验）
+## alpha.4 实机反馈修复复核（2026-11-16，本地与公开发行验证完成）
+
+固定源 `21fcb5dc1406c7e47d8d12584110433aeaa773d2` 的 [CI43814011028](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43814011028) 已57/57通过，无失败或跳过job。不可变 `v0.0.1-alpha.5` 的 [Release43819036138](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43819036138) 首次运行成功：60项成功，Homebrew复用分支按契约跳过1项（不计通过；源CI四目标Homebrew均通过）。2026-11-16T07:41:05Z公开，draft=false、prerelease=true；23资产、四目标签名/摘要/来源/成员、公开macOS arm64提示/版本/帮助/首次和重复暂存均验证通过。自动Formula提交 `62df599ad717541e4050f921347597d097567a07` 与从已验签资产重新生成的公式一致。
+
+补充验收：固定源21fcb5d的Debian12/systemd252实际普通UID密钥环provision与停止后unlock通过，凭据保持私密；隔离容器挂载传播修正和验证范围见15，不冒称用户VPS完整安装。
 
 本批基线11/27/28，已逐项复核七类契约：
 
@@ -10,7 +14,7 @@
 - 进程/取消/恢复：console首读触发sudo前台交接，原会话readiness-first不变；heartbeat在返回前join，现有子进程超时和取消保持。
 - 文件/终端/网络：公共应用目录明确0755，秘密目录/文件0700/0600；O_NOFOLLOW逐层校验。共享祖先不自动扩权；网络来源/签名/限额不变。
 - CLI/配置/发行：固定阶段和10秒耗时提示，不输出秘密或伪造百分比，不破坏JSON；密码用途说明、固定systemd状态和journal命令改善错误定位。历史alpha.4不修改，修复归入alpha.5。
-- 测试/证据：Linux真实sudo PTY、跨UID执行/恢复与私密访问拒绝已验证；CI新增必跑门禁。中间raw终端回归和共享目录扩权发现均修复，失败证据见15。最终原生4包race、全仓lint、bootstrap15项/发行工具33项、Linux client/install整包与sudo/跨UID专项通过；精确记录见15。固定源CI/发行尚待验，用户VPS完整安装、账号与物理重启不冒称通过。
+- 测试/证据：Linux真实sudo PTY、跨UID执行/恢复与私密访问拒绝已验证；CI新增必跑门禁。中间raw终端回归和共享目录扩权发现均修复，失败证据见15。最终原生4包race、全仓lint、bootstrap15项/发行工具33项、Linux client/install整包与sudo/跨UID专项通过；精确记录见15。固定源CI与公开发行均已验证；用户VPS完整安装、账号与物理重启不冒称通过。
 
 
 **alpha.4 已发布（2026-11-16）：** 固定源 `12664aac1d5b2ae6f1d5bb81e4eb59033009f9b0` 的 [CI43749533031](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43749533031) 57/57 全部通过；不可变标签 `v0.0.1-alpha.4` 的 [Release43754919496](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43754919496) 第二次尝试成功，最终 60 项成功、Homebrew 复用分支按契约跳过 1 项（同源发布前四平台 Homebrew 均成功，跳过不计通过）。23 个公开资产、四目标签名/摘要/成员/来源、自动 Formula 及 macOS arm64 版本/帮助/首次和重复离线暂存已独立核验。新向导真实 VPS/Mac 首装、账号授权与物理重启仍未实测。

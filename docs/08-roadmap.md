@@ -1,11 +1,15 @@
 # 开发路线图
 
-## alpha.4 实机反馈修复（2026-11-16，本地完成，发行待验）
+## alpha.4 实机反馈修复（2026-11-16，本地与公开发行验证完成）
+
+固定源 `21fcb5dc1406c7e47d8d12584110433aeaa773d2` 的 [CI43814011028](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43814011028) 已57/57通过，无失败或跳过job。不可变 `v0.0.1-alpha.5` 的 [Release43819036138](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43819036138) 首次运行成功：60项成功，Homebrew复用分支按契约跳过1项（不计通过；源CI四目标Homebrew均通过）。2026-11-16T07:41:05Z公开，draft=false、prerelease=true；23资产、四目标签名/摘要/来源/成员、公开macOS arm64提示/版本/帮助/首次和重复暂存均验证通过。自动Formula提交 `62df599ad717541e4050f921347597d097567a07` 与从已验签资产重新生成的公式一致。
+
+补充验收：固定源21fcb5d的Debian12/systemd252实际普通UID密钥环provision与停止后unlock通过，凭据保持私密；隔离容器挂载传播修正和验证范围见15，不冒称用户VPS完整安装。
 
 用户实际 Debian 12 VPS 反馈：管道经 sudo 启动时确认输入阻塞；依赖安装无进度；密钥环登记服务以 `203/EXEC Permission denied` 失败。源码发现 bootstrap 的 `umask 077` 与公共目录创建权限不匹配。真实反馈只证明这些失败与已到达的安装步骤，不代表完整首装或账号授权通过。
 
 - [x] 修复 console 首读/sudo PTY 与 macOS /dev/tty、非交互步骤10秒进度与耗时、严格 umask 下公共目录/服务文件权限及失败后的原地恢复；共享祖先不扩权，私密凭据不递归改权限。原生4包race/lint、bootstrap15项、发行工具33项、Linux整包与跨UID/sudo专项及七类架构复核通过，具体失败与修正见15/16。
-- [ ] 固定源码完整 CI、不可变 alpha.5 标签发行及公开签名资产验证。
+- [x] 固定源码完整CI57/57、不可变alpha.5发行、23公开资产及四目标签名验证；公开macOS确认提示和离线暂存通过，真实完整用户安装仍在下一项。
 - [ ] 用户 VPS 重新执行修复版向导；真实账号与物理重启仍按外部门槛登记。
 
 **alpha.4 已发布（2026-11-16）：** 固定源 `12664aac1d5b2ae6f1d5bb81e4eb59033009f9b0` 的 [CI43749533031](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43749533031) 57/57 全部通过；不可变标签 `v0.0.1-alpha.4` 的 [Release43754919496](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43754919496) 第二次尝试成功，最终 60 项成功、Homebrew 复用分支按契约跳过 1 项（同源发布前四平台 Homebrew 均成功，跳过不计通过）。23 个公开资产、四目标签名/摘要/成员/来源、自动 Formula 及 macOS arm64 版本/帮助/首次和重复离线暂存已独立核验。新向导真实 VPS/Mac 首装、账号授权与物理重启仍未实测。

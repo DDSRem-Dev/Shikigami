@@ -1,6 +1,9 @@
 # 实施与验收记录
 
-## alpha.4 实机安装反馈修复（2026-11-16，本地完成，发行待验）
+<a id="evidence-public-alpha5-release-20261116"></a>
+## alpha.4 实机安装反馈修复（2026-11-16，本地与公开发行验证完成）
+
+固定源 `21fcb5dc1406c7e47d8d12584110433aeaa773d2` 的 [CI43814011028](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43814011028) 已57/57通过，无失败或跳过job。不可变 `v0.0.1-alpha.5` 的 [Release43819036138](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43819036138) 首次运行成功：60项成功，Homebrew复用分支按契约跳过1项（不计通过；源CI四目标Homebrew均通过）。2026-11-16T07:41:05Z公开，draft=false、prerelease=true；23资产、四目标签名/摘要/来源/成员、公开macOS arm64提示/版本/帮助/首次和重复暂存均验证通过。自动Formula提交 `62df599ad717541e4050f921347597d097567a07` 与从已验签资产重新生成的公式一致。
 
 用户 Debian 12 / amd64 输出确认：下载与 Ed25519 验签成功；`curl | sudo bash` 下 installer PGID 与 TPGID 不同，第一次确认未继续；直接文件执行后系统支持计划可确认；耗时依赖阶段没有进度，随后出现口令输入；密钥环登记最终因普通 UID 无法执行 runtime 而 `203/EXEC`。未执行密码验证，不能把这次错误归因于口令或 GNOME keyring。
 
@@ -10,7 +13,11 @@
 
 已完成证据：真实 Linux sudo PTY 确认/秘密输入/取消；隔离 Debian12 arm64 root 与 UID65534 跨权限测试，实际重现旧0700执行失败后同 inode 修复，验证公共策略可读、凭据不可读、拒绝 symlink/外来 owner、共享祖先不扩权和服务文件0644；Linux install整包最终3.990s通过。原生 bootstrap 15项 HTTPS/Ed25519测试、发行工具33项通过。Linux CI 增加显式 sudo 终端与 root/普通UID 权限门禁，普通用户测试中的环境 skip 不算这些门禁通过。
 
-最终原生整包 race 通过：client20.738s、install10.893s、shiki-install4.008s、architecture1.441s；make lint（全仓go vet与gofmt门禁）通过。Linux client整包含显式sudo PTY通过，最后增加初始PGID!=TPGID断言后该专项再次通过；权限最终整包见上。证据工作目录 `/tmp/shiki-alpha5-public-verification/`，冻结源码和最终CI/发行结果随后追加。固定源 CI/alpha.5 发行仍待验；alpha.4 标签/资产保持不变。真实用户VPS完整重跑、账号及物理重启仍 pending。
+补充真实服务验证（固定源码 `21fcb5dc1406c7e47d8d12584110433aeaa773d2`）：Debian12 arm64/systemd252.39，隔离无网络容器、精确源码生成unit和runtime、umask0077。普通UID1000首次provision及停止后正常unlock均Result=success/ExecMainStatus=0；加密GNOME文件格式/owner/私密权限和服务外凭据不可读均通过。初次容器 `/run` private propagation 令systemd子命名空间的凭据mount消失；只修正隔离容器挂载传播后，新建干净容器以原始unit通过，没有产品权限绕过。证据 `keyring-smoke/`；这是手动暂存fixture的实际服务测试，不等于签名安装事务、Chrome、真实账号或用户VPS完整安装。容器关机退出0并清理。
+
+公开包独立验证：全部23资产与GitHub size/SHA-256一致；四个归档离线Ed25519验签、payload pin、verification receipt、version/OS/arch、构建来源与PROVENANCE均匹配。bootstrap与标签源码一致。所有目标二进制构建架构匹配；不导入buildinfo的region helper通过签名payload核验，其余版本/提交标记匹配。原生macOS arm64四个主程序版本/帮助、真实 `/dev/tty` quickstart输入 `n` 后取消，以及首次/重复stage-only安装通过，未激活宿主服务。Formula从公开签名资产重建逐字节一致、Ruby语法通过。下载时一次TLS连接错误经有界重试恢复，最终每个文件均按摘要核对，不把下载尝试错误隐去或计成资产通过。证据包含 `verification-summary.json`、`smoke-summary.json`、`public-prompt.log`、源/发行CI元数据与公开Release JSON。
+
+最终原生整包 race 通过：client20.738s、install10.893s、shiki-install4.008s、architecture1.441s；make lint（全仓go vet与gofmt门禁）通过。Linux client整包含显式sudo PTY通过，最后增加初始PGID!=TPGID断言后该专项再次通过；权限最终整包见上。证据工作目录 `/tmp/shiki-alpha5-public-verification/`，冻结源码与最终CI/发行结果见本节开头。固定源CI与alpha.5公开发行验证均已完成；alpha.4标签/资产保持不变。真实用户VPS完整重跑、账号及物理重启仍 pending。
 
 **alpha.4 已发布（2026-11-16）：** 固定源 `12664aac1d5b2ae6f1d5bb81e4eb59033009f9b0` 的 [CI43749533031](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43749533031) 57/57 全部通过；不可变标签 `v0.0.1-alpha.4` 的 [Release43754919496](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43754919496) 第二次尝试成功，最终 60 项成功、Homebrew 复用分支按契约跳过 1 项（同源发布前四平台 Homebrew 均成功，跳过不计通过）。23 个公开资产、四目标签名/摘要/成员/来源、自动 Formula 及 macOS arm64 版本/帮助/首次和重复离线暂存已独立核验。新向导真实 VPS/Mac 首装、账号授权与物理重启仍未实测。
 

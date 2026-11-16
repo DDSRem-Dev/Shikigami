@@ -2,11 +2,11 @@
 
 alpha.5 修复增量：在管道/sudo PTY 中正确读取确认与秘密输入；长操作显示阶段和耗时且在提示输入前停止刷新；严格 umask 下显式设置公共目录/服务文件权限，批准后修复已知旧版应用目录，保留私密凭据和管理员共享祖先权限。恢复命令与口令说明见[28](28-quickstart.md)，精确验证范围见08/15/16。
 
-v0.0.1-alpha.4 已提供 `bootstrap.sh --quickstart` / `shiki-install quickstart` / `shiki setup` 组合入口。普通用户从 [28 一键安装](28-quickstart.md)复制 VPS/Mac 各一条命令即可开始；向导处理依赖、服务、节点登录和插件配置。以下验签、服务、身份、授权和就绪要求继续作为基线。公开发布证据见[15](15-implementation-status.md#evidence-public-alpha4-release-20261116)；真实新向导双机首装、账号授权和物理重启仍未实测。
+v0.0.1-alpha.4 已提供 `bootstrap.sh --quickstart` / `shiki-install quickstart` / `shiki setup` 组合入口。普通用户从 [28 一键安装](28-quickstart.md)复制 VPS/Mac 各一条命令即可开始；向导处理依赖、服务、节点登录和插件配置。以下验签、服务、身份、授权和就绪要求继续作为基线。公开发布证据见[15](15-implementation-status.md#evidence-public-alpha5-release-20261116)；真实新向导双机首装、账号授权和物理重启仍未实测。
 
-**本文保留安装流程契约。仓库已实现固定版本bundle校验、事务安装/回滚、服务渲染、异步登录引导与就绪诊断。当前公开预发布v0.0.1-alpha.4已由tag自动构建、签名、发布并更新Homebrew Formula，验证见[15](15-implementation-status.md#evidence-public-alpha4-release-20261116)。[alpha.3历史证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)保留；下文既有systemd/LaunchAgent、五平台产品及升级/恢复验收保持各自历史源码与环境范围，不冒充全部在新公开包重跑。真实Claude登录/推理不纳入原Phase0–5交付验收且未实测，见[验收范围](#claude-acceptance-scope-20261031)；物理Mac/VPS重启仍未实测，见[替代验收](#no-host-reboot-acceptance-20261031)。**
+**本文保留安装流程契约。仓库已实现固定版本bundle校验、事务安装/回滚、服务渲染、异步登录引导与就绪诊断。当前公开预发布v0.0.1-alpha.5已由tag自动构建、签名、发布并更新Homebrew Formula，验证见[15](15-implementation-status.md#evidence-public-alpha5-release-20261116)。[alpha.3历史证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)保留；下文既有systemd/LaunchAgent、五平台产品及升级/恢复验收保持各自历史源码与环境范围，不冒充全部在新公开包重跑。真实Claude登录/推理不纳入原Phase0–5交付验收且未实测，见[验收范围](#claude-acceptance-scope-20261031)；物理Mac/VPS重启仍未实测，见[替代验收](#no-host-reboot-acceptance-20261031)。**
 
-`scripts/install.sh`、`install-client.sh`、`uninstall.sh`及短时运维helper `shiki-install`已存在。[当前公开Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.4)来自固定源`12664aac1d5b2ae6f1d5bb81e4eb59033009f9b0`及成功运行`43754919496`，四目标独立验签见[发行证据](15-implementation-status.md#evidence-public-alpha4-release-20261116)。安装接受本地bundle、固定版本和独立可信checksum pin；`scripts/release-trust.go fetch`可从显式HTTPS地址使用独立可信公钥认证归档，并生成私有副本/pin/receipt，但不建立公钥信任。GitHub下载会重定向，而`fetch`拒绝重定向；可用`gh release download v0.0.1-alpha.4 --repo DDSRem-Dev/Shikigami`取回资产，再由可信verifier和预置信任公钥离线验签。解包、安装和服务激活仍须显式执行；预发布成功不降低完整就绪与运维要求。
+`scripts/install.sh`、`install-client.sh`、`uninstall.sh`及短时运维helper `shiki-install`已存在。[当前公开Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.5)来自固定源`21fcb5dc1406c7e47d8d12584110433aeaa773d2`及成功运行`43819036138`，四目标独立验签见[发行证据](15-implementation-status.md#evidence-public-alpha5-release-20261116)。安装接受本地bundle、固定版本和独立可信checksum pin；`scripts/release-trust.go fetch`可从显式HTTPS地址使用独立可信公钥认证归档，并生成私有副本/pin/receipt，但不建立公钥信任。GitHub下载会重定向，而`fetch`拒绝重定向；可用`gh release download v0.0.1-alpha.5 --repo DDSRem-Dev/Shikigami`取回资产，再由可信verifier和预置信任公钥离线验签。解包、安装和服务激活仍须显式执行；预发布成功不降低完整就绪与运维要求。
 
 ## 地区/浏览器系统支持扩展（本地/容器验收完成）
 
