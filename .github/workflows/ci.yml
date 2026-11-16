@@ -123,6 +123,21 @@ jobs:
         run: go build -race -buildvcs=false -mod=readonly ./cmd/shiki ./cmd/shiki-agent ./cmd/shiki-daemon ./plugins/sync ./plugins/port
       - name: Test tools
         run: make test-tools
+      - name: Verify private-umask installation as root and ordinary UID
+        if: matrix.goos == 'linux'
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          shiki_permission_test="$(mktemp "$RUNNER_TEMP/shiki-permissions.XXXXXXXX")"
+          trap 'rm -f "$shiki_permission_test"' EXIT
+          go test -c -race -o "$shiki_permission_test" ./internal/install
+          sudo "$shiki_permission_test" -test.v -test.timeout=60s -test.run='^TestPublicInstallationDirectoriesUnderPrivateUmask$'
+      - name: Verify confirmation and password input through sudo PTY
+        if: matrix.goos == 'linux'
+        timeout-minutes: 5
+        env:
+          SHIKI_TEST_SUDO_PTY: '1'
+        run: go test -race -count=1 -timeout=60s ./internal/client -run '^TestConsoleSudoPipe$'
       - name: Test platform tools
         run: python3 -B scripts/test-platform-ci.py
       - name: Record preflight stages for downstream admission

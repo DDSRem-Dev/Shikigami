@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -14,7 +15,12 @@ import (
 // terminalFD owns a duplicate descriptor during raw mode. Nonblocking IO plus
 // bounded poll waits allow cancellation without leaving a reader behind. The
 // original file-description flags are restored after all terminal pumps join.
-type terminalFD struct{ fd, flags int }
+type terminalFD struct {
+	fd, flags int
+	// Only a console prompt needs the initial job-control read. Stream pumps
+	// retain readiness-first behavior throughout their lifetime.
+	readFirst bool
+}
 
 func openTerminalFD(file *os.File) (*terminalFD, error) {
 	fd, e := unix.Dup(int(file.Fd()))
@@ -54,22 +60,46 @@ func (f *terminalFD) wait(ctx context.Context, event int16) error {
 			continue
 		}
 		if descriptors[0].Revents&unix.POLLNVAL != 0 {
-			return os.ErrClosed
+			// Darwin cannot poll /dev/tty, although nonblocking read/write work.
+			// Distinguish that device limitation from an actually closed fd and
+			// retry the nonblocking operation at a bounded, cancellable interval.
+			if _, err := unix.FcntlInt(uintptr(f.fd), unix.F_GETFL, 0); err != nil {
+				return os.ErrClosed
+			}
+			timer := time.NewTimer(50 * time.Millisecond)
+			defer timer.Stop()
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-timer.C:
+				return nil
+			}
 		}
 		return nil
 	}
 }
 func (f *terminalFD) Read(ctx context.Context, data []byte) (int, error) {
 	for {
-		if e := f.wait(ctx, unix.POLLIN); e != nil {
+		if e := ctx.Err(); e != nil {
 			return 0, e
 		}
+		// A first console read delivers SIGTTIN when sudo's PTY monitor still
+		// owns the foreground. Poll alone never requests that handoff.
+		if !f.readFirst {
+			if e := f.wait(ctx, unix.POLLIN); e != nil {
+				return 0, e
+			}
+		}
+		f.readFirst = false
 		n, e := unix.Read(f.fd, data)
 		if errors.Is(e, unix.EAGAIN) || errors.Is(e, unix.EINTR) {
 			continue
 		}
 		if n == 0 && e == nil {
 			return 0, io.EOF
+		}
+		if n < 0 {
+			n = 0
 		}
 		return n, e
 	}

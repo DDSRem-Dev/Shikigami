@@ -198,7 +198,7 @@ func (n *Native) Prepare(ctx context.Context, plan Plan, release string) error {
 		if err = run(ctx, plan, true, filepath.Join(release, "shiki-daemon"), "--config", plan.Config, "init", "--user", plan.User); err != nil {
 			return err
 		}
-		if err = systemBinDirectory(plan.BinDir); err != nil {
+		if err = publicSystemDirectory(plan.BinDir); err != nil {
 			return err
 		}
 		for _, name := range []string{"shiki-daemon", "shiki-install"} {
@@ -391,7 +391,7 @@ func (n *Native) RemoveService(ctx context.Context, plan Plan) error {
 		} else if err != nil {
 			return err
 		}
-		if err = systemBinDirectory(plan.BinDir); err != nil {
+		if err = publicSystemDirectory(plan.BinDir); err != nil {
 			return err
 		}
 		for _, name := range []string{"shiki-daemon", "shiki-install"} {

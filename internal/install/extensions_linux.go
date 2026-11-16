@@ -157,6 +157,9 @@ func extensionPlatformPlan(ctx context.Context, operation string, o ExtensionOpt
 	plan.Sources = []string{"Existing administrator-managed Ubuntu/Debian APT sources for distribution dependencies (not changed by this installer).", "Local signed Shikigami release: independent root-owned Ed25519 public key -> authenticated archive -> signed SHA256SUMS pin -> payload hash while copying. No root code executes from a writable user plugin directory."}
 	plan.Warnings = []string{"PLAN ONLY unless --yes is supplied; version detection does not use the public network.", "APT changes are not transactional and installed/upgraded packages are never automatically rolled back or purged.", "No existing tmux, Claude, Chrome or browser runtime is restarted; host automatic-update policy is not changed.", "Uninstall preserves browser profiles and region snapshots/journal. It first revokes helper grants and quiesces the trusted installed helper; pending/conflicted recovery blocks uninstall and retains the guard/helper/policy. Only a clean disabled status permits removing recovery code."}
 	plan.Paths = []string{extensionReceiptPath}
+	if operation == "setup" {
+		appendPublicSupportDirectoryPlan(plan, o)
+	}
 	if o.includes("region") {
 		plan.Paths = append(plan.Paths, RegionHelperPath, RegionPolicyPath, RegionStatePath, "/etc/sudoers.d/shikigami-region-"+strconv.Itoa(uid), "/etc/systemd/system/"+RegionGuardUnit)
 		plan.Warnings = append(plan.Warnings, "Region authorization is for this one daemon UID; any process of that UID can invoke the six allowlisted actions. The root guard is never granted in sudoers.")
@@ -212,8 +215,48 @@ func extensionCommand(ctx context.Context, directory, binary string, args ...str
 }
 
 func extensionRun(ctx context.Context, directory, binary string, args ...string) error {
-	_, err := extensionExec(ctx, directory, binary, false, args...)
-	return err
+	return ProgressStep(ctx, extensionProgressLabel(binary, args), func() error {
+		_, err := extensionExec(ctx, directory, binary, false, args...)
+		return err
+	})
+}
+
+// Labels are fixed text, never command arguments or captured subprocess output.
+func extensionProgressLabel(binary string, args []string) string {
+	switch binary {
+	case "/usr/bin/apt-get":
+		for _, arg := range args {
+			switch arg {
+			case "update":
+				return "Refreshing package indexes (network access may take several minutes)"
+			case "download":
+				return "Downloading authenticated Google Chrome"
+			case "install":
+				return "Installing system packages (downloads and configuration may take several minutes)"
+			}
+		}
+	case "/usr/sbin/locale-gen":
+		return "Generating language locales"
+	case "/usr/bin/systemctl":
+		for _, arg := range args {
+			if strings.HasPrefix(arg, "shikigami-browser-keyring-provision-") {
+				return "Creating and verifying the encrypted browser keyring service"
+			}
+			if strings.HasPrefix(arg, "shikigami-browser-keyring-") {
+				return "Configuring unattended browser keyring unlock"
+			}
+		}
+		return "Configuring and checking system services"
+	case "/usr/bin/loginctl":
+		return "Enabling the ordinary user's background service manager"
+	case "/usr/bin/gpg":
+		return "Preparing the verified Google package signing key"
+	case "/usr/bin/systemd-creds":
+		return "Preparing host encryption for unattended keyring unlock"
+	case "/usr/sbin/visudo":
+		return "Validating restricted region helper authorization"
+	}
+	return "Applying system support"
 }
 
 // Parsed output must be complete. Verbose package/service command success is
@@ -357,7 +400,7 @@ func atomicExtensionFile(root *os.Root, name string, data []byte, mode os.FileMo
 }
 
 func copyExtensionBinary(bundle *Bundle, name, target string) error {
-	if err := systemBinDirectory(filepath.Dir(target)); err != nil {
+	if err := publicSystemDirectory(filepath.Dir(target)); err != nil {
 		return err
 	}
 	parent, err := os.OpenRoot(filepath.Dir(target))
@@ -526,17 +569,24 @@ func installChromeKey(ctx context.Context, work string) error {
 	if err != nil {
 		return err
 	}
-	response, err := client.Do(request)
+	var data []byte
+	err = ProgressStep(ctx, "Downloading the official Google signing key", func() error {
+		response, err := client.Do(request)
+		if err != nil {
+			return err
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusOK || response.ContentLength > 1<<20 {
+			return errors.New("invalid Google signing key response")
+		}
+		data, err = io.ReadAll(io.LimitReader(response.Body, (1<<20)+1))
+		if err != nil || len(data) > 1<<20 {
+			return errors.New("Google signing key is unreadable or oversized")
+		}
+		return nil
+	})
 	if err != nil {
 		return err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK || response.ContentLength > 1<<20 {
-		return errors.New("invalid Google signing key response")
-	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, (1<<20)+1))
-	if err != nil || len(data) > 1<<20 {
-		return errors.New("Google signing key is unreadable or oversized")
 	}
 	home := filepath.Join(work, "gnupg")
 	if err = os.Mkdir(home, 0700); err != nil {
@@ -659,7 +709,12 @@ func maintainChrome(ctx context.Context, work string, update bool) error {
 }
 
 func applyExtensionPlan(ctx context.Context, operation string, o ExtensionOptions) error {
-	plan, err := ExtensionPlatformPlan(ctx, operation, o)
+	var plan *ExtensionPlan
+	err := ProgressStep(ctx, "Checking the approved system-support plan", func() error {
+		var err error
+		plan, err = ExtensionPlatformPlan(ctx, operation, o)
+		return err
+	})
 	if err != nil {
 		return err
 	}
@@ -693,7 +748,11 @@ func applyExtensionPlan(ctx context.Context, operation string, o ExtensionOption
 	var bundle *Bundle
 	var verified releaseauth.Verified
 	if operation == "setup" {
-		bundle, verified, err = verifiedExtensionBundle(ctx, o, work)
+		err = ProgressStep(ctx, "Verifying and extracting signed system support", func() error {
+			var err error
+			bundle, verified, err = verifiedExtensionBundle(ctx, o, work)
+			return err
+		})
 		if err != nil {
 			return err
 		}

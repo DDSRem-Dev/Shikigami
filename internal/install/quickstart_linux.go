@@ -138,6 +138,12 @@ func InspectQuickstartSupport(ctx context.Context, o ExtensionOptions) (Quicksta
 }
 
 func quickstartSupportFiles(account *user.User, uid int, mode string) (bool, error) {
+	// An otherwise matching receipt from alpha.4 can hide public directories
+	// created with umask 077. Keep setup pending until approved repair occurs.
+	directories := append(chromePolicyDirectories(), filepath.Dir(BrowserRuntimePath), "/etc/shikigami")
+	if current, err := publicSupportDirectoryState(directories); err != nil || !current {
+		return false, err
+	}
 	unit, err := renderKeyringUnlockUnit(account, uid, false, false)
 	if err != nil {
 		return false, err

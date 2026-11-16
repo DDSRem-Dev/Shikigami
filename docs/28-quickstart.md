@@ -2,7 +2,7 @@
 
 用户要求（2026-11-16）：普通用户在 VPS 和 Mac 各执行一条命令，由工具完成依赖、服务、登录引导和插件配置，不再手工下载公钥、拼接 bundle/pin、编辑 YAML 或串联管理命令。
 
-**版本边界：本页描述已发布 v0.0.1-alpha.4 的新入口。alpha.3 不含 `shiki-install quickstart` 或 `shiki setup`，不会改写其归档。固定源 CI、公开发行和资产验证见[15](15-implementation-status.md#evidence-public-alpha4-release-20261116)；真实新向导 VPS/Mac 首装、账号授权与物理重启仍未实测。**
+**版本边界：本页使用 v0.0.1-alpha.5 修复入口，处理 alpha.4 实机反馈中的终端确认、静默长操作和公共目录权限问题。发行状态与验证见[15](15-implementation-status.md)。alpha.3 不含 `shiki-install quickstart` 或 `shiki setup`，历史归档不改写；真实完整双机首装、账号授权和物理重启仍按外部门槛登记。**
 
 ## 用户入口
 
@@ -18,17 +18,17 @@ Mac 当前登录用户，不加 sudo：
 bash scripts/bootstrap.sh --quickstart --role=client
 ```
 
-直接使用以下 v0.0.1-alpha.4 完整命令。用户无需克隆仓库或另行下载文件：
+直接使用以下 v0.0.1-alpha.5 完整命令。用户无需克隆仓库或另行下载文件：
 
 ```bash
 # VPS
-curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.4/bootstrap.sh | sudo bash -s -- --quickstart --version=v0.0.1-alpha.4
+curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.5/bootstrap.sh | sudo bash -s -- --quickstart --version=v0.0.1-alpha.5
 
 # Mac
-curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.4/bootstrap.sh | bash -s -- --quickstart --role=client --version=v0.0.1-alpha.4
+curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.5/bootstrap.sh | bash -s -- --quickstart --role=client --version=v0.0.1-alpha.5
 ```
 
-同一版本 Release 的 `bootstrap.sh` 也支持管道执行，交互通过 `/dev/tty`，不从脚本输入流读取回答。预发布必须使用明确的 Release/tag 下载 URL，不以 stable-only `latest/download` 推断预发布。加 `--version=v0.0.1-alpha.4` 可固定归档；省略时选择最近公开 Release，旧版本没有向导时明确失败，不退回半套安装冒充完成。脚本应从可信发布/源码取得，归档仍先验证固定发行身份和 Ed25519 签名，再执行包内代码。
+同一版本 Release 的 `bootstrap.sh` 也支持管道执行，交互通过 `/dev/tty`，不从脚本输入流读取回答。预发布必须使用明确的 Release/tag 下载 URL，不以 stable-only `latest/download` 推断预发布。加 `--version=v0.0.1-alpha.5` 可固定归档；省略时选择最近公开 Release，旧版本没有向导时明确失败，不退回半套安装冒充完成。脚本应从可信发布/源码取得，归档仍先验证固定发行身份和 Ed25519 签名，再执行包内代码。
 
 默认安装全部四种插件的支持；只需终端、同步和转发时加 `--components=core`。`--user=<普通用户>` 可覆盖 VPS 默认专用账号 `shiki`。向导不接受自定义布局或 `--non-interactive`，高级/无人值守部署继续使用原安装参数契约。
 
@@ -54,10 +54,18 @@ curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev
 
 不会隐式选择整机国家、DNS、出口、浏览器开机目标或文件同步方向。Chrome 托管策略影响同机全部官方 Chrome：禁用密码保存、Chrome 同步和 Chrome 账号登录，网站账号登录仍可用。实际官方授权仍由用户在远程浏览器完成；查看器仍需 Take control 才能输入。
 
+## 安装时看到的提示
+
+安装器显示当前步骤与耗时，耗时超过10秒的已覆盖非交互操作会持续提示仍在运行。APT、Chrome 下载和语言包生成可能需要数分钟；耗时提示不是下载百分比，也不代表检查已经成功。完成或失败会明确显示，Ctrl+C 仍可取消。
+
+`Keyring password (not echoed)` 要求设置专用浏览器加密密钥环口令，不是 root、SSH 或 Claude 密码。输入时不显示字符或星号；新建时输入两次。保存口令，后续恢复沿用同一个；正常运行采用已明确批准的 systemd 加密凭据自动解锁。
+
+alpha.4 曾因公共目录被 `umask 077` 限制而出现 `203/EXEC Permission denied`。本版在批准安装后修复已知公共程序/策略目录，不递归放宽私密凭据或密钥环权限。无需手工 chmod；直接执行上方新版本命令继续。
+
 ## 恢复与验收
 
 重复执行沿用安装事务、版本和身份。同源受信系统支持跳过包更新和密钥环重登记，运行 Chrome 保留；正常中断的密钥环登记继续使用原密码和加密 store。未提交的密文、受保护文件被外部修改等冲突保留人工复核，不自动覆盖。中断事务要求原有显式 rollback，不抹除 receipt。停止向导不等于卸载已完成的服务；安装包/系统依赖不是一个可完整回滚的大事务。
 
 systemd/LaunchAgent 存活、节点 online 或 doctor 输出均不单独代表应用 ready。Claude 未授权时先交付连接凭据解除“需要浏览器登录，却必须先登录才能连接”的引导循环，状态仍为 pending。
 
-本地隔离测试不访问真实账号，不安装宿主包，不修改用户系统服务。公开发行和资产验证见[15](15-implementation-status.md#evidence-public-alpha4-release-20261116)；真实 VPS/Mac 向导首装、官方 Claude 登录、物理重启及公开包完整服务升级/回滚仍单列外部门槛。11/27 的签名、普通 UID、权限、revision、取消和就绪要求保持，细分命令继续用于高级配置和故障处理。
+本地隔离测试不访问真实账号，不安装宿主包，不修改用户系统服务。公开发行和资产验证见[15](15-implementation-status.md)；真实 VPS/Mac 向导首装、官方 Claude 登录、物理重启及公开包完整服务升级/回滚仍单列外部门槛。11/27 的签名、普通 UID、权限、revision、取消和就绪要求保持，细分命令继续用于高级配置和故障处理。

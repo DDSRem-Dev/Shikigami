@@ -17,6 +17,7 @@ func ReadConsoleLine(ctx context.Context, input *os.File, limit int) (string, er
 		return "", e
 	}
 	defer file.Close()
+	file.readFirst = true
 	var data []byte
 	one := make([]byte, 1)
 	for {
@@ -50,6 +51,7 @@ func ReadSecret(ctx context.Context, input *os.File, limit int) (secret []byte, 
 		return nil, e
 	}
 	defer file.Close()
+	file.readFirst = true
 	one := make([]byte, 1)
 	for {
 		n, e := file.Read(ctx, one)

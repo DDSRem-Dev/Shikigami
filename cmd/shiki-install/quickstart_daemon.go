@@ -24,7 +24,9 @@ func quickstartDaemon(ctx context.Context, o quickstartOptions, tty *os.File, ou
 		if !errors.As(err, &unknown) {
 			return 1, err
 		}
-		if err = quickstartCommand(ctx, install.Plan{}, false, tty, nil, "/usr/sbin/useradd", "--create-home", "--shell", "/bin/bash", "--", o.User); err != nil {
+		if err = install.ProgressStep(ctx, "Creating the ordinary daemon account", func() error {
+			return quickstartCommand(ctx, install.Plan{}, false, tty, nil, "/usr/sbin/useradd", "--create-home", "--shell", "/bin/bash", "--", o.User)
+		}); err != nil {
 			return 1, err
 		}
 		account, err = user.Lookup(o.User)
@@ -150,7 +152,12 @@ func quickstartDependencies(ctx context.Context, plan install.Plan, tty *os.File
 		return errors.New("configured Claude executable is missing; preserve your existing layout and repair it before resuming")
 	}
 	fmt.Fprintln(tty, "Installing Claude from its official HTTPS installer as the ordinary runtime user…")
-	script, err := quickstartClaudeScript(ctx, nil)
+	var script []byte
+	err := install.ProgressStep(ctx, "Downloading the official Claude installer", func() error {
+		var err error
+		script, err = quickstartClaudeScript(ctx, nil)
+		return err
+	})
 	if err != nil {
 		return err
 	}
@@ -163,7 +170,12 @@ func quickstartDependencies(ctx context.Context, plan install.Plan, tty *os.File
 
 func quickstartSystemSupport(ctx context.Context, o quickstartOptions, plan install.Plan, tty *os.File) error {
 	options := install.ExtensionOptions{Component: "all", User: plan.User, Bundle: o.Bundle, Version: o.Version, Archive: o.Archive, Signature: o.Signature, PublicKey: o.PublicKey, BootUnlock: true, KeyringMode: "dedicated", Yes: true}
-	status, err := install.InspectQuickstartSupport(ctx, options)
+	var status install.QuickstartSupport
+	err := install.ProgressStep(ctx, "Verifying signed system support and checking previous installation", func() error {
+		var err error
+		status, err = install.InspectQuickstartSupport(ctx, options)
+		return err
+	})
 	if err != nil {
 		return err
 	}
@@ -188,7 +200,12 @@ func quickstartSystemSupport(ctx context.Context, o quickstartOptions, plan inst
 	if !options.ReuseKeyringCredential {
 		options.ReadKeyringSecret = keyringSecretReader(plan.User, false, "", options.ProvisionKeyring)
 	}
-	support, err := install.ExtensionPlatformPlan(ctx, "setup", options)
+	var support *install.ExtensionPlan
+	err = install.ProgressStep(ctx, "Preparing the system package and keyring plan", func() error {
+		var err error
+		support, err = install.ExtensionPlatformPlan(ctx, "setup", options)
+		return err
+	})
 	if err != nil {
 		return err
 	}

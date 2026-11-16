@@ -51,6 +51,12 @@ func keyringSecretReader(username string, stdin bool, path string, confirm bool)
 				return nil, errors.New("hidden password input requires a terminal; select --keyring-secret-stdin or --keyring-secret-file explicitly")
 			}
 			defer tty.Close()
+			if confirm {
+				_, _ = fmt.Fprintln(tty, "Create a password for the browser's encrypted keyring (not your root/SSH password). Save it securely; normal startup uses the enrolled encrypted credential.")
+			} else {
+				_, _ = fmt.Fprintln(tty, "Enter the existing browser keyring password. Existing keyrings are never reset.")
+			}
+			_, _ = fmt.Fprintln(tty, "Typing or pasting shows no characters or asterisks. Press Enter when finished.")
 			_, _ = fmt.Fprint(tty, "Keyring password (not echoed): ")
 			secret, err = client.ReadSecret(ctx, tty, maxKeyringSecretBytes)
 			_, _ = fmt.Fprintln(tty)

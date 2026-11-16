@@ -133,8 +133,10 @@ func appendBootUnlockPlan(ctx context.Context, plan *ExtensionPlan, o ExtensionO
 	}
 	if info, err := os.Lstat("/etc/shikigami"); err == nil {
 		owner, ok := info.Sys().(*syscall.Stat_t)
-		if !ok || owner.Uid != 0 || !info.IsDir() || info.Mode().Perm()&0022 != 0 || info.Mode().Perm()&0001 == 0 {
-			plan.Blocked = append(plan.Blocked, "/etc/shikigami must be a protected root-owned searchable policy directory; existing directory is preserved for administrator review")
+		if !ok || owner.Uid != 0 || !info.IsDir() || info.Mode().Perm()&0022 != 0 {
+			plan.Blocked = append(plan.Blocked, "/etc/shikigami must be a protected root-owned policy directory; unsafe directory is preserved for administrator review")
+		} else if info.Mode().Perm() != 0755 {
+			plan.Warnings = append(plan.Warnings, "Approved setup repairs /etc/shikigami to public directory mode 0755 so the ordinary runtime can read its non-secret policy; credential subdirectories and files remain private.")
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		plan.Blocked = append(plan.Blocked, "cannot inspect root browser policy directory")
@@ -298,7 +300,7 @@ func installBootUnlock(ctx context.Context, plan *ExtensionPlan, o ExtensionOpti
 			return err
 		}
 	}
-	if err = systemBinDirectory("/etc/shikigami"); err != nil {
+	if err = publicSystemDirectory("/etc/shikigami"); err != nil {
 		return err
 	}
 	if err = ensureSystemPrefix("/etc/shikigami/credentials"); err != nil {
@@ -361,7 +363,7 @@ func installBootUnlock(ctx context.Context, plan *ExtensionPlan, o ExtensionOpti
 		return err
 	}
 	if err = extensionRun(ctx, "", "/usr/bin/systemctl", "restart", keyringUnit(plan.UID, true)); err != nil {
-		return errors.New("credential enrollment service failed; no candidate credential was committed and existing keyrings were not reset")
+		return keyringEnrollmentFailure(ctx, plan.UID)
 	}
 	if err = writeRootFile(keyringCredentialPath(plan.UID), encrypted, 0600, false); err != nil {
 		return err
@@ -404,6 +406,50 @@ func installBootUnlock(ctx context.Context, plan *ExtensionPlan, o ExtensionOpti
 	receipt.BootUnlock = &bootUnlockReceipt{UID: plan.UID, Mode: o.KeyringMode, Enabled: true, CredentialSHA256: digest(encrypted), Provisioned: o.ProvisionKeyring || receipt.BootUnlock.Provisioned}
 	receipt.AppliedAt = time.Now().UTC().Format(time.RFC3339)
 	return saveExtensionReceipt(receipt)
+}
+
+// Only systemd's fixed status fields are reported. The runtime and its children
+// can handle secrets, so their output must never be copied into diagnostics.
+func keyringEnrollmentFailure(parent context.Context, uid int) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), 5*time.Second)
+	defer cancel()
+	unit := keyringUnit(uid, true)
+	cmd := exec.CommandContext(ctx, "/usr/bin/systemctl", "show", unit, "--property=Result,ExecMainCode,ExecMainStatus")
+	cmd.Env = []string{"PATH=/usr/bin:/bin", "LANG=C.UTF-8"}
+	cmd.WaitDelay = time.Second
+	captured := &cappedOutput{limit: 4096}
+	cmd.Stdout, cmd.Stderr = captured, io.Discard
+	status := ""
+	if cmd.Run() == nil {
+		data, truncated := captured.Bytes()
+		if !truncated {
+			status = keyringServiceStatus(data)
+		}
+	}
+	return fmt.Errorf("credential enrollment service %s failed%s; no candidate credential was committed and existing keyrings were not reset. Inspect: journalctl -b -u %s --no-pager -n 50", unit, status, unit)
+}
+
+func keyringServiceStatus(data []byte) string {
+	var values []string
+	for _, line := range strings.Split(string(data), "\n") {
+		key, value, ok := strings.Cut(line, "=")
+		if !ok || (key != "Result" && key != "ExecMainCode" && key != "ExecMainStatus") || len(value) == 0 || len(value) > 32 {
+			continue
+		}
+		valid := true
+		for _, char := range value {
+			if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '-' {
+				valid = false
+			}
+		}
+		if valid {
+			values = append(values, key+"="+value)
+		}
+	}
+	if len(values) == 0 {
+		return ""
+	}
+	return " (" + strings.Join(values, ", ") + ")"
 }
 
 func removeBootUnlock(ctx context.Context, plan Plan, uid int) error {

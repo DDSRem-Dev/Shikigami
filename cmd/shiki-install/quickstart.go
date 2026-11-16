@@ -109,7 +109,11 @@ func executeQuickstart(ctx context.Context, args []string, out, errOut io.Writer
 		return 2, errors.New("run client quickstart as your ordinary user, without sudo")
 	}
 	// Authenticate all payloads before account creation, downloads or packages.
-	if _, err = install.Verify(o.Bundle, o.Version, o.Pin); err != nil {
+	ctx = install.WithProgress(ctx, errOut)
+	if err = install.ProgressStep(ctx, "Verifying installation bundle", func() error {
+		_, err := install.Verify(o.Bundle, o.Version, o.Pin)
+		return err
+	}); err != nil {
 		return 1, err
 	}
 	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
@@ -120,6 +124,7 @@ func executeQuickstart(ctx context.Context, args []string, out, errOut io.Writer
 	if !term.IsTerminal(int(tty.Fd())) {
 		return 2, errors.New("quickstart requires a controlling terminal")
 	}
+	ctx = install.WithProgress(ctx, tty)
 	if err = quickstartPlan(ctx, o, tty); err != nil {
 		return 1, err
 	}
@@ -189,7 +194,13 @@ func quickstartInstall(ctx context.Context, o quickstartOptions, plan install.Pl
 	if token != "" {
 		args = append(args, "--token-output="+token)
 	}
-	return execute(ctx, args, out, errOut)
+	var code int
+	err := install.ProgressStep(ctx, "Installing application files and checking managed services", func() error {
+		var err error
+		code, err = execute(ctx, args, out, errOut)
+		return err
+	})
+	return code, err
 }
 
 func quickstartExistingPlan(prefix string, want install.Plan) error {

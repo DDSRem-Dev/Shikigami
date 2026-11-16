@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -67,7 +68,10 @@ func writeManagedFile(path string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	defer parent.Remove(temp)
-	_, err = file.Write(data)
+	err = file.Chmod(mode)
+	if err == nil {
+		_, err = file.Write(data)
+	}
 	if err == nil {
 		err = file.Sync()
 	}
@@ -85,26 +89,64 @@ func writeManagedFile(path string, data []byte, mode os.FileMode) error {
 }
 
 func systemBinDirectory(path string) error {
-	if !filepath.IsAbs(path) {
+	return rootInstallationDirectory(path, false)
+}
+
+// publicSystemDirectory repairs only this explicitly public directory. Never
+// apply its mode recursively: credential and state children remain private.
+func publicSystemDirectory(path string) error {
+	return rootInstallationDirectory(path, true)
+}
+
+func rootInstallationDirectory(path string, public bool) error {
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 		return errors.New("system binary directory must be absolute")
 	}
-	if err := os.MkdirAll(path, 0755); err != nil {
+	fd, err := unix.Open("/", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+	if err != nil {
 		return err
 	}
-	for current := path; ; current = filepath.Dir(current) {
-		info, err := os.Lstat(current)
-		if err != nil {
+	defer func() { unix.Close(fd) }()
+	parts := strings.Split(strings.TrimPrefix(path, "/"), "/")
+	for index := 0; ; index++ {
+		var stat unix.Stat_t
+		if err = unix.Fstat(fd, &stat); err != nil {
 			return err
 		}
-		owner, ok := info.Sys().(*syscall.Stat_t)
-		if !ok || !info.IsDir() || owner.Uid != 0 || info.Mode().Perm()&0022 != 0 {
+		if stat.Uid != 0 || stat.Mode&0022 != 0 {
 			return errors.New("system binary directory and its parents must be root-owned and not writable by other users")
 		}
-		if filepath.Dir(current) == current {
-			break
+		if index == len(parts) || path == "/" {
+			if public && path != "/" {
+				return unix.Fchmod(fd, 0755)
+			}
+			return nil
+		}
+		if public && stat.Mode&0001 == 0 {
+			return fmt.Errorf("shared ancestor /%s is not searchable by ordinary users; preserve its permissions for administrator review", strings.Join(parts[:index], "/"))
+		}
+		created := false
+		next, openErr := unix.Openat(fd, parts[index], unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+		if errors.Is(openErr, unix.ENOENT) {
+			if err = unix.Mkdirat(fd, parts[index], 0755); err != nil && !errors.Is(err, unix.EEXIST) {
+				return err
+			}
+			created = err == nil
+			next, openErr = unix.Openat(fd, parts[index], unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+		}
+		if openErr != nil {
+			return openErr
+		}
+		unix.Close(fd)
+		fd = next
+		if created {
+			// Mkdirat's mode is filtered by bootstrap's private umask. Set the
+			// intended public mode on the opened inode, without changing umask.
+			if err = unix.Fchmod(fd, 0755); err != nil {
+				return err
+			}
 		}
 	}
-	return nil
 }
 
 func ownedServiceDirectory(path string, uid int) error {

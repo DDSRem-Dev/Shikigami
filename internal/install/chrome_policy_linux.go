@@ -153,6 +153,13 @@ func installChromeManagedPolicy(plan *ExtensionPlan) error {
 	if err := inspectChromeManagedPolicies("", false); err != nil {
 		return err
 	}
+	// alpha.4 could create every new policy ancestor with bootstrap's 077
+	// umask. Repair only this public policy path, never sibling/child files.
+	for _, directory := range chromePolicyDirectories() {
+		if err := publicSystemDirectory(directory); err != nil {
+			return err
+		}
+	}
 	receipt, err := readExtensionReceipt()
 	if err != nil {
 		return err
@@ -171,6 +178,10 @@ func installChromeManagedPolicy(plan *ExtensionPlan) error {
 	}
 	receipt.Plan, receipt.AppliedAt = plan, time.Now().UTC().Format(time.RFC3339)
 	return saveExtensionReceipt(receipt)
+}
+
+func chromePolicyDirectories() []string {
+	return []string{"/etc/opt/chrome", "/etc/opt/chrome/policies", filepath.Dir(chromePolicyPath)}
 }
 
 func removeChromeManagedPolicy() error {

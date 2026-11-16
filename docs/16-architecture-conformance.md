@@ -1,5 +1,18 @@
 # 架构与文档一致性检查
 
+## alpha.4 实机反馈修复复核（2026-11-16，本地完成，发行待验）
+
+本批基线11/27/28，已逐项复核七类契约：
+
+- 目录/依赖/所有权：修复归属安装宿主与终端基础设施，未引入插件业务或SDK依赖倒置。
+- RPC/准入/版本/授权：接口、能力广告、设备身份与权限不变；安装系统变更仍需明确确认。
+- 状态/原子性/revision/去重：沿用签名/receipt/原子发布和已有恢复，密码不写日志，未提交凭据清理而已有密钥环保留。
+- 进程/取消/恢复：console首读触发sudo前台交接，原会话readiness-first不变；heartbeat在返回前join，现有子进程超时和取消保持。
+- 文件/终端/网络：公共应用目录明确0755，秘密目录/文件0700/0600；O_NOFOLLOW逐层校验。共享祖先不自动扩权；网络来源/签名/限额不变。
+- CLI/配置/发行：固定阶段和10秒耗时提示，不输出秘密或伪造百分比，不破坏JSON；密码用途说明、固定systemd状态和journal命令改善错误定位。历史alpha.4不修改，修复归入alpha.5。
+- 测试/证据：Linux真实sudo PTY、跨UID执行/恢复与私密访问拒绝已验证；CI新增必跑门禁。中间raw终端回归和共享目录扩权发现均修复，失败证据见15。最终原生4包race、全仓lint、bootstrap15项/发行工具33项、Linux client/install整包与sudo/跨UID专项通过；精确记录见15。固定源CI/发行尚待验，用户VPS完整安装、账号与物理重启不冒称通过。
+
+
 **alpha.4 已发布（2026-11-16）：** 固定源 `12664aac1d5b2ae6f1d5bb81e4eb59033009f9b0` 的 [CI43749533031](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43749533031) 57/57 全部通过；不可变标签 `v0.0.1-alpha.4` 的 [Release43754919496](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43754919496) 第二次尝试成功，最终 60 项成功、Homebrew 复用分支按契约跳过 1 项（同源发布前四平台 Homebrew 均成功，跳过不计通过）。23 个公开资产、四目标签名/摘要/成员/来源、自动 Formula 及 macOS arm64 版本/帮助/首次和重复离线暂存已独立核验。新向导真实 VPS/Mac 首装、账号授权与物理重启仍未实测。
 
 首次 WSL2 失败证据：`TestCLIThreeProcessTLSLifecycle` 在 `core_test.go:217` 首次 PTY 初始化调用处失败（8.45 秒），187/444 是清理日志位置，不是额外故障；尚未进入终端就绪输出读取。公开证据不含原始 errno，原因未确定，不宣称已证实基础设施故障。产品测试、发行工具和 systemd 生命周期通过；embedded-plugins 与独立 terminal 阶段未执行，不能计通过。同一源码发布前 WSL2 成功；相关 helper、PTY 依赖与平台脚本自 alpha.3 未修改。保留首次失败并在新 runner 上重试同源完整 WSL2，不改变断言或移动 tag。

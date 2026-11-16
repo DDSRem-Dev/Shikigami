@@ -1,5 +1,13 @@
 # 开发路线图
 
+## alpha.4 实机反馈修复（2026-11-16，本地完成，发行待验）
+
+用户实际 Debian 12 VPS 反馈：管道经 sudo 启动时确认输入阻塞；依赖安装无进度；密钥环登记服务以 `203/EXEC Permission denied` 失败。源码发现 bootstrap 的 `umask 077` 与公共目录创建权限不匹配。真实反馈只证明这些失败与已到达的安装步骤，不代表完整首装或账号授权通过。
+
+- [x] 修复 console 首读/sudo PTY 与 macOS /dev/tty、非交互步骤10秒进度与耗时、严格 umask 下公共目录/服务文件权限及失败后的原地恢复；共享祖先不扩权，私密凭据不递归改权限。原生4包race/lint、bootstrap15项、发行工具33项、Linux整包与跨UID/sudo专项及七类架构复核通过，具体失败与修正见15/16。
+- [ ] 固定源码完整 CI、不可变 alpha.5 标签发行及公开签名资产验证。
+- [ ] 用户 VPS 重新执行修复版向导；真实账号与物理重启仍按外部门槛登记。
+
 **alpha.4 已发布（2026-11-16）：** 固定源 `12664aac1d5b2ae6f1d5bb81e4eb59033009f9b0` 的 [CI43749533031](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43749533031) 57/57 全部通过；不可变标签 `v0.0.1-alpha.4` 的 [Release43754919496](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43754919496) 第二次尝试成功，最终 60 项成功、Homebrew 复用分支按契约跳过 1 项（同源发布前四平台 Homebrew 均成功，跳过不计通过）。23 个公开资产、四目标签名/摘要/成员/来源、自动 Formula 及 macOS arm64 版本/帮助/首次和重复离线暂存已独立核验。新向导真实 VPS/Mac 首装、账号授权与物理重启仍未实测。
 
 首次 WSL2 失败证据：`TestCLIThreeProcessTLSLifecycle` 在 `core_test.go:217` 首次 PTY 初始化调用处失败（8.45 秒），187/444 是清理日志位置，不是额外故障；尚未进入终端就绪输出读取。公开证据不含原始 errno，原因未确定，不宣称已证实基础设施故障。产品测试、发行工具和 systemd 生命周期通过；embedded-plugins 与独立 terminal 阶段未执行，不能计通过。同一源码发布前 WSL2 成功；相关 helper、PTY 依赖与平台脚本自 alpha.3 未修改。保留首次失败并在新 runner 上重试同源完整 WSL2，不改变断言或移动 tag。

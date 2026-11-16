@@ -1,5 +1,17 @@
 # 实施与验收记录
 
+## alpha.4 实机安装反馈修复（2026-11-16，本地完成，发行待验）
+
+用户 Debian 12 / amd64 输出确认：下载与 Ed25519 验签成功；`curl | sudo bash` 下 installer PGID 与 TPGID 不同，第一次确认未继续；直接文件执行后系统支持计划可确认；耗时依赖阶段没有进度，随后出现口令输入；密钥环登记最终因普通 UID 无法执行 runtime 而 `203/EXEC`。未执行密码验证，不能把这次错误归因于口令或 GNOME keyring。
+
+修复实现：仅 console 提示首读触发 sudo PTY 的 SIGTTIN 前台交接，普通会话终端保持 readiness-first；macOS `/dev/tty` 的 POLLNVAL 对仍有效的非阻塞 FD 使用有界可取消重试。非交互安装步骤显示固定阶段、完成/失败与耗时，10秒 heartbeat 返回前 join，不跨秘密输入、不复制子进程输出/参数/错误内容。公共应用目录和服务文件显式设置权限，批准后修复旧目录；目录 FD/O_NOFOLLOW 验证祖先，保留共享祖先权限与私密0700/0600。密钥环失败显示固定 systemd 状态及 journal 命令，保留原密钥环。
+
+复核期间拒绝了两项中间实现：全局 read-before-poll 导致原生 `TestTerminalTakeoverWaitsForStreamConfirmation` 阻塞（root race 165.292s 以 SIGQUIT 取栈后结束，不计通过），改为仅 console 首读；共享 `/etc/opt` 不应自动 chmod，现保留其管理员权限，受限共享祖先明确阻止安装。旧源码分别复现 Linux sudo 管道确认超时和 macOS `/dev/tty` 的 file-already-closed。最终整包验证结果在下方记录，不能用专项通过掩盖这些中间失败。
+
+已完成证据：真实 Linux sudo PTY 确认/秘密输入/取消；隔离 Debian12 arm64 root 与 UID65534 跨权限测试，实际重现旧0700执行失败后同 inode 修复，验证公共策略可读、凭据不可读、拒绝 symlink/外来 owner、共享祖先不扩权和服务文件0644；Linux install整包最终3.990s通过。原生 bootstrap 15项 HTTPS/Ed25519测试、发行工具33项通过。Linux CI 增加显式 sudo 终端与 root/普通UID 权限门禁，普通用户测试中的环境 skip 不算这些门禁通过。
+
+最终原生整包 race 通过：client20.738s、install10.893s、shiki-install4.008s、architecture1.441s；make lint（全仓go vet与gofmt门禁）通过。Linux client整包含显式sudo PTY通过，最后增加初始PGID!=TPGID断言后该专项再次通过；权限最终整包见上。证据工作目录 `/tmp/shiki-alpha5-public-verification/`，冻结源码和最终CI/发行结果随后追加。固定源 CI/alpha.5 发行仍待验；alpha.4 标签/资产保持不变。真实用户VPS完整重跑、账号及物理重启仍 pending。
+
 **alpha.4 已发布（2026-11-16）：** 固定源 `12664aac1d5b2ae6f1d5bb81e4eb59033009f9b0` 的 [CI43749533031](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43749533031) 57/57 全部通过；不可变标签 `v0.0.1-alpha.4` 的 [Release43754919496](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43754919496) 第二次尝试成功，最终 60 项成功、Homebrew 复用分支按契约跳过 1 项（同源发布前四平台 Homebrew 均成功，跳过不计通过）。23 个公开资产、四目标签名/摘要/成员/来源、自动 Formula 及 macOS arm64 版本/帮助/首次和重复离线暂存已独立核验。新向导真实 VPS/Mac 首装、账号授权与物理重启仍未实测。
 
 首次 WSL2 失败证据：`TestCLIThreeProcessTLSLifecycle` 在 `core_test.go:217` 首次 PTY 初始化调用处失败（8.45 秒），187/444 是清理日志位置，不是额外故障；尚未进入终端就绪输出读取。公开证据不含原始 errno，原因未确定，不宣称已证实基础设施故障。产品测试、发行工具和 systemd 生命周期通过；embedded-plugins 与独立 terminal 阶段未执行，不能计通过。同一源码发布前 WSL2 成功；相关 helper、PTY 依赖与平台脚本自 alpha.3 未修改。保留首次失败并在新 runner 上重试同源完整 WSL2，不改变断言或移动 tag。

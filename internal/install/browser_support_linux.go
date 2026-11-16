@@ -33,7 +33,7 @@ func lockBrowserRuntimeInstallation() (func(), error) {
 }
 
 func openBrowserRuntimeInstallationLock() (*os.File, error) {
-	if err := systemBinDirectory(filepath.Dir(BrowserRuntimeInstallLock)); err != nil {
+	if err := publicSystemDirectory(filepath.Dir(BrowserRuntimeInstallLock)); err != nil {
 		return nil, err
 	}
 	file, err := os.OpenFile(BrowserRuntimeInstallLock, os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0644)
