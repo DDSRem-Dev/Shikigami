@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -194,17 +195,30 @@ func TestLifecycleTimeoutDefaultsDoNotExtendCaller(t *testing.T) {
 		})
 		_, _ = next(context.Background(), connect.Spec{Procedure: test.procedure, StreamType: connect.StreamTypeUnary})
 	}
-	c := &Client{lifetime: context.Background(), timeout: 5 * time.Second}
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-	next := c.identity("")(func(ctx context.Context, _ connect.Spec) (connect.ClientStream, error) {
-		deadline, _ := ctx.Deadline()
-		if time.Until(deadline) > 50*time.Millisecond {
-			t.Fatal("caller deadline extended")
-		}
-		return nil, context.Canceled
-	})
-	_, _ = next(ctx, connect.Spec{Procedure: arpc.AgentShutdownProcedure, StreamType: connect.StreamTypeUnary})
+	for _, test := range []struct {
+		procedure string
+		timeout   time.Duration
+	}{
+		{arpc.AgentShutdownProcedure, 5 * time.Second},
+		{arpc.AgentResolveConflictProcedure, 90 * time.Second},
+	} {
+		c := &Client{lifetime: context.Background(), timeout: test.timeout}
+		parent, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		want, _ := parent.Deadline()
+		next := c.identity("")(func(ctx context.Context, _ connect.Spec) (connect.ClientStream, error) {
+			deadline, ok := ctx.Deadline()
+			if !ok || !deadline.Equal(want) {
+				t.Fatalf("%s changed earlier caller deadline: got %v want %v", test.procedure, deadline, want)
+			}
+			cancel()
+			if !errors.Is(ctx.Err(), context.Canceled) {
+				t.Fatalf("%s detached caller cancellation: %v", test.procedure, ctx.Err())
+			}
+			return nil, context.Canceled
+		})
+		_, _ = next(parent, connect.Spec{Procedure: test.procedure, StreamType: connect.StreamTypeUnary})
+		cancel()
+	}
 }
 
 func TestStartupPolicyRejectsOldAgentWithoutCallingRPC(t *testing.T) {

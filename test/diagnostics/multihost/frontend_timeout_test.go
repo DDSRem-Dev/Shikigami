@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -22,8 +25,10 @@ import (
 
 type timeoutAgent struct {
 	arpc.UnimplementedAgentHandler
-	next      atomic.Int64
-	deadlines chan time.Time
+	next     atomic.Int64
+	wait     atomic.Bool
+	entered  chan struct{}
+	canceled chan error
 }
 
 func (p *timeoutAgent) Handshake(context.Context, *apb.HandshakeRequest) (*apb.HandshakeResponse, error) {
@@ -37,12 +42,22 @@ func (*timeoutAgent) ReleaseFrontend(context.Context, *pb.Empty) (*pb.Empty, err
 	return &pb.Empty{}, nil
 }
 func (p *timeoutAgent) ResolveConflict(ctx context.Context, _ *ppb.ResolveConflictRequest) (*ppb.SyncState, error) {
-	deadline, ok := ctx.Deadline()
+	_, ok := ctx.Deadline()
 	if !ok {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, "missing caller deadline")
 	}
-	p.deadlines <- deadline
+	if p.wait.Load() {
+		p.entered <- struct{}{}
+		<-ctx.Done()
+		p.canceled <- ctx.Err()
+		return nil, ctx.Err()
+	}
 	return &ppb.SyncState{}, nil
+}
+
+type wireTimeoutObservation struct {
+	header string
+	at     time.Time
 }
 
 func TestFrontendExplicitTimeoutIsScopedAndPreservesEarlierCallerDeadline(t *testing.T) {
@@ -66,11 +81,28 @@ func TestFrontendExplicitTimeoutIsScopedAndPreservesEarlierCallerDeadline(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	probe := &timeoutAgent{deadlines: make(chan time.Time, 8)}
+	probe := &timeoutAgent{entered: make(chan struct{}, 1), canceled: make(chan error, 1)}
+	wire := make(chan wireTimeoutObservation, 8)
 	router := connect.NewServer()
 	arpc.RegisterAgentHandler(router, probe)
 	lifetime, cancel := context.WithCancel(t.Context())
-	server := connection.NewHTTPServer(lifetime, connection.NewRPCHandler(router))
+	handler := connection.NewRPCHandler(router)
+	server := connection.NewHTTPServer(lifetime, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == arpc.AgentResolveConflictProcedure {
+			wire <- wireTimeoutObservation{r.Header.Get("Connect-Timeout-Ms"), time.Now()}
+			// Connect transports a relative budget and reconstructs the server
+			// deadline at dispatch. Deliberately separate those instants: the
+			// server's absolute deadline cannot prove the client's deadline.
+			timer := time.NewTimer(25 * time.Millisecond)
+			defer timer.Stop()
+			select {
+			case <-timer.C:
+			case <-r.Context().Done():
+				return
+			}
+		}
+		handler.ServeHTTP(w, r)
+	}))
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(listener) }()
 	t.Cleanup(func() {
@@ -92,7 +124,7 @@ func TestFrontendExplicitTimeoutIsScopedAndPreservesEarlierCallerDeadline(t *tes
 		{"collision", 90, 90 * time.Second, 120 * time.Second, true},
 		{"default", 0, 5 * time.Second, 120 * time.Second, false},
 		{"short", 1, time.Second, 120 * time.Second, true},
-		{"collision", 90, 200 * time.Millisecond, 200 * time.Millisecond, false},
+		{"collision", 90, 2 * time.Second, 2 * time.Second, false},
 	} {
 		if test.openAgain {
 			data, err := json.Marshal(map[string]any{"name": test.name, "timeout_seconds": test.seconds})
@@ -115,14 +147,57 @@ func TestFrontendExplicitTimeoutIsScopedAndPreservesEarlierCallerDeadline(t *tes
 		if err != nil {
 			t.Fatal(err)
 		}
-		deadline := <-probe.deadlines
-		budget := deadline.Sub(started)
-		if budget > test.want+10*time.Millisecond || budget < test.want-150*time.Millisecond {
-			t.Fatalf("frontend %s budget=%v want=%v", test.name, budget, test.want)
+		observation := <-wire
+		millis, err := strconv.ParseInt(observation.header, 10, 64)
+		if err != nil || millis <= 0 {
+			t.Fatalf("frontend %s invalid wire timeout %q", test.name, observation.header)
 		}
-		if deadline.After(parentDeadline.Add(time.Millisecond)) {
-			t.Fatal("frontend extended an earlier caller deadline")
+		budget := time.Duration(millis) * time.Millisecond
+		maximum := min(test.want, parentDeadline.Sub(started))
+		// Serialization may occur anywhere between call start and ingress.
+		// Connect rounds down to milliseconds, with a minimum of one.
+		minimum := max(time.Millisecond, maximum-observation.at.Sub(started)-time.Millisecond)
+		if budget > max(time.Millisecond, maximum) || budget < minimum {
+			t.Fatalf("frontend %s wire budget=%v expected [%v, %v]", test.name, budget, minimum, maximum)
 		}
+	}
+
+	// The configured 90-second frontend must retain caller cancellation on a
+	// real in-flight request with an earlier deadline. Synchronize with handler
+	// admission instead of assuming dispatch completes within a short timeout.
+	probe.wait.Store(true)
+	f, err := h.front(t.Context(), "collision")
+	if err != nil {
+		t.Fatal(err)
+	}
+	call, stop := context.WithTimeout(t.Context(), 10*time.Second)
+	defer stop()
+	returned := make(chan error, 1)
+	go func() {
+		_, err := f.Agent().ResolveConflict(call, &ppb.ResolveConflictRequest{})
+		returned <- err
+	}()
+	select {
+	case <-probe.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("server did not admit the cancellation probe")
+	}
+	stop()
+	select {
+	case err := <-returned:
+		if connect.CodeOf(err) != connect.CodeCanceled {
+			t.Fatalf("caller cancellation did not end RPC: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("RPC continued after caller cancellation")
+	}
+	select {
+	case err := <-probe.canceled:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("server request was not canceled: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("server retained the canceled request")
 	}
 }
 

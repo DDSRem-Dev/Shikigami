@@ -4,6 +4,8 @@
 
 固定源 `21fcb5dc1406c7e47d8d12584110433aeaa773d2` 的 [CI43814011028](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43814011028) 已57/57通过，无失败或跳过job。不可变 `v0.0.1-alpha.5` 的 [Release43819036138](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43819036138) 首次运行成功：60项成功，Homebrew复用分支按契约跳过1项（不计通过；源CI四目标Homebrew均通过）。2026-11-16T07:41:05Z公开，draft=false、prerelease=true；23资产、四目标签名/摘要/来源/成员、公开macOS arm64提示/版本/帮助/首次和重复暂存均验证通过。自动Formula提交 `62df599ad717541e4050f921347597d097567a07` 与从已验签资产重新生成的公式一致。
 
+后续文档/Formula同步提交 `2a0e1883ec6097dac49bfda1d65584ef25cb741c` 的CI43826191775最终56项成功、1项失败；macOS Intel `unit-test-support`失败：`TestFrontendExplicitTimeoutIsScopedAndPreservesEarlierCallerDeadline` 于 frontend_timeout_test.go:124 报caller deadline被延长，测试耗时0.09s。运行时源码和公开alpha.5未改变。Connect通过相对毫秒预算传输超时、在服务端分发时重建绝对deadline；仅加入25ms分发延迟即复现旧断言失败（5s误测5.026919625s）。现只修正测试：HTTP入口检查实际预算并计入序列化耗时/毫秒截断，保留可控延迟，增加真实RPC取消；本地interceptor要求较早父deadline精确相等。原生相关race连续50次通过（multihost10.887s、client1.811s）；两整包race3.132s/20.846s及定向go vet通过；隔离无网络Debian12 arm64相关race连续25次通过（5.574s/1.018s），不修改生产超时或放宽契约。七类复核确认仅测试观测与文档变化，SDK/host/plugin归属、RPC/授权/能力、持久化/身份、生产进程/网络/安装布局均不变；测试资源仍有界回收。原失败保留；本段记录本地修复证据，新提交完整CI结果以关联Actions为准。
+
 补充验收：固定源21fcb5d的Debian12/systemd252实际普通UID密钥环provision与停止后unlock通过，凭据保持私密；隔离容器挂载传播修正和验证范围见15，不冒称用户VPS完整安装。
 
 本批基线11/27/28，已逐项复核七类契约：
