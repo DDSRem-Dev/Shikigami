@@ -1,8 +1,10 @@
 # Homebrew 分发与自动更新
 
-更新：2026-11-15。当前Homebrew版本[v0.0.1-alpha.3](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.3)已由tag工作流全自动发布并更新[Formula/shikigami.rb](../Formula/shikigami.rb)，bot提交`280db0e52a7ff7e36e8663f5873ee0a530070b2b`。23公开资产独立验签、公式从认证资产重建后的逐字节一致性及Linux amd64暂存已验，见[alpha.3证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)。同源发布前CI四平台Homebrew通过；本轮未重复公开tap全平台安装。下文alpha.2远端tap及macOS工具限制保持历史范围，完整门槛见08。
+更新：2026-11-16。当前Homebrew版本[v0.0.1-alpha.4](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.4)已由tag工作流全自动发布并更新[Formula/shikigami.rb](../Formula/shikigami.rb)，bot提交`87883018623b3d78068bab208d7ec4400285a29d`。23公开资产、四目标验签与公式验证见[alpha.4证据](15-implementation-status.md#evidence-public-alpha4-release-20261116)。发布前CI57/57通过；不代表新公开tap四平台重装或新向导真实VPS/Mac首装通过。[alpha.3证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)及下文alpha.2远端tap和macOS工具限制保持历史范围。
 
 ## 安装与使用边界
+
+普通用户首次使用推荐 [28 一键安装](28-quickstart.md)：VPS/Mac 各一条命令完成依赖、服务与配置引导，无需手工拼接 bundle/pin。Homebrew 继续作为独立的命令与发行包渠道；已经安装受管 agent 的客户端可运行 `shiki setup` 配置连接和插件。
 
 同一个仓库作为 tap，不需要额外仓库、维护账号或跨仓库 Secret。实际安装命令：
 
@@ -19,7 +21,7 @@ brew trust --formula ddsrem-dev/shikigami/shikigami
 
 Formula 按当前 OS/架构选择固定版本的 Linux/macOS × arm64/amd64 归档，不从源码编译产品。四目标可供下载不等于全部原生平台均已验收。
 
-Homebrew只安装经过认证的完整bundle：基础14成员及该平台签名归档中的可选插件保存在Cellar的`libexec/bundle/`；alpha.3的Linux包为20成员，macOS包为16成员。`bin/`链接`shiki`、`shiki-agent`、`shiki-daemon`、`shiki-install`；插件和manifest随bundle保留，不以内嵌业务替代。Homebrew不初始化账号、配置或tsnet，不启动服务、不执行管理员地区/浏览器依赖安装，也不提供`brew services`入口。
+Homebrew只安装经过认证的完整bundle：基础14成员及该平台签名归档中的可选插件保存在Cellar的`libexec/bundle/`；alpha.4的Linux包为20成员，macOS包为16成员。`bin/`链接`shiki`、`shiki-agent`、`shiki-daemon`、`shiki-install`；插件和manifest随bundle保留，不以内嵌业务替代。Homebrew不初始化账号、配置或tsnet，不启动服务、不执行管理员地区/浏览器依赖安装，也不提供`brew services`入口。
 
 安装后先查看当前版本和服务安装说明：
 

@@ -1,22 +1,22 @@
 # 首版预发布、自动发布流程与交付门槛
 
-更新：2026-11-15。当前公开预发布为[v0.0.1-alpha.3](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.3)，固定源`d9056c3ffed86b2bbac9cd5e89c433eaa3093cb2`的[CI43723367228](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43723367228)57/57通过；[Release43727419792](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43727419792)成功（60通过、复用Homebrew分支1跳过）。23资产于`2026-11-15T15:48:03Z`公开，`draft=false`、`prerelease=true`；自动Formula提交`280db0e52a7ff7e36e8663f5873ee0a530070b2b`。四目标公开验签、来源/成员、公式一致性与Linux amd64首次/重复暂存见[发行证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)。alpha.2原22资产及[历史验收](15-implementation-status.md#evidence-public-alpha2-release-20261030)保持不变。
+更新：2026-11-16。当前公开预发布为[v0.0.1-alpha.4](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.4)，固定源`12664aac1d5b2ae6f1d5bb81e4eb59033009f9b0`的[CI43749533031](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43749533031)57/57通过；[Release43754919496](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43754919496)成功，23资产公开，`draft=false`、`prerelease=true`，Homebrew自动更新提交`87883018623b3d78068bab208d7ec4400285a29d`。四目标公开验签、来源/成员及公式验证见[发行证据](15-implementation-status.md#evidence-public-alpha4-release-20261116)。新增[一键安装](28-quickstart.md)的真实VPS/Mac首装、账号与物理重启仍未实测。[alpha.3历史发行证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)及alpha.2原22资产保持不变。
 
 历史首个公开预发布 [v0.0.1-alpha.1](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.1) 已通过 tag 全自动工作流发布；固定提交为 `f0b5f83dce599c8e0d715bda5e7806a0ef6aaa72`，[Actions 40895007350](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40895007350) 已完成且成功，包含同源 CI、四目标构建、签名验签和公开发布。Release 于 `2026-10-29T15:13:47Z` 公开，`draft=false`、`prerelease=true`，共22个资产；独立下载与实际产物验证结果见[公开发行证据](15-implementation-status.md#evidence-public-alpha-release-20261029)。本文件保存发布流程、验收边界与剩余门槛；[该版本说明](./releases/v0.0.1-alpha.1.md) 随 tag 冻结。完整范围仍由 [08 路线图](./08-roadmap.md) 决定，预发布不缩小交付要求。
 
 <a id="current-support"></a>
-## 当前支持声明（2026-11-15）
+## 当前支持声明（2026-11-16）
 
-本节是当前支持范围的统一入口。路线图Phase0–5的原42项已完成验收登记与声明核对；alpha.3已另行完成公开发行，不是beta或稳定版。下文按日期保留的候选、失败、平台待办仅代表当时范围，不能覆盖本节。
+本节是当前支持范围的统一入口。路线图Phase0–5的原42项已完成验收登记与声明核对；alpha.4已另行完成公开发行，不是beta或稳定版。下文按日期保留的候选、失败、平台待办仅代表当时范围，不能覆盖本节。
 
 ### 版本与证据来源
 
 | 对象 | 当前结论 | 来源与限制 |
 |---|---|---|
-| 当前源码 | alpha.3固定源包含安装、签名marketplace、插件运行时及新增region/browser | `d9056c3`的CI43723367228为57/57；新增功能精确本地/容器证据及失败修复见15，不以旧平台测试替代新浏览器全平台体验 |
+| 当前源码 | alpha.4固定源新增VPS/Mac一键安装与客户端配置向导，保留签名marketplace及四种内置插件 | `12664aac`的CI43749533031为57/57；精确本地/容器及发行证据见15，不以CI或旧平台测试替代新向导真实双机首装 |
 | 认证生命周期、长稳/资源/性能 | 2026-11-01按用户确认测试通过关闭 | 既有实测证据分别见23、20；用户确认与独立实测分别记录，不补造官方URL到期现场或生产heap/object归因结果 |
-| 公开安装包 | 安装入口及Formula为`v0.0.1-alpha.3`，固定源`d9056c3ffed86b2bbac9cd5e89c433eaa3093cb2` | 23资产含bootstrap，四目标独立验签、自动公式逐字节核对及Linux amd64暂存通过；本轮未执行公开包完整服务升级/回滚 |
-| 版本性质 | alpha.3按用户要求供测试，未发布beta | [发行说明](releases/v0.0.1-alpha.3.md)与08/15/16保留真实账号、公网、物理重启和新增原生体验边界；下方beta记录保持历史含义 |
+| 公开安装包 | 安装入口及Formula为`v0.0.1-alpha.4`，固定源`12664aac1d5b2ae6f1d5bb81e4eb59033009f9b0` | 23资产含bootstrap，四目标独立验签及自动公式验证见15；不表示真实新向导双机首装或完整服务升级/回滚通过 |
+| 版本性质 | alpha.4按用户要求供测试，未发布beta | [发行说明](releases/v0.0.1-alpha.4.md)与08/15/16保留真实账号、公网、物理重启和新增原生体验边界；下方beta记录保持历史含义 |
 
 ### 功能支持矩阵
 
@@ -32,7 +32,7 @@
 | region可选插件 | JP/US时区/locale计划、显式应用/回滚，单独授权DNS及独立恢复守卫 | 27/15：Linux普通daemon调用root受限helper；Debian12/Ubuntu24.04 amd64隔离验收，不保证改变IP地区或规避风控 |
 | browser可选插件 | Linux远程Chrome、持久profile、独立systemd服务、loopback noVNC、单控制者、中文/日文输入与授权文件通道 | 27/15：真实amd64容器界面和安装证据；macOS包只含客户端，新增完整ARM/macOS/WSL2体验及真实账号/物理重启仍未验 |
 | 会话配置快照与模板 | 保存启动配置、从当前项目文件创建新会话 | `session-config-snapshot.v1`、CLI帮助及session快照测试；不恢复文件、环境、进程或Claude对话历史 |
-| 安装与维护 | 认证bundle、显式安装/升级/回滚、systemd或LaunchAgent、卸载保留数据 | 11/24/26；历史公开包和本地候选分别记录，跨schema回退受兼容性限制；Homebrew不自动启动或升级受管服务 |
+| 安装与维护 | 一键安装/首次配置向导、认证bundle、显式安装/升级/回滚、systemd或LaunchAgent、卸载保留数据 | 11/24/26/28；新向导真实双机首装仍未验，历史公开包和本地候选分别记录；跨schema回退受兼容性限制，Homebrew不自动启动或升级受管服务 |
 | 长稳、资源与性能 | 已记录负载下的默认12小时轮换、恢复尾部、资源回收、故障及性能回归 | 20及15专项、用户确认；c4长跑为direct-TLS/shell夹具，不是tsnet/Claude长跑。没有全环境零泄漏、最大容量、延迟SLA承诺 |
 | 签名、分发与支持入口 | Ed25519归档认证、固定版本Release/Homebrew、GitHub Issues | 21/22/24；不是Apple公证或在线密钥撤销服务；无响应时限/SLA承诺 |
 
@@ -122,7 +122,7 @@ git tag -a v0.0.1-alpha.3 -m "Release v0.0.1-alpha.3"
 git push origin v0.0.1-alpha.3
 ```
 
-alpha.3已固定到`d9056c3ffed86b2bbac9cd5e89c433eaa3093cb2`，由Release43727419792发布；alpha.2仍固定到`fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2`，由Release40912019720发布。均不能再次创建或移动。推送新版本tag即授权发布该固定版本。
+alpha.4已固定到`12664aac1d5b2ae6f1d5bb81e4eb59033009f9b0`，由Release43754919496发布；alpha.3已固定到`d9056c3ffed86b2bbac9cd5e89c433eaa3093cb2`，由Release43727419792发布；alpha.2仍固定到`fa35debd9c74d0ad44704e3a7897e0e0c1fcc3f2`，由Release40912019720发布。均不能再次创建或移动。推送新版本tag即授权发布该固定版本。
 GitHub `release-signing` 环境已按用户要求取消人工审批，只允许 `v*` tag，
 不允许分支运行取得环境密钥；管理员绕过保持关闭。规则集 `Immutable release tags`
 禁止 `refs/tags/v*` 更新或删除，没有绕过主体；不得移动旧 tag 来替换已发行版本。
@@ -264,7 +264,7 @@ Shikigami 通过本地 CLI/TUI 和常驻 agent 使用远端普通用户的 tmux/
 
 此前608文件冻结源码的实际完整`make release`已在macOS arm64和普通用户Linux arm64容器通过：一次性测试密钥签名、可信源码verifier配合独立公钥验签、认证私有副本解包、六二进制版本核对、真实helper暂存（macOS client；Linux client/daemon）。仅生成可审查服务文件，未激活或发布；详见[完整签名构建](15-implementation-status.md#evidence-current-release-validation)。此证据补齐先前旧developer归档的构建来源范围，不建立正式发布者身份。
 
-- 安装器需要现存普通运行用户、明确服务PATH、tmux和可运行的Claude可执行文件。应用ready另检查其实际登录报告；未登录时可保留已安装产物/服务，但报告application_pending，不宣称应用就绪。缺依赖会报告，不会静默代用户安装或登录。真实Claude登录/推理不作为当前交付验收条件，见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)。
+- 高级安装器需要现存普通运行用户、明确服务PATH、tmux和可运行的Claude可执行文件。alpha.4的一键向导可在用户确认后创建普通账号并安装缺失依赖，见[28](28-quickstart.md)。应用ready另检查其实际登录报告；未登录时可保留已安装产物/服务，但报告application_pending，不宣称应用就绪。缺依赖会报告，不会静默代用户安装或登录。真实Claude登录/推理不作为当前交付验收条件，见[11验收范围](11-automated-installation.md#claude-acceptance-scope-20261031)。
 - 现有配置/身份保持。全新非交互配置需要私有 key 文件；首次非交互 daemon 激活需要新的私有 Token 输出路径。凭据不放命令行参数值或 journal。
 - 停止对应 host/worker 后再备份和切换；tmux 会话保留，但网络流需要重建。真实systemd容器活动传输中agent/daemon升级与回滚已专项通过（187.62秒、13次边界，同一pane保活），覆盖终端/TCP无重放、文件冲突保留及新监听恢复；证据快照不含随后Unix socket原子发布修改。原生macOS LaunchAgent的活动上传/下载/终端/TCP中A→B→A均已通过，此前下载87.29秒/同版上传85.03秒，含旧公开目标完整SHA断言；本批新安装源码另补上传90.41秒及systemd 13次边界验证；此前独立取消保留runner143/test1并验证清理，未重复追认到新夹具。daemon为普通TLS fixture。历史正式产物、重启/登录持久化和外部部署仍待验收，见[Linux升级报告](15-implementation-status.md#evidence-upgrade-validation)及[原生活动升级报告](15-implementation-status.md#evidence-launchd-activity-validation)。
 - 本批sync ledger迁至服务独立schema2的修复已通过限定双平台验收，旧写入方须拒绝新ledger；迁移保留原始备份，旧schema1历史未知操作不能因初始化空日志就视为安全。迁移恢复栅栏及SDK未来schema字段拒绝已实现，SDK原生受影响race和Linux故障矩阵已通过；最终同源双平台合并亦已通过；这些是当前开发格式的迁移验收，不替代历史正式产物/所有既有用户组合验收。核心安装schema保持其自身版本，不能将所有状态统一升至2。

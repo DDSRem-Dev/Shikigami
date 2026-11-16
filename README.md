@@ -2,15 +2,25 @@
 
 通过本地 CLI/TUI 和常驻 agent，使用远端 VPS 上的 tmux / Claude Code。核心链路采用 Connect/protobuf over HTTP/2；文件同步和 TCP 转发由双端插件执行。
 
-**当前源码的 Phase 0–5 验收清单已闭环（42/42）。** 功能、已验平台、证据来源及未支持范围见[支持声明](docs/18-release-readiness.md#current-support)，逐项进度见[路线图](docs/08-roadmap.md)。认证生命周期及长稳、资源与性能按用户确认测试通过关闭；真实 Claude 登录/推理、物理主机重启和生产 heap/object 归因仍保留未实测边界。当前公开安装入口为 alpha.3，包含新增可选地区环境与远程浏览器插件；不是 beta 或稳定版。
+**当前源码的 Phase 0–5 验收清单已闭环（42/42）。** 功能、已验平台、证据来源及未支持范围见[支持声明](docs/18-release-readiness.md#current-support)，逐项进度见[路线图](docs/08-roadmap.md)。认证生命周期及长稳、资源与性能按用户确认测试通过关闭；真实 Claude 登录/推理、物理主机重启和生产 heap/object 归因仍保留未实测边界。当前公开安装入口为 alpha.4，包含 VPS/Mac 一键安装向导及地区环境与远程浏览器插件；不是 beta 或稳定版。
 
-alpha.3 固定源码的发布前 CI 为57/57；自动构建、签名、公开发布和 Homebrew 更新成功，23资产及 Linux amd64 首次/重复暂存已独立核验，见[公开发行证据](docs/15-implementation-status.md#evidence-public-alpha3-release-20261115)。新增功能的原生体验、真实账号、公网与物理重启边界见[发行说明](docs/releases/v0.0.1-alpha.3.md)。历史 beta 候选证据保留，不表示已发布 beta。
+alpha.4 固定源码的发布前 CI 为 57/57；自动构建、签名、公开发布和 Homebrew 更新成功，23 个公开资产的验证结果见[发行证据](docs/15-implementation-status.md#evidence-public-alpha4-release-20261116)。新向导的真实 VPS/Mac 首装、账号授权与物理重启仍未实测，见[发行说明](docs/releases/v0.0.1-alpha.4.md)。[alpha.3 历史发行证据](docs/15-implementation-status.md#evidence-public-alpha3-release-20261115)保留，不扩大为新向导验收。
 
 ## 安装
 
-本仓库新增下一版的一键安装入口：VPS 使用 `sudo bash scripts/bootstrap.sh --quickstart`，Mac 使用 `bash scripts/bootstrap.sh --quickstart --role=client`，由向导处理依赖、服务、登录和插件；已有客户端使用 `shiki setup`。**这些入口需要包含向导的新发行包，当前公开 alpha.3 不支持。** 行为与验证范围见 [一键安装](docs/28-quickstart.md)，当前公开版安装如下。
+VPS 和 Mac 各执行一条命令，向导处理依赖、服务、登录和插件配置：
 
-当前公开预发布为 [v0.0.1-alpha.3](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.3)。通过 Homebrew 安装：
+```bash
+# VPS（Debian 12 / Ubuntu 24.04）
+curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.4/bootstrap.sh | sudo bash -s -- --quickstart --version=v0.0.1-alpha.4
+
+# Mac（当前登录用户，不加 sudo）
+curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.4/bootstrap.sh | bash -s -- --quickstart --role=client --version=v0.0.1-alpha.4
+```
+
+按提示确认系统变更、完成账号授权，并将 VPS 显示的地址和 Token 填入 Mac 向导。默认配置全部插件；仅需终端、同步和端口转发时，两端均追加 `--components=core`。已有受管客户端可运行 `shiki setup`。重复同一命令可继续引导，详细行为、插件说明和恢复方式见[一键安装](docs/28-quickstart.md)。
+
+当前公开预发布为 [v0.0.1-alpha.4](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.4)。也可通过 Homebrew 安装命令和完整 bundle：
 
 ```bash
 brew tap ddsrem-dev/shikigami https://github.com/DDSRem-Dev/Shikigami

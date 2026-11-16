@@ -1,6 +1,23 @@
 # 实施与验收记录
 
-**alpha.4 发布准备（2026-11-16）：** 用户已授权提交、推送、修复全部 CI 并发布 `v0.0.1-alpha.4`。本批新增固定版本的一键安装命令与[发行说明](releases/v0.0.1-alpha.4.md)；完整远端 CI、签名发行及公开资产验证待执行，不提前计为通过。沿用下述目录/SDK、RPC/授权、状态事务、进程、文件网络、CLI/安装和证据七类复核结论；实际 VPS/Mac 首装、账号授权与物理重启仍是独立门槛。
+**alpha.4 已发布（2026-11-16）：** 固定源 `12664aac1d5b2ae6f1d5bb81e4eb59033009f9b0` 的 [CI43749533031](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43749533031) 57/57 全部通过；不可变标签 `v0.0.1-alpha.4` 的 [Release43754919496](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43754919496) 第二次尝试成功，最终 60 项成功、Homebrew 复用分支按契约跳过 1 项（同源发布前四平台 Homebrew 均成功，跳过不计通过）。23 个公开资产、四目标签名/摘要/成员/来源、自动 Formula 及 macOS arm64 版本/帮助/首次和重复离线暂存已独立核验。新向导真实 VPS/Mac 首装、账号授权与物理重启仍未实测。
+
+首次 WSL2 失败证据：`TestCLIThreeProcessTLSLifecycle` 在 `core_test.go:217` 首次 PTY 初始化调用处失败（8.45 秒），187/444 是清理日志位置，不是额外故障；尚未进入终端就绪输出读取。公开证据不含原始 errno，原因未确定，不宣称已证实基础设施故障。产品测试、发行工具和 systemd 生命周期通过；embedded-plugins 与独立 terminal 阶段未执行，不能计通过。同一源码发布前 WSL2 成功；相关 helper、PTY 依赖与平台脚本自 alpha.3 未修改。保留首次失败并在新 runner 上重试同源完整 WSL2，不改变断言或移动 tag。
+
+第二次尝试在新 runner 重跑相同标签源码，WSL2 全部必需阶段及清理通过；`TestCLIThreeProcessTLSLifecycle` 为 32.79 秒成功，`incomplete_stages=[]`。未修改代码、断言或超时，也未移动标签；首次 PTY 初始化失败未复现，原始系统错误仍未知。最终成功不抹去首次失败和未运行阶段。
+
+<a id="evidence-public-alpha4-release-20261116"></a>
+## alpha.4 公开发行与独立核验（2026-11-16）
+
+Release 于 `2026-11-15T21:14:03Z` 公开，`draft=false`、`prerelease=true`，精确源码为上方 `12664aac`；自动 Homebrew 提交为 `87883018623b3d78068bab208d7ec4400285a29d`。历史版本和归档均未改写，alpha 不占 stable latest。
+
+- 全部 23 个公开文件逐个核对 GitHub 资产大小及 SHA-256；四平台归档以仓库可信公钥离线验签，固定 version/OS/arch、归档摘要、payload pin、成员清单与公开 verification receipt 一致。Linux 20 成员、macOS 16 成员；bootstrap 与标签源码逐字节一致，PROVENANCE 的源码、签名工作流和 run ID 匹配。
+- 所有二进制的 Go 构建目标匹配归档；除不导入 buildinfo 的 region helper 外，其余二进制内版本/提交标记存在。region helper 通过签名归档、payload 摘要和来源验证，不宣称其提供版本命令。四个 macOS arm64 主程序实际运行的版本/提交匹配，`shiki setup --help`、`shiki-install quickstart --help` 和公开 bootstrap 帮助通过。
+- macOS arm64 使用真实公开归档完成首次与重复 `--stage-only` 安装；未建立 active/current、未创建运行配置或状态，未激活本机服务。不是新向导的真实完整首装，也不是公开包完整升级/回滚。
+- 自动 Formula 从已认证公开资产重新生成，和 bot 提交逐字节相同，Ruby 语法通过。公钥 PEM 仅以 DER 等价核对处理跨平台换行；未降低信任身份要求。本轮未重复四平台实际 tap 安装。
+- 临时独立验收脚本最初错误假定 `go version -m` 保留 `-ldflags`，并假定每个支持 helper 都导入 buildinfo；按实际构建契约修正观察方式后完成上述核验。只修正验收脚本，不改产品或发行资产，不把静态标记当作跨平台实际运行。
+
+独立证据保存于 `/tmp/shiki-alpha4-public-verification/`：源 CI/最终 Release JSON、WSL 两次阶段记录、公开资产元数据、`verification-summary.json`、`smoke-summary.json` 与 Formula 重建文件。临时文件不是新的公开分发源。08/16 同步关闭发行门槛，真实账号、完整新向导双机首装、物理重启及公开包完整服务升级/回滚仍 pending。
 
 ## 一键安装增量（2026-11-16，本地实现与隔离回归完成）
 
@@ -16,7 +33,7 @@
 
 独立 Linux arm64 容器使用 `golang:1.26.11-bookworm`，镜像摘要 `sha256:dc40a13b61304647ed7e5d581d246b86413dfc29d63c6d018310feb93cd98fc0`，2 CPU/3 GiB、network none、普通 checker UID1000、只读冻结源码/module cache。20 项顶层 quickstart/help/installer 检查全部通过、零 skip（cmd 2.074s，install 4.473s）；包含 Linux build-tag 实现编译，不表示实际 APT/systemd/Chrome 全向导。创建夹具用户时容器报告 home chown 警告，测试实际成功，不称无警告完整用户安装。证据 `/tmp/shiki-quickstart-verification-20261116/`，1014文件源码 manifest SHA-256 为 `27de87699e672be9574de82eef3a28d23be2629cb28afe892048b390b6321a70`；完成后核对 Go/scripts 与冻结副本一致；Linux amd64 两个入口交叉构建通过，不替代 amd64 运行。测试容器已自动移除，临时拉取的专用 Go 镜像也按精确标签回收，不操作已有用户容器。
 
-真实 APT/官方 Claude 安装、Linux systemd/Mac LaunchAgent 完整新向导、真实账号、公网、物理重启和包含新入口的公开发行仍未执行。公开 alpha.3 不含本功能，未新建 tag/发布资产。
+本地批次不包含真实 APT/官方 Claude 安装、Linux systemd/Mac LaunchAgent 完整新向导、真实账号、公网或物理重启；这些门槛仍未完成。后续 alpha.4 公开发行证据见上节，公开 alpha.3 不含本功能。
 
 **原清单进度（2026-11-12）：42/42，原清单最后一项已关闭。** 功能、平台、验收依据及未支持范围统一见[支持声明](18-release-readiness.md#current-support)。Phase 0–5各阶段为11/11、7/7、6/6、6/6、6/6、6/6；认证生命周期和长稳/资源/性能沿用2026-11-01用户确认，历史实测/失败及源码范围保留。生产heap/object归因、真实Claude登录/推理及物理主机重启仍未实测。2026-11-15已发布alpha.3，新增地区/浏览器及发行证据单列如下，不扩大原42项或宣称稳定版。
 
