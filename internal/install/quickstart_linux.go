@@ -71,6 +71,7 @@ func InspectQuickstartSupport(ctx context.Context, o ExtensionOptions) (Quicksta
 		}
 	}
 	current := true
+	runtimeCurrent := false
 	for _, path := range []string{RegionHelperPath, BrowserRuntimePath} {
 		name := filepath.Base(path)
 		entry := File{}
@@ -83,6 +84,9 @@ func InspectQuickstartSupport(ctx context.Context, o ExtensionOptions) (Quicksta
 		if receipt.SupportFiles[name] != entry || !quickstartSameRelease(receipt.SignedReleases[name], verified) {
 			current = false
 			continue
+		}
+		if path == BrowserRuntimePath {
+			runtimeCurrent = true
 		}
 		if err = verifyInstalledSupport(path, receipt); err != nil {
 			return result, err
@@ -113,9 +117,28 @@ func InspectQuickstartSupport(ctx context.Context, o ExtensionOptions) (Quicksta
 			return result, err
 		}
 		if filesCurrent {
+			exists, err := inspectRegionDaemonPolicy(account.Username, uid)
+			if err != nil {
+				return result, err
+			}
+			if exists {
+				restart, err := regionDaemonNeedsRestart(ctx, account.Username)
+				if err != nil {
+					// A previous interrupted setup may have published the file
+					// before daemon-reload. Only approved setup may reconcile
+					// it; that path rejects effective administrator conflicts.
+					return result, nil
+				}
+				if restart {
+					return result, nil
+				}
+			}
 			result.Current = true
 			return result, nil
 		}
+	}
+	if runtimeCurrent {
+		return result, nil
 	}
 	// Reject a support upgrade while Chrome owns the publication lock BEFORE
 	// package installation or credential enrollment. Do not stop it implicitly.
@@ -155,6 +178,7 @@ func quickstartSupportFiles(account *user.User, uid int, mode string) (bool, err
 	}{
 		{"/etc/sudoers.d/shikigami-region-" + strconv.Itoa(uid), 0440, []byte(regionSudoers(uid))},
 		{"/etc/systemd/system/" + RegionGuardUnit, 0644, []byte(regionGuardService())},
+		{regionDaemonDropIn, 0644, regionDaemonServicePolicy(uid)},
 		{"/etc/systemd/system/" + keyringUnit(uid, false), 0644, []byte(unit)},
 	} {
 		if err := trustedInstalledFile(expected.path, expected.mode); errors.Is(err, os.ErrNotExist) {

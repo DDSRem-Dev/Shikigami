@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/DDSRem-Dev/Shikigami/internal/client"
@@ -135,6 +136,13 @@ func executeQuickstart(ctx context.Context, args []string, out, errOut io.Writer
 	if err != nil {
 		return 1, err
 	}
+	uid, err := strconv.ParseUint(account.Uid, 10, 32)
+	if err != nil {
+		return 1, err
+	}
+	if err = quickstartSecureHome(account.HomeDir, uint32(uid)); err != nil {
+		return 1, err
+	}
 	plan := install.Plan{Role: "client", User: account.Username, Port: 9527, Claude: "claude"}
 	prefix := ""
 	if err = defaults(&plan, &prefix); err != nil {
@@ -175,6 +183,7 @@ func quickstartPlan(ctx context.Context, o quickstartOptions, tty *os.File) erro
 	} else {
 		fmt.Fprintln(tty, "Install/update your private agent and login service, add a fixed ~/.local/bin PATH block to zsh/bash startup files, then guide Tailscale login, server connection and selected plugins. Existing configuration and data are retained.")
 	}
+	fmt.Fprintln(tty, "If the selected runtime home permits other users to write, remove only its group/other write bits so plugin executables can be trusted. No recursive permission or ownership changes.")
 	fmt.Fprint(tty, "Continue with this installation? [y/N] ")
 	answer, err := client.ReadConsoleLine(ctx, tty, 32)
 	if err != nil {

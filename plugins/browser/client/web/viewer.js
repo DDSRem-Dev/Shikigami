@@ -9,7 +9,7 @@ const state = {
     screenReady: false, attached: false, controller: false, canControl: false,
     attachment: "", instance: "", revision: "", controllerId: "",
     pendingControl: false, connecting: false, closed: false, transferring: false,
-    refreshing: false, statusTimer: null,
+    refreshing: false, statusTimer: null, screenClosing: null,
 };
 
 function showMessage(message, info = false) {
@@ -58,7 +58,7 @@ function renderAuthority() {
     byId("take-control").disabled = !state.screenReady || !state.canControl || controlling || state.pendingControl || state.closed;
     byId("take-control").textContent = state.pendingControl ? "Waiting for control update…" : "Take control";
     byId("paste-clipboard").disabled = !controlling;
-    byId("reconnect").disabled = !state.session || state.connecting || state.screenReady || state.closed;
+    byId("reconnect").disabled = !state.session || state.connecting || state.closed;
     byId("connection-status").textContent = state.connecting ? "Connecting" : state.screenReady ? "Connected" : "Disconnected";
     byId("refresh-status").disabled = state.closed;
     byId("close-viewer").disabled = state.closed;
@@ -69,16 +69,27 @@ function renderAuthority() {
 }
 
 function detachScreen() {
+    // Invalidate callbacks before closing the old channel. A delayed HTTP
+    // takeover/status response must not affect a replacement attachment.
+    ++state.generation;
+    const rfb = state.rfb;
+    const channel = state.channel;
+    state.rfb = null;
+    state.channel = null;
     state.controller = false;
     state.screenReady = false;
     state.attached = false;
     state.connecting = false;
     state.pendingControl = false;
-    if (state.rfb) state.rfb.disconnect();
-    if (state.channel) state.channel.close();
-    state.rfb = null;
-    state.channel = null;
+    if (rfb) rfb.disconnect();
+    if (channel) {
+        const closing = channel.closed;
+        state.screenClosing = closing;
+        closing.then(() => { if (state.screenClosing === closing) state.screenClosing = null; });
+        channel.close();
+    }
     renderAuthority();
+    return state.screenClosing;
 }
 
 // noVNC supports a raw WebSocket-like channel. This adapter delivers only binary
@@ -95,6 +106,7 @@ class ViewerChannel {
         this.revision = "";
         this.readyState = WebSocket.CONNECTING;
         this.onEvent = onEvent;
+        this.closed = new Promise((resolve) => { this.resolveClosed = resolve; });
         this.socket = new WebSocket(url, [protocol, `csrf.${csrf}`]);
         this.socket.binaryType = "arraybuffer";
         this.socket.onopen = (event) => {
@@ -128,6 +140,7 @@ class ViewerChannel {
         };
         this.socket.onclose = (event) => {
             this.readyState = WebSocket.CLOSED;
+            this.resolveClosed();
             this.onclose?.(event);
         };
     }
@@ -173,22 +186,24 @@ function screenEvent(event, generation) {
         state.controllerId = event.controllerId || "";
         if (event.type === "ready") state.canControl = !state.session.readOnly && event.canControl === true;
         state.controller = state.canControl && event.controller === true && event.readOnly === false;
+        const controlWasPending = state.pendingControl;
         state.pendingControl = false;
         renderAuthority();
+        if (controlWasPending && state.controller) showMessage("You control this remote browser. Click inside the screen to use the mouse and keyboard.", true);
     } else if (event.type === "closed" || event.type === "error") {
-        state.controller = false;
-        state.pendingControl = false;
-        renderAuthority();
+        detachScreen();
         showMessage(event.message || "Unknown screen failure. Refresh status; the independent browser may still be running.");
     } else {
         throw new Error("Unknown viewer metadata type");
     }
 }
 
-function connectScreen() {
-    if (!state.session || state.closed || state.connecting || state.screenReady) return;
-    detachScreen();
-    const generation = ++state.generation;
+async function connectScreen() {
+    if (!state.session || state.closed || state.connecting) return;
+    // This is an explicit action, including when an open screen has stalled.
+    // The replacement starts read-only and never restores or replays input.
+    const previousClosed = detachScreen();
+    const generation = state.generation;
     state.connecting = true;
     state.canControl = false;
     state.attachment = state.instance = state.revision = state.controllerId = "";
@@ -196,6 +211,17 @@ function connectScreen() {
     showMessage("");
     renderAuthority();
     try {
+        if (previousClosed) {
+            // Let the old attachment close before creating its replacement.
+            // Otherwise a new socket can race VIEWER_ALREADY_ATTACHED.
+            let timer;
+            try {
+                await Promise.race([previousClosed, new Promise((_, reject) => {
+                    timer = window.setTimeout(() => reject(new Error("Previous screen did not close")), 5000);
+                })]);
+            } finally { clearTimeout(timer); }
+            if (generation !== state.generation || state.closed) return;
+        }
         const url = new URL("rfb", window.location.href);
         url.protocol = "ws:";
         const channel = new ViewerChannel(url.href, state.csrf, (event) => screenEvent(event, generation));
@@ -216,10 +242,10 @@ function connectScreen() {
         });
         rfb.addEventListener("disconnect", (event) => {
             if (generation !== state.generation) return;
-            state.connecting = state.screenReady = state.attached = state.controller = state.pendingControl = false;
-            state.rfb = null;
-            state.channel = null;
-            renderAuthority();
+            // noVNC can emit disconnect before its WebSocket has closed.
+            // Preserve that close barrier and invalidate outstanding callbacks
+            // before allowing an explicit replacement attachment.
+            detachScreen();
             if (!state.closed && !event.detail.clean) showMessage("The screen disconnected unexpectedly; remote browser state is unknown. Refresh status, then reconnect explicitly. Input is never replayed.");
         });
         rfb.addEventListener("securityfailure", () => {
@@ -243,16 +269,19 @@ function connectScreen() {
             byId("copy-clipboard").disabled = !text;
         });
     } catch {
+        if (generation !== state.generation || state.closed) return;
         detachScreen();
-        showMessage("The embedded noVNC viewer could not initialize. Remote browser state is unknown; no local Chrome was started.");
+        showMessage("The screen could not reconnect or initialize. Remote Chrome may still be running; refresh status and use Reconnect screen again. Input is never replayed.");
     }
 }
 
 async function refreshStatus() {
     if (!state.session || state.closed || state.refreshing) return;
     state.refreshing = true;
+    const generation = state.generation;
     try {
         const status = await api("status");
+        if (state.closed || generation !== state.generation) return;
         const details = [`State: ${status.state || "unknown"}`, `Attachments: ${status.attachments || 0}`, `Chrome: ${status.chrome_version || "unknown"}`];
         if (status.restart_required) details.push("Configuration changed: remote restart required (not automatic)");
         if (status.reason) details.push(`Reason: ${status.reason}`);
@@ -262,12 +291,11 @@ async function refreshStatus() {
         // input. A status request must never silently grant this page control.
         if (!state.attached) state.revision = status.control_revision || "";
         if (state.instance && status.instance_id && state.instance !== status.instance_id) {
-            state.controller = false;
-            renderAuthority();
+            detachScreen();
             showMessage("The managed browser instance changed. Reconnect the screen explicitly; no input will be replayed.");
         }
     } catch (error) {
-        byId("remote-status").textContent = `Remote browser status: unknown. ${error.message}`;
+        if (!state.closed && generation === state.generation) byId("remote-status").textContent = `Remote browser status: unknown. ${error.message}`;
     } finally { state.refreshing = false; }
 }
 
@@ -277,15 +305,20 @@ byId("resize-session").addEventListener("change", renderAuthority);
 byId("take-control").addEventListener("click", async () => {
     if (!state.screenReady || !state.canControl || state.controller || state.pendingControl) return;
     const expected = state.revision;
+    const generation = state.generation;
     const description = state.controllerId ? "The current controller will become read-only." : "No viewer will be promoted automatically.";
     if (!window.confirm(`Take control of this remote browser? ${description}\nExpected control revision: ${expected}`)) return;
     state.pendingControl = true;
     renderAuthority();
     try {
         await api("control", {method: "POST", json: {revision: expected}});
-        showMessage("Takeover accepted. Input is enabled only when the server stream confirms this attachment is the controller.", true);
+        if (state.closed || generation !== state.generation) return;
+        showMessage(state.controller
+            ? "You control this remote browser. Click inside the screen to use the mouse and keyboard."
+            : "Takeover accepted; waiting for the screen to confirm control. If the screen stays unresponsive, use Reconnect screen and take control again.", true);
         refreshStatus();
     } catch (error) {
+        if (state.closed || generation !== state.generation) return;
         state.pendingControl = false;
         renderAuthority();
         showMessage(error.message);
@@ -449,8 +482,10 @@ window.addEventListener("unhandledrejection", () => {
         state.csrf = session.csrf;
         byId("scope").textContent = `Server: ${session.server} · Profile: ${session.profile}`;
         byId("file-limit").textContent = `Configured file limit: ${session.maxFileBytes} bytes per file; one active transfer per viewer. Downloads are temporarily spooled in the private client plugin state and deleted when the request finishes.`;
-        await refreshStatus();
+        // Status is useful diagnostics, not a prerequisite for attaching.
+        // Start both so one slow status request cannot delay the screen.
         connectScreen();
+        refreshStatus();
         state.statusTimer = window.setInterval(() => { if (!document.hidden) refreshStatus(); }, 10000);
         window.setTimeout(() => {
             state.closed = true;

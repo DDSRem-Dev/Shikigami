@@ -137,7 +137,7 @@ func Open(parent context.Context, options Options) (*Node, error) {
 		defer close(n.started)
 		n.opMu.Lock()
 		defer n.opMu.Unlock()
-		_ = n.startLocked(nil)
+		_ = n.startLocked(nil, nil)
 	}()
 	context.AfterFunc(parent, func() { _ = n.Close() })
 	return n, nil
@@ -145,7 +145,7 @@ func Open(parent context.Context, options Options) (*Node, error) {
 func (n *Node) InstanceID() string { return n.instance }
 
 // startLocked requires opMu. All SDK fields are immutable after Start.
-func (n *Node) startLocked(attempt *loginAttempt) error {
+func (n *Node) startLocked(attempt *loginAttempt, authKey []byte) error {
 	if n.ctx.Err() != nil {
 		return n.ctx.Err()
 	}
@@ -160,7 +160,11 @@ func (n *Node) startLocked(attempt *loginAttempt) error {
 	}
 	generation := n.generation
 	n.mu.Unlock()
-	server := &tsnet.Server{Dir: n.options.StateDir, Hostname: n.options.Hostname, ControlURL: n.options.ControlURL, Store: &stateStore{n.state}, Logf: logger.Discard, UserLogf: logger.Discard}
+	// tsnet.Start may begin registration before returning. Supply an explicit
+	// one-time key before startup, otherwise the empty-key registration can be
+	// rejected and incorrectly finish this new attempt before LocalAPI Start.
+	// It is supplied only in memory, never through persisted preferences.
+	server := &tsnet.Server{Dir: n.options.StateDir, Hostname: n.options.Hostname, ControlURL: n.options.ControlURL, AuthKey: string(authKey), Store: &stateStore{n.state}, Logf: logger.Discard, UserLogf: logger.Discard}
 	if err := server.Start(); err != nil {
 		n.setGenerationFailure(generation, "NODE_START_FAILED")
 		return connect.NewError(connect.CodeFailedPrecondition, "NODE_START_FAILED")

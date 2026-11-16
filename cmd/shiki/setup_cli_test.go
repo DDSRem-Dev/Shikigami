@@ -57,3 +57,13 @@ func TestSetupHelpAndInvalidComponentsNeedNoInstalledAgent(t *testing.T) {
 		t.Fatal("invalid selection reached agent or system state", err)
 	}
 }
+
+func TestSetupRejectsPortOnlyAddressBeforeConnecting(t *testing.T) {
+	var output bytes.Buffer
+	root := newRoot(nil, &output, &output)
+	root.SetArgs([]string{"--config", "/does/not/exist", "setup", "--tailscale-address", "9527"})
+	err := root.Execute()
+	if err == nil || !strings.Contains(err.Error(), "not a port number") || output.Len() != 0 {
+		t.Fatal("invalid address reached terminal or agent", err, output.String())
+	}
+}

@@ -34,11 +34,11 @@ func (w *setupWizard) browser(ctx context.Context, server string) error {
 			return err
 		}
 		if status.State != "running" {
-			answer, err := w.prompt(ctx, "Start this saved browser profile? yes/no", "yes")
+			answer, err := w.confirm(ctx, "Start this saved browser profile?", true)
 			if err != nil {
 				return err
 			}
-			if answer != "yes" {
+			if !answer {
 				fmt.Fprintln(w.out, "Saved profile retained; browser start remains pending.")
 				return nil
 			}
@@ -46,11 +46,11 @@ func (w *setupWizard) browser(ctx context.Context, server string) error {
 		}
 		return w.openBrowser(ctx, server, id)
 	}
-	answer, err := w.prompt(ctx, "Create a persistent browser profile named work, start Chrome and open its local viewer? yes/no", "yes")
+	answer, err := w.confirm(ctx, "Create a persistent browser profile named work, start Chrome and open its local viewer?", true)
 	if err != nil {
 		return err
 	}
-	if answer != "yes" {
+	if !answer {
 		fmt.Fprintln(w.out, "Browser plugins enabled; no profile started or viewer verified.")
 		return nil
 	}
@@ -83,7 +83,7 @@ func (w *setupWizard) openBrowser(ctx context.Context, server, id string) error 
 	if err := w.backend.run(ctx, true, "--server", server, "browser", "open", id, "--read-only=false", "--launch"); err != nil {
 		return fmt.Errorf("Chrome started, but local viewer opening failed: %w", err)
 	}
-	fmt.Fprintln(w.out, "Use Take control in the viewer to type. Website/Claude login is completed by you in that remote browser. Closing the viewer leaves Chrome running; automatic boot startup is not enabled.")
+	fmt.Fprintln(w.out, "In the viewer, click Take control and wait for Controller before clicking or typing. Website/Claude login is completed by you in that remote browser. Closing the viewer leaves Chrome running; automatic boot startup is not enabled.")
 	return nil
 }
 

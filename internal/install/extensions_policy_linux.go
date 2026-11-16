@@ -204,7 +204,7 @@ func (n *Native) removeRegionSupport(ctx context.Context, plan Plan, uid int) er
 				return errors.New("region recovery components are incomplete; refusing to remove them without trusted helper status")
 			}
 		}
-		return nil
+		return removeRegionDaemonPolicy(uid)
 	}
 	if err != nil {
 		return err
@@ -241,6 +241,9 @@ func (n *Native) removeRegionSupport(ctx context.Context, plan Plan, uid int) er
 		return errors.New("unrecognized region guard unit; recovery components preserved")
 	}
 	if err = run(ctx, plan, false, "/usr/bin/systemctl", "disable", "--now", RegionGuardUnit); err != nil {
+		return err
+	}
+	if err = removeRegionDaemonPolicy(uid); err != nil {
 		return err
 	}
 	if err = os.Remove(unit); err != nil {

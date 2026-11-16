@@ -249,3 +249,143 @@ func TestFailedInteractiveRecoveryRetiresAuthorizedSDK(t *testing.T) {
 		})
 	}
 }
+
+func TestAuthKeyLoginAdoptsStartupRegistration(t *testing.T) {
+	for _, mode := range []string{"registering", "new-identity", "cached-identity", "pending-url"} {
+		t.Run(mode, func(t *testing.T) {
+			n := newLoginReuseNode(t)
+			attempt := &loginAttempt{previousKey: n.selfKey}
+			n.attempt = attempt
+			observed := &ipnstate.Status{BackendState: "NeedsLogin"}
+			if mode != "registering" {
+				observed.BackendState = "Running"
+				observed.Self = &ipnstate.PeerStatus{PublicKey: n.selfKey}
+			}
+			if mode == "new-identity" {
+				observed.Self.PublicKey = key.NewNode().Public()
+			}
+			if mode == "pending-url" {
+				observed.AuthURL = "https://control.invalid/login/pending"
+			}
+			encoded, err := json.Marshal(observed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			posts := 0
+			lc := &local.Client{OmitAuth: true, Transport: peerStatusTransport(func(request *http.Request) (*http.Response, error) {
+				if request.Method == http.MethodPost {
+					posts++
+					if request.URL.Path != "/localapi/v0/login-interactive" {
+						t.Errorf("unexpected duplicate SDK start: %s", request.URL.Path)
+					}
+					return &http.Response{StatusCode: http.StatusNoContent, Header: make(http.Header), Body: http.NoBody, Request: request}, nil
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(encoded)), Request: request}, nil
+			})}
+			if err := n.requestLogin(t.Context(), lc, attempt, []byte("fixture-key")); err != nil {
+				t.Fatal(err)
+			}
+			want := 0
+			if mode == "cached-identity" {
+				want = 1
+			}
+			if posts != want || !attempt.loginStarted {
+				t.Fatalf("registration posts=%d, want=%d; started=%v", posts, want, attempt.loginStarted)
+			}
+		})
+	}
+}
+
+func TestAuthKeyLoginWaitsForRestoredIdentity(t *testing.T) {
+	for _, mode := range []string{"old-identity", "new-identity", "deadline"} {
+		t.Run(mode, func(t *testing.T) {
+			n := newLoginReuseNode(t)
+			attempt := &loginAttempt{previousKey: n.selfKey}
+			n.attempt = attempt
+			reads, posts := 0, 0
+			lc := &local.Client{OmitAuth: true, Transport: peerStatusTransport(func(request *http.Request) (*http.Response, error) {
+				if request.Method == http.MethodPost {
+					posts++
+					if request.URL.Path != "/localapi/v0/login-interactive" || reads < 3 {
+						t.Error("registration restarted before restored identity was known")
+					}
+					return &http.Response{StatusCode: http.StatusNoContent, Header: make(http.Header), Body: http.NoBody, Request: request}, nil
+				}
+				reads++
+				observed := &ipnstate.Status{BackendState: "NoState"}
+				if reads > 1 {
+					observed.BackendState = "Starting"
+				}
+				if reads > 2 && mode != "deadline" {
+					observed.BackendState = "Running"
+					observed.Self = &ipnstate.PeerStatus{PublicKey: n.selfKey}
+					if mode == "new-identity" {
+						observed.Self.PublicKey = key.NewNode().Public()
+					}
+				}
+				encoded, err := json.Marshal(observed)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(encoded)), Request: request}, nil
+			})}
+			budget := time.Second
+			if mode == "deadline" {
+				budget = 100 * time.Millisecond
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), budget)
+			defer cancel()
+			err := n.requestLogin(ctx, lc, attempt, []byte("fixture-key"))
+			if mode == "deadline" {
+				if !errors.Is(err, context.DeadlineExceeded) || posts != 0 || attempt.loginStarted {
+					t.Fatal("ambiguous startup did not preserve deadline without restarting registration", err)
+				}
+				return
+			}
+			wantPosts := 0
+			if mode == "old-identity" {
+				wantPosts = 1
+			}
+			if err != nil || reads != 3 || posts != wantPosts || !attempt.loginStarted {
+				t.Fatalf("reads=%d posts=%d want=%d started=%v err=%v", reads, posts, wantPosts, attempt.loginStarted, err)
+			}
+		})
+	}
+}
+
+func TestAuthKeyRecoveryRotatesRestoredIdentity(t *testing.T) {
+	control := localControl(t, false, "fixture-key")
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	n := newTestNode(t, ctx, control, "key-recovery")
+	<-n.started
+	if _, err := n.beginLogin(&apb.BeginLoginRequest{RequestId: "first", Method: &apb.BeginLoginRequest_AuthKey{AuthKey: []byte("fixture-key")}}); err != nil {
+		t.Fatal(err)
+	}
+	awaitState(t, n, func(s *apb.NodeStatus) bool { return s.State == "online" })
+	// Freeze status publication while admitting explicit recovery from an
+	// offline diagnostic state. The following SDK restart and control server
+	// registration are real and retain the previously persisted identity.
+	n.opMu.Lock()
+	release, err := n.acquireStatusPermit(ctx)
+	if err != nil {
+		n.opMu.Unlock()
+		t.Fatal(err)
+	}
+	n.mu.Lock()
+	oldKey := n.selfKey
+	n.status = &apb.NodeStatus{State: "offline", ReasonCode: "NODE_CONTROL_UNAVAILABLE"}
+	n.mu.Unlock()
+	_, err = n.beginLogin(&apb.BeginLoginRequest{RequestId: "recover-key", Method: &apb.BeginLoginRequest_AuthKey{AuthKey: []byte("fixture-key")}})
+	release()
+	n.opMu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	awaitState(t, n, func(s *apb.NodeStatus) bool { return s.State == "online" })
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.selfKey == oldKey || n.selfKey.IsZero() || !n.attempt.finished {
+		t.Fatal("auth-key recovery accepted an old cached identity")
+	}
+}

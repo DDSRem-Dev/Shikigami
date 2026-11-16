@@ -69,3 +69,11 @@ alpha.4 曾因公共目录被 `umask 077` 限制而出现 `203/EXEC Permission d
 systemd/LaunchAgent 存活、节点 online 或 doctor 输出均不单独代表应用 ready。Claude 未授权时先交付连接凭据解除“需要浏览器登录，却必须先登录才能连接”的引导循环，状态仍为 pending。
 
 本地隔离测试不访问真实账号，不安装宿主包，不修改用户系统服务。公开发行和资产验证见[15](15-implementation-status.md)；真实 VPS/Mac 向导首装、官方 Claude 登录、物理重启及公开包完整服务升级/回滚仍单列外部门槛。11/27 的签名、普通 UID、权限、revision、取消和就绪要求保持，细分命令继续用于高级配置和故障处理。
+
+## alpha.6 源码改进（发行前不替代上方公开入口）
+
+客户端把服务器标签与地址分开提示，纯端口号会被拒绝并重新询问；已保存地址会显示，可用`shiki setup --server <标签> --tailscale-address <IP或主机名>`显式修正，保留凭据和身份pin。确认支持y/yes/n/no；Token提示说明不回显、Enter提交和Ctrl+C取消。控制面暂时离线不会要求重新授权或误换Token。
+
+快速安装批准计划后，仅移除所选普通用户真实home目录的组/其他用户写位，保留已有读/执行位及全部子文件；不更改所有者。受保护shell启动文件逐个保留和报告，其他安全文件仍可写入PATH块。显式安装region支持会写入受管daemon专用NoNewPrivileges=false drop-in，使既有六动作sudo授权可以执行；core-only仍保持true。若运行daemon仍继承旧限制，仅重启daemon，独立tmux/Claude/Chrome保持运行。
+
+查看器显示Controller后才能操作。画面冻结时可以显式点击Reconnect screen，新连接仍从只读开始，需要重新Take control；不会重放此前鼠标/键盘输入。部署与实测结果见[29](29-alpha6-installation-followup.md)。

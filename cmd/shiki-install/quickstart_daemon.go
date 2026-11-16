@@ -37,6 +37,13 @@ func quickstartDaemon(ctx context.Context, o quickstartOptions, tty *os.File, ou
 	if account.Uid == "0" {
 		return 2, errors.New("daemon runtime account cannot be root")
 	}
+	homeUID, err := strconv.ParseUint(account.Uid, 10, 32)
+	if err != nil {
+		return 1, err
+	}
+	if err = quickstartSecureHome(account.HomeDir, uint32(homeUID)); err != nil {
+		return 1, err
+	}
 	plan := install.Plan{Role: "daemon", User: o.User, Claude: filepath.Join(account.HomeDir, ".local", "bin", "claude"), Port: 9527}
 	prefix := ""
 	if err = defaults(&plan, &prefix); err != nil {

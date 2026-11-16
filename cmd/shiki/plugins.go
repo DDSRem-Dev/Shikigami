@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"connectrpc.com/connect/v2"
 	"github.com/DDSRem-Dev/Shikigami/internal/client"
 	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
 	apb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/agent"
@@ -248,6 +249,9 @@ func waitForPlugin(ctx context.Context, status *pb.PluginStatus, refresh func(co
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	for {
+		if err := ctx.Err(); err != nil {
+			return status, fmt.Errorf("plugin change was accepted but completion was not confirmed: %w", err)
+		}
 		if status.Revision != revision {
 			return status, errors.New("plugin changed while waiting; inspect its current status")
 		}
@@ -270,6 +274,16 @@ func waitForPlugin(ctx context.Context, status *pb.PluginStatus, refresh func(co
 		}
 		next, e := refresh(ctx)
 		if e != nil {
+			if err := ctx.Err(); err != nil {
+				return status, fmt.Errorf("plugin change was accepted but completion was not confirmed: %w", err)
+			}
+			// The mutation was already accepted. A lost or timed-out status
+			// response does not undo it: retry only this read within the same
+			// wait budget, never submit ManagePlugin again. Trust, admission,
+			// revision and other business failures remain terminal.
+			if code := connect.CodeOf(e); code == connect.CodeUnavailable || code == connect.CodeDeadlineExceeded {
+				continue
+			}
 			return status, e
 		}
 		status = next

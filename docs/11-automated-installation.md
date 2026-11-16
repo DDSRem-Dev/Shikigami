@@ -334,3 +334,7 @@ systemd 的 `WorkingDirectory` 使用规范 `~`（按 `User=` 或用户 manager 
 已有持久卷二次PID1启动、CLI auto_start关闭且服务先于CLI/probe出现、身份/资源/业务恢复证据见[二次启动](15-implementation-status.md#evidence-service-boot-validation)；原生当前GUI域LaunchAgent bootstrap、崩溃恢复、升级回滚与清理见[LaunchAgent](15-implementation-status.md#evidence-launchd-validation)，公开包维护及五平台证据见24/26。先复用这些已完成范围，新增重点是保留官方tsnet身份穿过真实安装器和专用服务管理流程；原手动进程替换不能当该组合已完成。若标准服务名称与用户既有安装冲突，改在清洁原生CI或隔离环境完成相应环节，记录其外部身份覆盖边界，不覆盖用户服务。
 
 上述替代组合现已实际完成，证据及失败边界见[24终态](24-public-package-compatibility.md#installer-final-20261031)，据此关闭安装器/服务与升级回滚/卸载两项；Mac和VPS均未重启或注销。以下为制定方案时的判定原则：替代组合实际通过且其他条件齐备后，按其覆盖关闭对应功能门槛；真实设备重启继续作为未实测支持边界，不再无限等待用户提供该操作。其余Tailscale认证和生产资源归因不由此免除；真实Claude登录/推理按用户后续明确要求移出交付验收，见[验收范围](#claude-acceptance-scope-20261031)；制定方案本身不增加勾选；本轮仅在实际组合通过后勾选原两条，不改42条文字，也不更改生产状态枚举、协议或自动启动行为。
+
+### alpha.6 region daemon运行策略补修
+
+显式region系统支持计划包含受管daemon专用`50-shikigami-region.conf`（NoNewPrivileges=false），仅匹配已安装受管服务的普通UID，保留六动作sudoers白名单。core默认服务仍NoNewPrivileges=true。daemon-reload不能改变已有进程继承标志，故若/proc仍报告NoNewPrivs=1，批准setup有条件仅重启daemon；不重启独立Chrome/tmux/Claude。固定drop-in被修改或其他管理员策略冲突时保留并明确失败；卸载只删除内容精确匹配的受管文件。当前发行/部署证据见08/15/16及29。

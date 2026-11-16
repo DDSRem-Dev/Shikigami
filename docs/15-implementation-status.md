@@ -1,6 +1,59 @@
 # 实施与验收记录
 
+## alpha.6 安装问题统一修复（2026-11-16，源码验证完成，公开CI待验）
+
+用户授权发布alpha.6并升级VPS/Mac后清理Shikigami开发产物，明确保留agent-remote。完整问题表与清理边界见[29 安装问题跟进](29-alpha6-installation-followup.md)。本批覆盖：地址/标签与端口输入校验、原地纠正和保留pin的地址修正；y/yes/n/no与秘密输入说明/PTY取消恢复；控制面离线不重新发起登录且不误换Token；准确的启动失败阶段；受保护shell文件逐个处理与批准后仅修正准确home写权限；显式region支持的受管daemon策略及有条件daemon-only重启；插件修改只读状态恢复；短探测不误杀共享流、仅同一成功在途检查合并；浏览器显式重连与旧代回调隔离、独立启动状态/画面。
+
+本地证据：引导/地址/PTY专项race三轮7.188s，最终3.731s，节点授权/Token区分三项十轮1.617s；连接池agent整包race63.943s、architecture1.626s；浏览器实际JS行为10/10通过，原HEAD首批6/6失败，真实loopback重连20次×20轮race通过、client整包race1.902s；安装器Mac两包race3.742s/10.697s，Linux arm64测试在隔离Debian12容器实际执行通过。相关vet/actionlint/diff检查通过，最终组合复验另记，不外推公网稳定性。
+
+七类复核：目录及SDK/host/plugin依赖保持；RPC、权限和能力未扩展，region仍仅已批准六动作sudo，core NoNewPrivileges=true；证明仅内存，持久identity/revision/去重不变；原截止/取消和进程归属保持，屏幕重连不自动接管；文件/终端/网络限额保持，home不递归修改，秘密不输出；CLI与安装计划明示可操作错误及变更，签名旧版本不覆盖；原红新绿、本地/容器结果与公开CI、部署、外部网络门槛分开。
+
+补充全量回归发现：首次 `make test` 在Unix socket发布与一次性auth key登录两项失败，其余已执行包通过。Mac默认大小写不敏感文件系统上，临时socket名可能与公开名仅大小写不同，现绑定前排除别名并新增确定性回归；connection整包race三轮4.971s通过。tsnet启动会自行注册，原实现晚传auth key可把空key注册拒绝归入新登录（旧实现十轮六次失败）；现于SDK启动前仅内存传入key，复用已有新注册，仅缓存旧身份仍Running时明确请求注册。node整包race73.473s、key注册/持久秘密检查及四种启动状态十轮10.562s通过。未延长deadline或跳过身份验证。查看器原生disconnect亦等待旧attachment有界关闭，最终JS行为10/10通过。最终完整复验与公开CI另记。
+
+完整本地 `make test` 复验通过：106项Python工具测试、10项查看器行为测试、全部Go race包和两组发行工具测试；其中hostrotation218.350s、插件跨进程集成65.296s。随后独立复核补齐auth key恢复中SDK处于NoState/Starting的分支，在原5秒调用预算内等待状态明确，避免接收旧身份为新登录或盲目重复注册；实际SDK身份轮换及状态/截止专项race最终三轮9.204s通过；旧逻辑overlay下三种延迟启动回归失败，真实SDK虽Running但应用15秒后仍authenticating，临时overlay已清理。正式控制面的单次key消费语义仍按SDK契约，未为本批在用户节点上重登或重置身份；最终node整包race复验74.538s通过。`make lint`、actionlint、diff检查通过。
+
+- [x] 已确认问题汇总与源码回归覆盖（29记录）。
+- [ ] alpha.6固定源完整CI、签名公开发行与资产验证。
+- [ ] 两端签名升级、稳定性复验与开发产物清理。
+
+
+## alpha.5 实机连接波动跟进（2026-11-16，本地源码验证及 Mac 热修复试用，公网故障仍复现）
+
+用户已完成 VPS 密钥环登记/解锁、Tailscale 授权、Mac 配对及 sync/port/region/browser 向导，真实远程 Chrome `work` 画面已出现；Claude 账号登录和物理重启没有新增验收证据。Mac 主目录原0775导致插件目录祖先检查失败，现场仅移除主目录组写权限后本地插件ready；VPS daemon 的 `NoNewPrivileges=true` 与region固定sudo helper冲突，用户应用独立systemd覆盖后region/browser ready。这两项现场修复不等于alpha.5安装器已自动处理，后续安装诊断/权限策略仍需单列修复，禁止绕过插件目录或sudo白名单校验。
+
+连接故障现场：正式alpha.5查看器状态曾200 → 约5002ms的504 → 200 → 503并断屏；用户确认未启用代理/VPN。临时诊断agent仅在私有临时目录构建，记录故障分类而不记录Token、URL或原始错误；2026-11-16T10:31:26.644Z及10:31:31.646Z连续本地身份探测超时，紧接10:31:31.646Z的共享流取消，bad=true、pool_canceled=true，随后新路线探测也超时。证明两次5秒探测会放大链路慢响应为共享流终止，不证明底层网络为何慢，也不能归因于中继或VPS资源不足。该轮临时agent已退出并恢复正式LaunchAgent；再次通过RPC确认原`work`实例仍running。随后本机切换热修复试用，见下段；正式发布包和签名未改动。
+
+本批修复目标：保留每次新RPC的身份复核、原请求deadline和信任失败立即撤销；完整探测超时需至少两次、且从首次观察到完整超时开始的持续失败窗口达到30秒，才替换共享池。成功身份协商清除窗口；在后续失败检查中观察到已认证Receive进展会重置窗口，静默流不因两次短慢探测立即断开，真正持续无进展仍有界恢复。CLI仅在插件修改已接受之后，对临时Unavailable/DeadlineExceeded继续查询同一revision，保持原等待截止，不重放修改、输入或控制权接管。
+
+验证状态：CLI真实UDS回归确认两次临时查询失败后成功且配置修改只提交一次，覆盖永久错误、revision变化和取消/截止；专项race三次通过。连接池真实HTTP/2专项race通过（49.734s）；首轮整包race的CLI（46.675s）和architecture（1.365s）通过，agent的runtime夹具因误用真实用户plugins_dir而失败，现将其隔离到夹具私有目录，保留首次失败并重跑agent整包；go vet和diff检查通过。agent整包race复验通过（62.594s），七类架构复核完成；修复尚未公开发布；已在用户 Mac 以独立路径运行本地 agent 热修复，但后续实测仍复现故障，不宣称公网稳定通过。
+
+实机热修复试用：2026-11-16T10:48Z 构建 `local-hotfix-7ad65ab3765e`（基于4462f1f及本批未提交补丁；Version仍为alpha.5以匹配内置插件，Commit明确标为本地构建）。二进制、构建记录、原LaunchAgent备份与回退脚本保存在用户私有hotfix目录；只原子替换LaunchAgent程序路径并保留安装器managed标记，没有覆盖签名release/current或用户CLI链接。新agent及local sync/port/browser均ready，真实VPS Chrome保持原实例。CLI修复二进制也已构建，但用户默认CLI链接仍是正式alpha.5。
+
+真实查看器失败保留：首轮观察中状态查询失败但画面暂留Connected，约62秒状态恢复、95秒控制权由远端流确认，随后点击空白/滚动未观察到画面响应；约146秒仍断开。Connected标签不证明帧仍在到达，不能将本轮计为鼠标或稳定性验收通过。局部修复没有消除全部故障；继续用不含Token/URL/请求头的时序诊断区分探测排队、传输与服务端响应。现场原始观察记录保存在私有 `live-observation-1.json`。
+
+后续隔离诊断：同一补丁加临时HTTP trace的agent记录请求写出通常0ms、首响应约2–4秒或5秒探测超时，path查询0ms；一轮54次探测43次成功、11次未完成，该区间没有池主动失效。诊断v4额外区分浏览器方法和TSMP，专项race50.011s通过；但重启后节点成为 `offline/NODE_CONTROL_UNAVAILABLE`，未获得有效TSMP对照，不能计通过。Mac无代理环境变量，系统HTTP/HTTPS/SOCKS/PAC开关均0；直接HTTPS访问controlplane.tailscale.com与github.com均在TLS握手报SSL_ERROR_SYSCALL（约7.03s/6.30s），显式--noproxy的控制面复查也失败（5.13s）。这是当前Mac至外部服务的连接失败证据，不证明具体ISP/NAT/中继或VPS故障，也不把它等同于先前全部断线的根因。
+
+临时诊断已停止，LaunchAgent恢复为独立路径的无诊断热修复；原签名发行物、配置、Token及远程Chrome未被重置。当时建议用户切换Mac网络做同条件对照；后续用户要求保留网络复测，见下段。不能宣称安装重跑或加长超时能解决问题。
+
+同网复测（2026-11-16T12:28–12:34Z，用户暂不切换网络）：无重装/凭据重置时，原热修复agent节点已online；显式无代理HTTPS检查恢复，控制面302/1.238s、GitHub200/0.726s。初次新查看器仍断屏，状态200/503交替。随后临时v4诊断复测中，TSMP成功12次（120–852ms）、超时1次、取消2次（取消不计通过）；同一时期身份探测及GetBrowserStatus仍出现deadline，不能用节点可达排除TCP丢包/队头阻塞，也不能据此断言服务端处理阻塞。
+
+第二个查看器在181秒DOM观察中保持Connected，期间23次状态/控制HTTP请求有5次非200；控制请求200且流确认Controller，鼠标滚动后约11.1秒观察到实际画面变化。该窗口未出现主动池撤销引发的屏幕断开，最终BrowserStream取消来自明确关闭查看器；不把这次局部改善覆盖初次失败或声称长期稳定。VPS单次采样CPU18.7%、已用内存1715.7MiB、最小磁盘空闲35340.2MiB；不能据此推断全部资源或I/O健康。隔离诊断停止并恢复无诊断热修复，证据为私有 `retest-trace.json` 与 `retest-browser-observation.json`。本轮仅补充实测与文档，七类复核确认生产源码/协议/权限/持久身份未新增变更，已有签名发行物不变；精确根因及完整稳定性仍待验证，换网不是继续排查的前置要求。
+
 <a id="evidence-public-alpha5-release-20261116"></a>
+### 并发探测与启动诊断补修（2026-11-16）
+
+同一服务器代际的并发调用现在仅共享其实际等待的成功身份探测；复用要求相同池、相同完成门、完整持久记录及凭据revision一致，任何后续探测均清除旧证明，失败不形成缓存。后续独立调用仍探测，每个业务RPC仍鉴权，原deadline、信任失败立即停止及禁止重放保持。CLI启动读取失败增加本地服务器/映射、远端项目/会话阶段说明，用%w保留错误码、取消及结构化诊断。
+
+真实HTTP/2并发/后续独立探测、旧成功被新失败替代、凭据更新和等待者取消专项race三轮通过（5.057s）；agent整包race63.943s、architecture1.626s通过；CLI真实PTY/UDS启动错误及现有首次运行/会话专项race2.110s通过；agent/CLI vet通过。七类复核：依赖和SDK/host/plugin归属未改变；RPC/权限/能力未扩展；复用证明仅内存态，持久身份/原子性/revision/去重保持；不新增后台任务或延长取消；文件/终端/网络限额保持；CLI仅增强错误上下文，签名发行布局不改；本地测试不替代外部稳定性或公开CI，原现场失败继续保留。
+
+用户授权SSH诊断后实际登录VPS：daemon active/running，NRestarts=0，NoNewPrivileges=no；三次vmstat采样无blocked进程、无swap、wa/st均0，采样CPU idle96–99%。这些短采样不能排除间歇性I/O/网络问题。SSH首次握手超时、两次认证阶段连接关闭，随后只读命令成功；不将连接关闭误判为密码错误或已经确定的Shikigami根因。真实交互稳定性仍待复验。
+
+
+本批后续实机证据：新本地构建 `local-hotfix-ec0873d4a3e0` 已在 `~/.local/share/shiki/hotfixes/coalescing-20261116T135216Z/` 保存源码补丁、构建摘要、上一版LaunchAgent/CLI链接及回退脚本；已切换Mac agent与默认CLI链接，未改签名release/current目录。CLI整包race47.204s通过。重启后节点短暂offline随后online；五次默认期限项目查询仍全部Unavailable（4.972/2.523/2.519/2.525/2.524s），之后真实PTY裸命令成功进入“Create a new remote project / Project:”提示并主动Ctrl+C退出，未创建项目/映射。浏览器open仍返回Unavailable，未获得可验的查看器，不计浏览器通过。
+
+独立SSH对照：三个已有SSH连接上的true命令分别超过8s、超过8s和3.925s成功；后续只读状态命令8.004s完成。用SSH_CONNECTION确认所测TCP连接，服务器ss记录其累计重传34次、bytes_retrans9368、rtt847.39ms、rto14916ms（并非丢包率或逐包根因）。20秒有界strace仅统计flock/fsync/fdatasync：34次flock、无syscall错误、未观察到fsync；汇总CPU计时不是锁等待时长。daemon持续active、I/O压力avg10/60/300为0。证明额外SSH路径也出现慢响应与重传，不确定具体ISP/NAT/主机网络段，不将这些短采样推导为Shikigami已修复或所有延迟都来自同一根因。新热修复尚未提交/推送/发布，当前公网稳定性仍PENDING。
+
+
 ## alpha.4 实机安装反馈修复（2026-11-16，本地与公开发行验证完成）
 
 固定源 `21fcb5dc1406c7e47d8d12584110433aeaa773d2` 的 [CI43814011028](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43814011028) 已57/57通过，无失败或跳过job。不可变 `v0.0.1-alpha.5` 的 [Release43819036138](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43819036138) 首次运行成功：60项成功，Homebrew复用分支按契约跳过1项（不计通过；源CI四目标Homebrew均通过）。2026-11-16T07:41:05Z公开，draft=false、prerelease=true；23资产、四目标签名/摘要/来源/成员、公开macOS arm64提示/版本/帮助/首次和重复暂存均验证通过。自动Formula提交 `62df599ad717541e4050f921347597d097567a07` 与从已验签资产重新生成的公式一致。

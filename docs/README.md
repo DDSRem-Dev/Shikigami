@@ -1,5 +1,7 @@
 # Shikigami 设计文档导航
 
+**alpha.6 修复跟进：** 安装反馈完整清单、连接故障证据、两端升级与开发文件清理状态见[29](29-alpha6-installation-followup.md)。尚未发布时不使用未来版本下载地址。
+
 **一键体验（2026-11-16）：** alpha.4 实机反馈的终端确认、静默长操作和权限问题由 alpha.5 修复；VPS/Mac 命令、配置和插件说明见 [28 一键安装与首次使用](28-quickstart.md)，当前发行验证状态见[15](15-implementation-status.md)。用户 VPS 已到达并报告安装故障，不把这些步骤当作完整首装、账号和物理重启验收。
 
 **状态：当前源码 Phase 0–5 验收清单已闭环（42/42）。** [当前支持声明](18-release-readiness.md#current-support)统一功能、平台、证据和未支持范围；[08 路线图](08-roadmap.md)、[15 实施记录](15-implementation-status.md)与[16 架构复核](16-architecture-conformance.md)记录关闭依据。认证生命周期和长稳、资源与性能按用户确认通过；真实 Claude 登录/推理、物理主机重启及生产 heap/object 归因仍保留未实测边界。当前公开安装入口为 v0.0.1-alpha.5，不是beta或稳定版。00–14保留设计契约，不能仅凭示例认定功能已通过所有平台验收。

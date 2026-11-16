@@ -109,3 +109,7 @@ shiki --server my-vps browser diagnose jp-work
 | 原生平台 | 在Ubuntu24.04/Debian12的amd64/arm64与macOS/Linux/WSL2实际客户端运行安装、查看器、输入法、文件、断线/重连；记录精确包版本与架构 | 本批容器amd64和交叉编译证据不扩大为ARM/macOS/WSL2运行通过 |
 | 真实网络观察 | 用户自行确认出口及供应商授权后，分别查看主机、目标Chrome与权威DNS/HTTPS观察结果；不把解析器注册国当作出口国 | 隔离DNS/TLS夹具不代表公网地区、信誉或服务资格 |
 | 公开包完整部署 | 先独立验签，再在可恢复环境执行服务安装/升级/回滚 | alpha.3已公开，四目标资产及Linux amd64首次/重复暂存已验；本轮未重复公开包完整服务升级/回滚，不把私有包历史验收当作该公开包实测 |
+
+### alpha.6 region daemon运行策略补修
+
+显式region系统支持计划包含受管daemon专用`50-shikigami-region.conf`（NoNewPrivileges=false），仅匹配已安装受管服务的普通UID，保留六动作sudoers白名单。core默认服务仍NoNewPrivileges=true。daemon-reload不能改变已有进程继承标志，故若/proc仍报告NoNewPrivs=1，批准setup有条件仅重启daemon；不重启独立Chrome/tmux/Claude。固定drop-in被修改或其他管理员策略冲突时保留并明确失败；卸载只删除内容精确匹配的受管文件。当前发行/部署证据见08/15/16及29。

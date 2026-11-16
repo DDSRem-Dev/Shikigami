@@ -31,11 +31,11 @@ func (w *setupWizard) plugins(ctx context.Context, server, components string) er
 			args = append(args, "plugins", "--side", side)
 			status := new(pb.PluginStatus)
 			if err := w.backend.query(ctx, status, append(args, "status", id)...); err != nil {
-				return fmt.Errorf("%s %s plugin unavailable; finish the matching installer on that machine: %w", side, id, err)
+				return setupPluginFailure(side, id, err)
 			}
 			if !status.Enabled || status.State != "ready" {
 				if err := w.backend.run(ctx, false, append(args, "enable", id, "--expected-revision", status.Revision)...); err != nil {
-					return fmt.Errorf("%s %s plugin remains pending; for VPS region/browser prerequisites rerun the VPS quickstart installer: %w", side, id, err)
+					return setupPluginFailure(side, id, err)
 				}
 				if err := w.backend.query(ctx, status, append(args, "status", id)...); err != nil {
 					return err
@@ -76,11 +76,11 @@ func (w *setupWizard) ports(ctx context.Context, server string, existing bool) e
 	if err != nil {
 		return err
 	}
-	answer, err := w.prompt(ctx, "Replace the COMPLETE remote port configuration with this allowlist and defaults for all other options? yes/no", "no")
+	answer, err := w.confirm(ctx, "Replace the COMPLETE remote port configuration with this allowlist and defaults for all other options?", false)
 	if err != nil {
 		return err
 	}
-	if answer != "yes" {
+	if !answer {
 		fmt.Fprintln(w.out, "Port configuration preserved; no new forward configured.")
 		return nil
 	}
@@ -132,4 +132,12 @@ func setupJSONFile(value any, use func(string) error) error {
 		return err
 	}
 	return use(path)
+}
+
+func setupPluginFailure(side, id string, err error) error {
+	machine := "VPS"
+	if side == "local" {
+		machine = "Mac/client"
+	}
+	return fmt.Errorf("%s %s plugin remains pending; inspect shiki doctor; if worker or system support is missing, rerun the %s quickstart installer: %w", side, id, machine, err)
 }

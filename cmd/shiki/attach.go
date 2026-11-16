@@ -206,7 +206,7 @@ func (a *app) smart(ctx context.Context) error {
 	return a.withClient(ctx, true, func(c *client.Client) error {
 		servers, e := c.Agent().ListServers(ctx, &pb.Empty{})
 		if e != nil {
-			return e
+			return fmt.Errorf("load servers from the local agent: %w", e)
 		}
 		if len(servers.Servers) == 0 {
 			fmt.Fprintln(a.errorOutput, "Set up your first server.")
@@ -245,7 +245,7 @@ func (a *app) smart(ctx context.Context) error {
 		}
 		mappings, e := c.Agent().ListMappings(ctx, &apb.ListMappingsRequest{})
 		if e != nil {
-			return e
+			return fmt.Errorf("load directory mappings from the local agent: %w", e)
 		}
 		mapping, relative, e := client.MappingForDirectory(cwd, mappings.Mappings)
 		if e != nil {
@@ -288,7 +288,7 @@ func (a *app) smart(ctx context.Context) error {
 		if a.project != "" {
 			project, e := c.ResolveProject(ctx, server, a.project)
 			if e != nil {
-				return e
+				return fmt.Errorf("look up the remote project: %w", e)
 			}
 			if projectID != "" && projectID != project.Id {
 				mapping = nil
@@ -298,7 +298,7 @@ func (a *app) smart(ctx context.Context) error {
 		if projectID == "" {
 			list, e := c.Remote(server).ListProjects(ctx, &pb.ListProjectsRequest{})
 			if e != nil {
-				return e
+				return fmt.Errorf("list remote projects: %w", e)
 			}
 			verified, e := c.ResolveServer(ctx, server)
 			if e != nil {
@@ -358,7 +358,7 @@ func (a *app) smart(ctx context.Context) error {
 		}
 		sessions, e := c.Remote(server).ListProjectSessions(ctx, &pb.ListProjectSessionsRequest{ProjectId: projectID})
 		if e != nil {
-			return e
+			return fmt.Errorf("list remote project sessions: %w", e)
 		}
 		verified, e := c.ResolveServer(ctx, server)
 		if e != nil {

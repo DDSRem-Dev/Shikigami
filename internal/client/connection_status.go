@@ -21,10 +21,14 @@ func ConnectionRecovery(record *apb.ServerRecord) string {
 	switch {
 	case record.ReasonCode == "RECONNECT_EXHAUSTED":
 		return "Check the network, then retry: shiki connect " + id
+	case record.ReasonCode == "NODE_AUTH_REQUIRED":
+		return "Check this device's Tailscale status: shiki node status; complete node login if authorization is required."
 	case record.ConnectionState == "auth_required":
 		return "Provide a valid Token: shiki connect " + id + " --token-file /absolute/path/to/token"
 	case record.ConnectionState == "incompatible":
 		return "Inspect the configured identity and trust: shiki config get --server " + id
+	case record.ConnectionState == "offline" && record.ReasonCode == "REMOTE_UNAVAILABLE":
+		return "Check the saved server and network with shiki doctor --server " + id + "; after connectivity recovers, retry shiki connect " + id
 	default:
 		return ""
 	}

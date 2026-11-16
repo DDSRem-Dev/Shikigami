@@ -181,16 +181,20 @@ func TestUnixPublicationLongestPathAndConcurrentBind(t *testing.T) {
 	}
 	var wait sync.WaitGroup
 	results := make(chan net.Listener, 16)
+	failures := make(chan error, 16)
 	for range 16 {
 		wait.Go(func() {
 			l, err := ListenUnix(path, uint32(os.Getuid()))
 			if err == nil {
 				results <- l
+			} else {
+				failures <- err
 			}
 		})
 	}
 	wait.Wait()
 	close(results)
+	close(failures)
 	var winner net.Listener
 	for l := range results {
 		if winner != nil {
@@ -200,6 +204,9 @@ func TestUnixPublicationLongestPathAndConcurrentBind(t *testing.T) {
 		winner = l
 	}
 	if winner == nil {
+		for err := range failures {
+			t.Log(err)
+		}
 		t.Fatal("no successful publisher")
 	}
 	defer winner.Close()
@@ -214,5 +221,37 @@ func TestUnixPublicationLongestPathAndConcurrentBind(t *testing.T) {
 	entries, err := os.ReadDir(directory)
 	if err != nil || len(entries) != 0 {
 		t.Fatal("contending publishers leaked names", entries, err)
+	}
+}
+
+func TestUnixPublicationSkipsCaseAliasOfPublicName(t *testing.T) {
+	base := publicationDirectory(t)
+	directory := filepath.Join(base, strings.Repeat("d", 101-len(base)-1))
+	if err := os.Mkdir(directory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(directory, "s")
+	calls := 0
+	l, err := listenUnix(path, uint32(os.Getuid()), func() string {
+		calls++
+		if calls == 1 {
+			return "S"
+		}
+		return "T"
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	if calls != 2 {
+		t.Fatalf("bound a case alias of the public name: %d candidate(s)", calls)
+	}
+	exchangePublishedSocket(t, l, path)
+	if err := l.Close(); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("publication leaked names", entries, err)
 	}
 }

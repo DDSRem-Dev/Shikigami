@@ -200,3 +200,31 @@ func TestViewerWebSocketAdmission(t *testing.T) {
 		t.Fatal("rejected WebSocket opened a remote attachment")
 	}
 }
+
+// A viewer reconnects explicitly after closing its prior loopback socket.
+// Verify rapid replacement does not keep a stale remote attachment alive.
+func TestViewerExplicitReconnectReleasesPreviousAttachment(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	created := make(chan *viewerTestScreen, 32)
+	w := startViewerTestWorker(t, &viewerTestBrowser{stream: func(ctx context.Context) (sdk.BrowserClientStream, error) {
+		screen := newViewerTestScreen(ctx)
+		created <- screen
+		return screen, nil
+	}})
+	viewer, client, csrf := bootstrapViewerTest(t, w, false)
+	target := strings.Replace(w.origin, "http:", "ws:", 1) + "/v/" + viewer.Id + "/rfb"
+	for range 20 {
+		socket, _, err := websocket.Dial(ctx, target, &websocket.DialOptions{HTTPClient: client, HTTPHeader: http.Header{"Origin": []string{w.origin}}, Subprotocols: []string{viewerSubprotocol, "csrf." + csrf}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		<-created
+		readViewerScreenEvent(t, ctx, socket)
+		// Browser WebSocket.close completes only after the close handshake.
+		if err := socket.Close(websocket.StatusNormalClosure, "Viewer detached"); err != nil {
+			t.Fatal(err)
+		}
+		// The next Dial intentionally races handler cleanup after the close handshake.
+	}
+}

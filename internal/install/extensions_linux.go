@@ -161,7 +161,13 @@ func extensionPlatformPlan(ctx context.Context, operation string, o ExtensionOpt
 		appendPublicSupportDirectoryPlan(plan, o)
 	}
 	if o.includes("region") {
-		plan.Paths = append(plan.Paths, RegionHelperPath, RegionPolicyPath, RegionStatePath, "/etc/sudoers.d/shikigami-region-"+strconv.Itoa(uid), "/etc/systemd/system/"+RegionGuardUnit)
+		plan.Paths = append(plan.Paths, RegionHelperPath, RegionPolicyPath, RegionStatePath, "/etc/sudoers.d/shikigami-region-"+strconv.Itoa(uid), "/etc/systemd/system/"+RegionGuardUnit, regionDaemonDropIn)
+		plan.Warnings = append(plan.Warnings, "Explicit region support installs a daemon-only NoNewPrivileges=false drop-in so its ordinary UID can use the six-action sudoers grant. An already-running managed daemon with NoNewPrivs=1 is restarted; independent tmux, Claude and Chrome remain running. Core-only installations retain NoNewPrivileges=true.")
+		if !o.StageOnly && operation == "setup" {
+			if _, err := inspectRegionDaemonPolicy(plan.User, uid); err != nil {
+				plan.Blocked = append(plan.Blocked, err.Error())
+			}
+		}
 		plan.Warnings = append(plan.Warnings, "Region authorization is for this one daemon UID; any process of that UID can invoke the six allowlisted actions. The root guard is never granted in sudoers.")
 		for _, action := range []string{"inspect", "plan", "apply", "confirm", "rollback", "operation"} {
 			plan.Authorization = append(plan.Authorization, ExtensionCommand{Program: RegionHelperPath, Args: []string{action}, AsUser: plan.User})
@@ -205,6 +211,7 @@ func extensionPlatformPlan(ctx context.Context, operation string, o ExtensionOpt
 	}
 	if !o.StageOnly && o.includes("region") && operation == "setup" {
 		plan.Commands = append(plan.Commands, ExtensionCommand{Program: "/usr/sbin/visudo", Args: []string{"--check", "--file", "<private-staged-sudoers>"}}, ExtensionCommand{Program: RegionHelperPath, Args: []string{"activate"}}, ExtensionCommand{Program: "/usr/bin/systemctl", Args: []string{"daemon-reload"}}, ExtensionCommand{Program: "/usr/bin/systemctl", Args: []string{"enable", RegionGuardUnit}}, ExtensionCommand{Program: "/usr/bin/systemctl", Args: []string{"restart", RegionGuardUnit}})
+		plan.Commands = append(plan.Commands, ExtensionCommand{Program: "/usr/bin/systemctl", Args: []string{"daemon-reload"}}, ExtensionCommand{Program: "/usr/bin/systemctl", Args: []string{"show", "shiki-daemon.service", "--property=User", "--property=NoNewPrivileges", "--property=MainPID"}}, ExtensionCommand{Program: "/usr/bin/systemctl", Args: []string{"try-restart", "shiki-daemon.service"}})
 		plan.Warnings = append(plan.Warnings, "The root recovery guard is explicitly started/restarted after signed helper activation; the six-action sudoers grant is published only after this succeeds. Running Chrome and ordinary host processes are not restarted.")
 	}
 	return plan, nil
@@ -504,6 +511,10 @@ func stageExtensionSupport(bundle *Bundle, o ExtensionOptions, plan *ExtensionPl
 		files["etc/shikigami-region-helper.json"] = append(policy, '\n')
 		files["etc/sudoers.d/shikigami-region-"+strconv.Itoa(plan.UID)] = []byte(regionSudoers(plan.UID))
 		files["etc/systemd/system/"+RegionGuardUnit] = []byte(regionGuardService())
+		if err = root.MkdirAll(filepath.Dir(strings.TrimPrefix(regionDaemonDropIn, "/")), 0700); err != nil {
+			return err
+		}
+		files[strings.TrimPrefix(regionDaemonDropIn, "/")] = regionDaemonServicePolicy(plan.UID)
 	}
 	if o.includes("browser") {
 		const policy = "etc/opt/chrome/policies/managed/shikigami-browser.json"
@@ -900,7 +911,10 @@ func installRegionSupport(ctx context.Context, bundle *Bundle, plan *ExtensionPl
 	if err = extensionRun(ctx, "", "/usr/bin/systemctl", "restart", RegionGuardUnit); err != nil {
 		return err
 	}
-	return writeRootFile("/etc/sudoers.d/shikigami-region-"+strconv.Itoa(uid), sudoers, 0440, true)
+	if err = writeRootFile("/etc/sudoers.d/shikigami-region-"+strconv.Itoa(uid), sudoers, 0440, true); err != nil {
+		return err
+	}
+	return installRegionDaemonPolicy(ctx, plan.User, uid)
 }
 
 func (n *Native) removeInstalledExtensions(ctx context.Context, plan Plan) error {

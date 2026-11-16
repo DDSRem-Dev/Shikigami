@@ -38,15 +38,29 @@ type remotePool struct {
 	needsSuspend  bool
 	// Protected by Resources.mu; only consecutive full-budget probe deadlines
 	// count, never a short caller budget or an abandoned request.
-	probeTimeouts int
+	probeTimeouts    int
+	probeFailedSince time.Time
+	probeProgress    uint64
+	// Successful application responses on this authenticated pool are stronger
+	// evidence of liveness than a separately timed-out identity probe.
+	receiveProgress atomic.Uint64
 	// Only one authentication operation per server generation; waiters do not
 	// hold Resources.mu and may independently cancel.
 	resolving chan struct{}
+	// A waiter may share only the successful flight it actually waited for.
+	// Starting any later probe clears this proof, including on probe failure.
+	// These fields are protected by Resources.mu and never form a time cache.
+	verifiedBy     chan struct{}
+	verifiedRecord *agentpb.ServerRecord
 }
 
 // One slow probe is not evidence that unrelated live streams have failed.
-// Two consecutive failures are the minimum evidence for route replacement.
-const consecutiveProbeTimeoutLimit = 2
+// Repeated short probes must observe sustained failure before they cancel
+// unrelated long-lived streams. Each probe still honors its own deadline.
+const (
+	consecutiveProbeTimeoutLimit = 2
+	probeFailureRecoveryWindow   = 30 * time.Second
+)
 
 func (p *remotePool) invalidate() {
 	if p.bad.CompareAndSwap(false, true) {
@@ -215,6 +229,9 @@ func (r *Resources) resolveLocked(ctx context.Context, id string, snapshot *stor
 		if r.ctx.Err() != nil {
 			return nil, rpcError(connect.CodeUnavailable, "AGENT_STOPPING")
 		}
+		if r.faulted.Load() {
+			return nil, rpcError(connect.CodeFailedPrecondition, "AGENT_STATE_UNAVAILABLE")
+		}
 		current, err := r.store.View()
 		if err != nil {
 			return nil, stateError(err)
@@ -229,11 +246,21 @@ func (r *Resources) resolveLocked(ctx context.Context, id string, snapshot *stor
 		if err := snapshot.Put("servers", id, record); err != nil {
 			return nil, stateError(err)
 		}
+		// Share the identity check that completed while this caller waited,
+		// provided no newer probe, pool replacement or configuration/credential
+		// generation has intervened. Business RPCs still authenticate normally.
+		// Failed flights provide no reusable proof and follow the normal path.
+		if r.pools[id] == existing && existing.verifiedBy == done &&
+			existing.client != nil && !existing.bad.Load() && existing.ctx.Err() == nil &&
+			proto.Equal(existing.verifiedRecord, latest) {
+			return existing.client, nil
+		}
 	}
 	gate := make(chan struct{})
 	owner := r.pools[id]
 	if owner != nil {
 		owner.resolving = gate
+		owner.verifiedBy, owner.verifiedRecord = nil, nil
 	}
 	defer func() {
 		if owner != nil && owner.resolving == gate {
@@ -288,6 +315,7 @@ func (r *Resources) resolveLocked(ctx context.Context, id string, snapshot *stor
 				existing.setCapabilities(agreement)
 				existing.path = path
 				existing.probeTimeouts = 0
+				existing.probeFailedSince = time.Time{}
 				if record.Config.DaemonId == "" {
 					record.Config.DaemonId = existing.daemonID
 					record.Revision = newID("rev_")
@@ -295,6 +323,8 @@ func (r *Resources) resolveLocked(ctx context.Context, id string, snapshot *stor
 						return nil, stateError(err)
 					}
 				}
+				existing.verifiedBy = gate
+				existing.verifiedRecord = proto.Clone(record).(*agentpb.ServerRecord)
 				return existing.client, nil
 			}
 			// Canceling one caller's identity probe says nothing about the
@@ -315,11 +345,18 @@ func (r *Resources) resolveLocked(ctx context.Context, id string, snapshot *stor
 				if timeout.callerLimited {
 					return nil, safeRemoteError(err)
 				}
+				progress := existing.receiveProgress.Load()
+				if existing.probeFailedSince.IsZero() || progress != existing.probeProgress {
+					existing.probeFailedSince = time.Now()
+					existing.probeTimeouts = 0
+					existing.probeProgress = progress
+				}
 				existing.probeTimeouts++
-				if existing.probeTimeouts < consecutiveProbeTimeoutLimit {
+				if existing.probeTimeouts < consecutiveProbeTimeoutLimit || time.Since(existing.probeFailedSince) < probeFailureRecoveryWindow {
 					// Fail this request without retiring an authenticated shared
 					// route. A successful later probe resets the failure sequence;
-					// repeated timeouts enter the normal bounded recovery below.
+					// authenticated application progress also resets the window.
+					// Only sustained no-progress timeouts enter recovery below.
 					return nil, safeRemoteError(err)
 				}
 			}
@@ -402,6 +439,8 @@ func (r *Resources) resolveLocked(ctx context.Context, id string, snapshot *stor
 	p.nextCheck = time.Now().Add(5 * time.Second)
 	p.episode = reconnectEpisode{}
 	p.client = connect.NewClient(clientTransport{p.base}, p.bind)
+	p.verifiedBy = gate
+	p.verifiedRecord = proto.Clone(record).(*agentpb.ServerRecord)
 	r.publish("server", id, id, record.Revision)
 	return p.client, nil
 }
@@ -540,6 +579,9 @@ func (s *remoteStream) Send(message any) error {
 }
 func (s *remoteStream) Receive(message any) error {
 	err := s.ClientStream.Receive(message)
+	if err == nil {
+		s.pool.receiveProgress.Add(1)
+	}
 	s.pool.failed(err)
 	if err != nil || s.singleResponse {
 		_ = s.Close()

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -29,12 +30,13 @@ func quickstartShellPath(home string) error {
 	default:
 		return errors.New("unknown shell; add ~/.local/bin to its PATH explicitly")
 	}
+	var problems []error
 	for _, name := range names {
 		if err := quickstartAppendPath(filepath.Join(home, name)); err != nil {
-			return err
+			problems = append(problems, fmt.Errorf("%s was preserved: %w", filepath.Join(home, name), err))
 		}
 	}
-	return nil
+	return errors.Join(problems...)
 }
 
 func quickstartAppendPath(path string) error {

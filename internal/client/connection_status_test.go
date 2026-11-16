@@ -12,6 +12,8 @@ func TestConnectionRecoveryOffersScopedActionsWithoutChangingTrust(t *testing.T)
 		state, reason, want string
 	}{
 		{"offline", "RECONNECT_EXHAUSTED", "shiki connect srv_one"},
+		{"offline", "REMOTE_UNAVAILABLE", "shiki doctor --server srv_one"},
+		{"auth_required", "NODE_AUTH_REQUIRED", "shiki node status"},
 		{"auth_required", "CREDENTIAL_REJECTED", "--token-file"},
 		{"incompatible", "DAEMON_ID_MISMATCH", "shiki config get --server srv_one"},
 		{"ready", "", ""},
@@ -20,6 +22,9 @@ func TestConnectionRecoveryOffersScopedActionsWithoutChangingTrust(t *testing.T)
 		got := ConnectionRecovery(record)
 		if test.want == "" && got != "" || test.want != "" && !strings.Contains(got, test.want) {
 			t.Fatalf("%s/%s recovery = %q", test.state, test.reason, got)
+		}
+		if test.reason == "NODE_AUTH_REQUIRED" && strings.Contains(got, "--token-file") {
+			t.Fatal("local node authorization incorrectly asks to replace the server credential")
 		}
 	}
 	unsafe := &apb.ServerRecord{Config: &apb.ServerConfig{Id: "$(malicious)"}, ReasonCode: "RECONNECT_EXHAUSTED"}

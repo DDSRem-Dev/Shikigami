@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect/v2"
@@ -24,7 +25,7 @@ import (
 type setupBackend interface {
 	run(context.Context, bool, ...string) error
 	query(context.Context, proto.Message, ...string) error
-	connect(context.Context, string, bool) error
+	connect(context.Context, string, bool, string) error
 	health(context.Context, string) error
 }
 
@@ -52,7 +53,7 @@ func (s setupCLI) query(ctx context.Context, result proto.Message, args ...strin
 	return protojson.Unmarshal(out.Bytes(), result)
 }
 
-func (s setupCLI) connect(ctx context.Context, server string, renew bool) error {
+func (s setupCLI) connect(ctx context.Context, server string, renew bool, address string) error {
 	if renew {
 		token, err := s.app.credential(ctx, &serverFlags{}, true)
 		if err != nil {
@@ -70,7 +71,11 @@ func (s setupCLI) connect(ctx context.Context, server string, renew bool) error 
 			return err
 		}
 	}
-	return s.run(ctx, true, "connect", server)
+	args := []string{"connect", server}
+	if address != "" {
+		args = append(args, "--tailscale-address", address)
+	}
+	return s.run(ctx, true, args...)
 }
 
 func (s setupCLI) health(ctx context.Context, server string) error {
@@ -101,10 +106,11 @@ type setupWizard struct {
 	backend setupBackend
 	prompt  func(context.Context, string, string) (string, error)
 	out     io.Writer
+	address string
 }
 
 func (a *app) setupCommand() *cobra.Command {
-	var components string
+	var components, address string
 	command := &cobra.Command{
 		Use: "setup", Args: cobra.NoArgs,
 		Short: "Connect a server and configure the selected plugins in one guided session",
@@ -112,6 +118,13 @@ func (a *app) setupCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if components != "" && components != "all" && components != "core" {
 				return errors.New("--components must be all or core")
+			}
+			if address != "" {
+				var err error
+				address, err = normalizeTailnetAddress(address)
+				if err != nil {
+					return err
+				}
 			}
 			if a.json || a.project != "" || a.requestID != "" {
 				return errors.New("setup is an interactive sequence; --json, --project and --request-id do not apply")
@@ -131,11 +144,12 @@ func (a *app) setupCommand() *cobra.Command {
 				defer tty.Close()
 				interactive.input, interactive.output, interactive.errorOutput = tty, tty, tty
 			}
-			wizard := setupWizard{backend: setupCLI{app: &interactive}, prompt: interactive.prompt, out: interactive.output}
+			wizard := setupWizard{backend: setupCLI{app: &interactive}, prompt: interactive.prompt, out: interactive.output, address: address}
 			return wizard.setup(cmd.Context(), components, a.server)
 		},
 	}
 	command.Flags().StringVar(&components, "components", "", "all (sync, port, region, browser) or core (sync, port); omitted prompts")
+	command.Flags().StringVar(&address, "tailscale-address", "", "Explicit server address correction; preserves saved credentials and pinned daemon identity")
 	return command
 }
 
@@ -170,7 +184,7 @@ func (w *setupWizard) setup(ctx context.Context, components, server string) erro
 			defaultName = list.Servers[0].GetConfig().GetName()
 		}
 		var err error
-		server, err = w.prompt(ctx, "Server name (existing name reuses its saved address and credential)", defaultName)
+		server, err = w.prompt(ctx, "Server label (e.g. my-vps; an existing label resumes its saved connection)", defaultName)
 		if err != nil {
 			return err
 		}
@@ -182,20 +196,39 @@ func (w *setupWizard) setup(ctx context.Context, components, server string) erro
 	for _, record := range list.Servers {
 		if record.GetConfig().GetName() == server || record.GetConfig().GetId() == server {
 			existing = true
-			renew = record.CredentialPresent && record.ConnectionState == "auth_required"
+			if saved := record.GetConfig().GetTailscaleAddress(); saved != "" {
+				fmt.Fprintf(w.out, "Saved VPS address: %s (change with setup --tailscale-address <IP-or-hostname>)\n", safeText(saved))
+				if _, err := normalizeTailnetAddress(saved); err != nil && w.address == "" {
+					fmt.Fprintln(w.out, "The saved address is invalid. Enter the VPS address to correct this record; its credential and pinned identity are retained.")
+					for {
+						answer, err := w.prompt(ctx, "VPS Tailscale IP or hostname (not the port number)", "")
+						if err != nil {
+							return err
+						}
+						w.address, err = normalizeTailnetAddress(answer)
+						if err == nil {
+							break
+						}
+						fmt.Fprintln(w.out, err)
+					}
+				}
+			}
+			// A saved status can still reflect the node login that just finished.
+			// Device authorization never means its application Token was rejected.
+			renew = record.CredentialPresent && record.ConnectionState == "auth_required" && record.ReasonCode != "NODE_AUTH_REQUIRED"
 		}
 	}
 	if renew {
-		answer, err := w.prompt(ctx, "Saved server credential needs authorization. Replace it with a fresh token? yes/no", "yes")
+		answer, err := w.confirm(ctx, "Saved server credential needs authorization. Replace it with a fresh token?", true)
 		if err != nil {
 			return err
 		}
-		if answer != "yes" {
+		if !answer {
 			return errors.New("server authorization remains pending; saved credential preserved")
 		}
 	}
-	if err := w.backend.connect(ctx, server, renew); err != nil {
-		return fmt.Errorf("server connection remains pending; rerun setup after completing authorization: %w", err)
+	if err := w.backend.connect(ctx, server, renew, w.address); err != nil {
+		return fmt.Errorf("server connection remains pending; check the displayed address and shiki doctor, then rerun setup: %w", err)
 	}
 	if err := w.backend.run(ctx, false, "servers", "switch", server); err != nil {
 		return err
@@ -224,6 +257,10 @@ func (w *setupWizard) node(ctx context.Context) error {
 		return err
 	}
 	if status.State == "online" {
+		return nil
+	}
+	if status.State == "offline" && status.ReasonCode == "NODE_CONTROL_UNAVAILABLE" {
+		fmt.Fprintln(w.out, "Tailscale control service is temporarily unavailable. Checking the saved server connection; no new device authorization is started.")
 		return nil
 	}
 	if status.ReasonCode == "NODE_DISABLED" {
@@ -267,4 +304,29 @@ func (w *setupWizard) node(ctx context.Context) error {
 
 func setupLoginActive(status *apb.NodeStatus) bool {
 	return nodeLoginActive(status) && status.LoginId != "" && status.LoginExpiresAt > time.Now().Unix()
+}
+
+// Explicit answers accept the familiar short forms; unrecognized input must not
+// silently decline a requested change or accidentally grant it.
+func (w *setupWizard) confirm(ctx context.Context, label string, defaultYes bool) (bool, error) {
+	fallback := "no"
+	if defaultYes {
+		fallback = "yes"
+	}
+	for {
+		answer, err := w.prompt(ctx, label+" yes/no", fallback)
+		if err != nil {
+			return false, err
+		}
+		switch strings.ToLower(strings.TrimSpace(answer)) {
+		case "y", "yes":
+			return true, nil
+		case "n", "no":
+			return false, nil
+		case "":
+			return defaultYes, nil
+		default:
+			fmt.Fprintln(w.out, "Enter yes (y) or no (n).")
+		}
+	}
 }

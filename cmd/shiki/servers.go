@@ -116,7 +116,7 @@ func (a *app) saveServer(cmd *cobra.Command, c *client.Client, args []string, fl
 	}
 	var e error
 	if name == "" {
-		name, e = a.prompt(ctx, "Server name", "")
+		name, e = a.prompt(ctx, "Server label (e.g. my-vps; the address is entered next)", "")
 		if e != nil {
 			return e
 		}
@@ -160,7 +160,11 @@ func (a *app) saveServer(cmd *cobra.Command, c *client.Client, args []string, fl
 		if !c.Config.Tailscale.Enabled {
 			return errors.New("tailnet is disabled; provide an explicit --tls-address and TLS trust settings")
 		}
-		config.TailscaleAddress, e = a.prompt(ctx, "Server address (Tailscale IP or hostname; default port 9527)", "")
+		defaultAddress := ""
+		if net.ParseIP(strings.Trim(name, "[]")) != nil {
+			defaultAddress = name
+		}
+		config.TailscaleAddress, e = a.promptTailnetAddress(ctx, defaultAddress)
 		if e != nil {
 			return e
 		}
@@ -215,6 +219,9 @@ func (a *app) saveServer(cmd *cobra.Command, c *client.Client, args []string, fl
 		}
 	}
 	if probe {
+		if a.interactive() {
+			fmt.Fprintln(a.errorOutput, "Verifying server connection… Ctrl+C cancels; saved settings are retained.")
+		}
 		if config.TailscaleAddress != "" {
 			if e = a.prepareTailnetLogin(ctx, c); e != nil {
 				return e
@@ -274,6 +281,7 @@ func (a *app) credential(ctx context.Context, flags *serverFlags, required bool)
 		if !a.interactive() {
 			return nil, errors.New("connect requires --token-file or explicit --token-stdin in non-interactive mode")
 		}
+		fmt.Fprintln(a.errorOutput, "Paste the private device Token from the VPS. No characters or asterisks appear; press Enter to submit, or Ctrl+C to cancel.")
 		fmt.Fprint(a.errorOutput, "Connection token (hidden): ")
 		data, e = client.ReadSecret(ctx, a.input, 16384)
 		fmt.Fprintln(a.errorOutput)
@@ -291,6 +299,20 @@ func (a *app) credential(ctx context.Context, flags *serverFlags, required bool)
 	return []byte(clean), nil
 }
 
+func (a *app) promptTailnetAddress(ctx context.Context, defaultValue string) (string, error) {
+	for {
+		value, err := a.prompt(ctx, "VPS Tailscale IP or hostname (e.g. 100.64.1.2; optional :9527)", defaultValue)
+		if err != nil {
+			return "", err
+		}
+		address, err := normalizeTailnetAddress(value)
+		if err == nil {
+			return address, nil
+		}
+		fmt.Fprintln(a.errorOutput, err)
+	}
+}
+
 func normalizeTailnetAddress(value string) (string, error) {
 	if value == "" || strings.ContainsAny(value, "/\\@ \t\r\n") {
 		return "", errors.New("tailnet address must be an IP or hostname with optional port")
@@ -303,6 +325,9 @@ func normalizeTailnetAddress(value string) (string, error) {
 		} else {
 			return "", errors.New("invalid tailnet host:port")
 		}
+	}
+	if net.ParseIP(host) == nil && strings.Trim(host, "0123456789.") == "" {
+		return "", errors.New("enter the VPS Tailscale IP or hostname, not a port number; the port defaults to 9527")
 	}
 	number, err := strconv.Atoi(port)
 	if err != nil || number < 1 || number > 65535 || host == "" {

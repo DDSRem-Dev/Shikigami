@@ -35,10 +35,14 @@ type setupFixture struct {
 	privateTemporary bool
 	renewedToken     bool
 	authRequired     bool
+	authReason       string
+	savedAddress     string
+	connectedAddress string
 }
 
-func (f *setupFixture) connect(ctx context.Context, server string, renew bool) error {
+func (f *setupFixture) connect(ctx context.Context, server string, renew bool, address string) error {
 	f.renewedToken = renew
+	f.connectedAddress = address
 	return f.run(ctx, true, "connect", server)
 }
 
@@ -94,9 +98,10 @@ func (f *setupFixture) query(ctx context.Context, output proto.Message, args ...
 		}
 	case *apb.ServerList:
 		if f.existing {
-			value.Servers = []*apb.ServerRecord{{Config: &apb.ServerConfig{Id: "server-id", Name: "my-vps"}, CredentialPresent: true}}
+			value.Servers = []*apb.ServerRecord{{Config: &apb.ServerConfig{Id: "server-id", Name: "my-vps", TailscaleAddress: f.savedAddress}, CredentialPresent: true}}
 			if f.authRequired {
 				value.Servers[0].ConnectionState = "auth_required"
+				value.Servers[0].ReasonCode = f.authReason
 			}
 		}
 	case *pb.PluginStatus:
@@ -299,5 +304,80 @@ func TestSetupCanRenewRejectedCredentialWithoutReconfiguringExistingServer(t *te
 	}
 	if !f.renewedToken || f.temporaryFile != "" {
 		t.Fatal("credential renewal failed or replaced plugin configuration")
+	}
+}
+
+func TestSetupCorrectsInvalidSavedAddressWithoutRenewingToken(t *testing.T) {
+	f := &setupFixture{existing: true, pluginsReady: true, savedAddress: "9527:9527"}
+	wizard, output := setupTestWizard(t, f, "9527", "100.71.151.36", "")
+	if err := wizard.setup(t.Context(), "core", "my-vps"); err != nil {
+		t.Fatal(err)
+	}
+	if f.connectedAddress != "100.71.151.36:9527" || f.renewedToken {
+		t.Fatal("address repair replaced credential or used invalid input", f.connectedAddress, f.renewedToken)
+	}
+	if !strings.Contains(output.String(), "Saved VPS address: 9527:9527") || !strings.Contains(output.String(), "not a port number") {
+		t.Fatal("invalid saved endpoint not explained", output.String())
+	}
+}
+
+func TestSetupExplicitAddressCorrectionPreservesOtherChoices(t *testing.T) {
+	f := &setupFixture{existing: true, pluginsReady: true, savedAddress: "old-host:9527"}
+	wizard, _ := setupTestWizard(t, f, "")
+	wizard.address = "new-host:9527"
+	if err := wizard.setup(t.Context(), "core", "my-vps"); err != nil {
+		t.Fatal(err)
+	}
+	if f.connectedAddress != "new-host:9527" || f.renewedToken {
+		t.Fatal("explicit address correction not passed independently", f.connectedAddress, f.renewedToken)
+	}
+	if f.temporaryFile != "" {
+		t.Fatal("address correction changed plugin config")
+	}
+}
+
+func TestSetupConfirmationRepromptsAndAcceptsShortAnswers(t *testing.T) {
+	for _, test := range []struct {
+		answer string
+		want   bool
+	}{{"y", true}, {"YES", true}, {"n", false}, {"No", false}} {
+		t.Run(test.answer, func(t *testing.T) {
+			f := &setupFixture{pluginsReady: true}
+			wizard, output := setupTestWizard(t, f, "3000", "mistyped", test.answer)
+			if err := wizard.setup(t.Context(), "core", "my-vps"); err != nil {
+				t.Fatal(err)
+			}
+			if (f.temporaryFile != "") != test.want {
+				t.Fatal("unexpected port config mutation", f.runs)
+			}
+			if !strings.Contains(output.String(), "Enter yes (y) or no (n)") {
+				t.Fatal("invalid answer silently consumed", output.String())
+			}
+		})
+	}
+}
+
+func TestSetupControlOutageDoesNotStartAnotherAuthorization(t *testing.T) {
+	f := &setupFixture{existing: true, pluginsReady: true, node: &apb.NodeStatus{State: "offline", ReasonCode: "NODE_CONTROL_UNAVAILABLE"}}
+	wizard, output := setupTestWizard(t, f, "")
+	if err := wizard.setup(t.Context(), "core", "my-vps"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.Join(f.runs, "\n"), "node login") || f.renewedToken {
+		t.Fatal("control outage triggered authorization", f.runs)
+	}
+	if !strings.Contains(output.String(), "no new device authorization") {
+		t.Fatal("control outage not explained", output.String())
+	}
+}
+
+func TestSetupNodeAuthorizationDoesNotRenewApplicationToken(t *testing.T) {
+	f := &setupFixture{existing: true, authRequired: true, authReason: "NODE_AUTH_REQUIRED", pluginsReady: true}
+	wizard, _ := setupTestWizard(t, f, "")
+	if err := wizard.setup(t.Context(), "core", "my-vps"); err != nil {
+		t.Fatal(err)
+	}
+	if f.renewedToken {
+		t.Fatal("node authorization replaced the saved application Token")
 	}
 }

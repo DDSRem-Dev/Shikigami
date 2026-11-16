@@ -25,6 +25,9 @@ func runtimeConfig(t *testing.T) (*config.Client, string) {
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	cfg := config.DefaultClient()
+	// A runtime fixture must not load the developer's installed plugins (whose
+	// release version intentionally differs from this fixture's "test" build).
+	cfg.PluginsDir = filepath.Join(dir, "plugins")
 	cfg.Agent.StateDir = filepath.Join(dir, "agent")
 	cfg.Agent.Socket = filepath.Join(dir, "run", "agent.sock")
 	cfg.Tailscale.StateDir = filepath.Join(dir, "node")

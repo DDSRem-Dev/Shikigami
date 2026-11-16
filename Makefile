@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: tools generate-proto build test test-tools test-linux test-integration test-e2e test-all fmt vet lint clean build-embedded release
+.PHONY: tools generate-proto build test test-tools test-viewer test-linux test-integration test-e2e test-all fmt vet lint clean build-embedded release
 
 tools:
 	./scripts/dev-setup.sh
@@ -11,7 +11,7 @@ generate-proto:
 build:
 	./scripts/build.sh
 
-test: test-tools
+test: test-tools test-viewer
 	go test -race ./...
 	go test -race ./scripts/release-trust.go ./scripts/release-trust_test.go
 	go test -race ./scripts/release.go ./scripts/release_test.go
@@ -20,6 +20,10 @@ test-tools:
 	@test "$$(id -u)" -ne 0 || { echo 'Run tool tests as an ordinary user; root would skip collector lifecycle checks.' >&2; exit 1; }
 	@python3 -B -c 'import sys; sys.version_info >= (3, 10) or sys.exit("Tool tests require Python 3.10 or newer.")'
 	python3 -B -m unittest discover -s scripts/tests -p 'test_*.py' -v
+
+test-viewer:
+	@node -e 'if (Number(process.versions.node.split(".")[0]) < 22) { console.error("Viewer tests require Node.js 22 or newer."); process.exit(1); }'
+	node --test plugins/browser/client/viewer_ui_test.mjs
 
 test-linux:
 	./scripts/test-linux.sh

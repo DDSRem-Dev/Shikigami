@@ -14,7 +14,7 @@ import (
 	"github.com/DDSRem-Dev/Shikigami/pkg/protocol/version"
 	"google.golang.org/protobuf/proto"
 	"tailscale.com/client/local"
-	"tailscale.com/ipn"
+	"tailscale.com/ipn/ipnstate"
 )
 
 // Control is registered only on an owner-verified local Unix listener. Its
@@ -190,7 +190,7 @@ func (n *Node) runLogin(attempt *loginAttempt, key []byte, reuse bool) {
 		// request was published. Fresh, rejected and canceled registrations
 		// must never resume an old control client's auth key or followup.
 		n.stopLocked()
-		err = n.startLocked(attempt)
+		err = n.startLocked(attempt, key)
 	}
 	n.mu.Lock()
 	active = n.attempt == attempt && !attempt.finished
@@ -355,8 +355,17 @@ func (n *Node) requestLogin(ctx context.Context, lc *local.Client, attempt *logi
 			err = lc.StartLoginInteractive(ctx)
 		}
 	} else if err == nil {
-		err = lc.Start(ctx, ipn.Options{AuthKey: string(key)})
-		if err == nil {
+		// A key-based attempt always creates a fresh SDK. startLocked already
+		// supplied its key and started registration; do not start a second one.
+		if len(key) == 0 {
+			return connect.NewError(connect.CodeInvalidArgument, "LOGIN_METHOD_REQUIRED")
+		}
+		observed, observeErr := authKeyStartupStatus(ctx, lc, !attempt.previousKey.IsZero())
+		if observeErr != nil {
+			err = observeErr
+		} else if observed.BackendState == "Running" && observed.AuthURL == "" && observed.Self != nil && !attempt.previousKey.IsZero() && observed.Self.PublicKey == attempt.previousKey {
+			// SDK startup can retain an old registered identity and ignore the
+			// supplied key. Only that case needs an explicit new registration.
 			err = lc.StartLoginInteractive(ctx)
 		}
 	}
@@ -366,4 +375,27 @@ func (n *Node) requestLogin(ctx context.Context, lc *local.Client, attempt *logi
 	}
 	n.mu.Unlock()
 	return err
+}
+
+// A restarted SDK can restore its old identity asynchronously. NoState/Starting
+// alone cannot tell us whether startup used the supplied key or resumed the old
+// registration. Wait for that decision within requestLogin's original budget;
+// never blindly issue a second registration with a possibly single-use key.
+func authKeyStartupStatus(ctx context.Context, lc *local.Client, hasPreviousKey bool) (*ipnstate.Status, error) {
+	for {
+		observed, err := lc.StatusWithoutPeers(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !hasPreviousKey || observed.AuthURL != "" || (observed.BackendState != "NoState" && observed.BackendState != "Starting") {
+			return observed, nil
+		}
+		timer := time.NewTimer(20 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
 }

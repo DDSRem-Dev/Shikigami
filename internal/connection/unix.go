@@ -51,6 +51,10 @@ func (l *uidListener) Accept() (net.Conn, error) {
 // ListenUnix never replaces or removes an existing destination. Stale recovery belongs to the
 // single-instance lock owner, which must establish that the old process died.
 func ListenUnix(path string, uid uint32) (net.Listener, error) {
+	return listenUnix(path, uid, rand.Text)
+}
+
+func listenUnix(path string, uid uint32, randomName func() string) (net.Listener, error) {
 	if err := validateSocketPath(path); err != nil {
 		return nil, err
 	}
@@ -72,8 +76,10 @@ func ListenUnix(path string, uid uint32) (net.Listener, error) {
 	var temporary string
 	var err error
 	for range 64 {
-		temporary = filepath.Join(directory, rand.Text()[:length])
-		if temporary == path {
+		temporary = filepath.Join(directory, randomName()[:length])
+		// APFS commonly treats ASCII case variants as the same filename. Never
+		// bind an alias of the public name before permissions are finalized.
+		if strings.EqualFold(temporary, path) {
 			continue
 		}
 		listener, err = net.ListenUnix("unix", &net.UnixAddr{Name: temporary, Net: "unix"})

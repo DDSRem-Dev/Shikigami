@@ -121,6 +121,12 @@ jobs:
       - name: Warm race build cache for subprocess tests
         timeout-minutes: 10
         run: go build -race -buildvcs=false -mod=readonly ./cmd/shiki ./cmd/shiki-agent ./cmd/shiki-daemon ./plugins/sync ./plugins/port
+      - name: Set up Node for viewer behavior tests
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Test viewer lifecycle and control behavior
+        run: make test-viewer
       - name: Test tools
         run: make test-tools
       - name: Verify private-umask installation as root and ordinary UID

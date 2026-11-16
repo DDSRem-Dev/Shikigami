@@ -21,10 +21,11 @@ import (
 
 // Exercise a real HTTP/2 stream while an independent identity probe exhausts
 // its own fair-share deadline. The cancellation-ordering case forces a local
-// transport status; every case keeps a real authenticated terminal exchanging
-// bytes without canceling its parent.
-func TestProbeTimeoutPreservesSharedTerminalUntilConsecutiveFailure(t *testing.T) {
-	for _, outcome := range []string{"short callers repeat", "local cancellation after deadline", "full success resets", "full consecutive timeout", "authentication rejection", "identity rejection", "remote deadline", "remote cancellation"} {
+// transport status. Both active and legitimately idle terminals must survive
+// brief stalls; only sustained failure without authenticated progress retires
+// their shared route. Trust rejections never receive this timeout grace.
+func TestProbeTimeoutPreservesSharedTerminalUntilSustainedFailure(t *testing.T) {
+	for _, outcome := range []string{"short callers repeat", "local cancellation after deadline", "full success resets", "active progress resets", "idle sustained timeout", "authentication rejection", "identity rejection", "remote deadline", "remote cancellation"} {
 		t.Run(outcome, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 			defer cancel()
@@ -130,12 +131,25 @@ func TestProbeTimeoutPreservesSharedTerminalUntilConsecutiveFailure(t *testing.T
 					t.Fatal("isolated probe timeout replaced the shared pool or consumed its retry budget")
 				}
 			}
-			fullBudget := outcome == "full success resets" || outcome == "full consecutive timeout"
+			fullBudget := outcome == "full success resets" || outcome == "active progress resets" || outcome == "idle sustained timeout"
 			if next, err := resolve("timeout", fullBudget); next != nil || connect.CodeOf(err) != connect.CodeUnavailable {
 				t.Fatalf("first probe timeout must fail only its caller: client=%p error=%v original_bad=%v", next, err, original.bad.Load())
 			}
 			preserved()
-			exchange(1)
+			if outcome != "idle sustained timeout" && outcome != "full success resets" {
+				exchange(1)
+			}
+			ageFailure := func() {
+				t.Helper()
+				r.mu.Lock()
+				defer r.mu.Unlock()
+				if original.probeFailedSince.IsZero() {
+					t.Fatal("full-budget failure did not begin a recovery observation")
+				}
+				// Advance only the observation window. Probes still perform real
+				// HTTP/2 calls and exhaust their actual five-second deadlines.
+				original.probeFailedSince = time.Now().Add(-probeFailureRecoveryWindow)
+			}
 			switch outcome {
 			case "local cancellation after deadline":
 				// The shared terminal and retry budget were checked above.
@@ -148,23 +162,39 @@ func TestProbeTimeoutPreservesSharedTerminalUntilConsecutiveFailure(t *testing.T
 					exchange(n)
 				}
 			case "full success resets":
+				ageFailure()
 				if next, err := resolve("success", true); err != nil || next != client {
 					t.Fatal("successful verification replaced the route", err)
 				}
-				if next, err := resolve("timeout", true); next != nil || connect.CodeOf(err) != connect.CodeUnavailable {
-					t.Fatal("successful verification did not reset the failure sequence", err)
+				for n := 0; n < 2; n++ {
+					if next, err := resolve("timeout", true); next != nil || connect.CodeOf(err) != connect.CodeUnavailable {
+						t.Fatal("successful verification did not reset the failure sequence and observation window", err)
+					}
+					preserved()
 				}
-				preserved()
 				exchange(2)
-			case "full consecutive timeout":
+			case "active progress resets":
+				for n := 2; n <= 3; n++ {
+					ageFailure()
+					if next, err := resolve("timeout", true); next != nil || connect.CodeOf(err) != connect.CodeUnavailable {
+						t.Fatal("identity timeout ignored successful application traffic", err)
+					}
+					preserved()
+					exchange(n)
+				}
+			case "idle sustained timeout":
 				if next, err := resolve("timeout", false); next != nil || connect.CodeOf(err) != connect.CodeUnavailable {
 					t.Fatal("short caller invalidated the route", err)
 				}
 				preserved()
-				exchange(2)
+				if next, err := resolve("timeout", true); next != nil || connect.CodeOf(err) != connect.CodeUnavailable {
+					t.Fatal("two five-second stalls canceled a legitimately idle terminal", err)
+				}
+				preserved()
+				ageFailure()
 				next, err := resolve("timeout", true)
 				if err != nil || next == nil || next == client || !original.bad.Load() || original.ctx.Err() == nil {
-					t.Fatal("consecutive probe failures did not replace the failed route", err)
+					t.Fatal("sustained no-progress probe failures did not replace the failed route", err)
 				}
 				probe.waitClosed(t, ready.AttachmentId)
 				probe.mu.Lock()

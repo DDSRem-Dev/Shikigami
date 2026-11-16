@@ -133,7 +133,7 @@ func TestTailnetAddressDefaultsAndExplicitTLSBoundary(t *testing.T) {
 			t.Fatalf("%q -> %q %v", input, got, e)
 		}
 	}
-	for _, input := range []string{"https://host:9527", "host:0", "host:65536", ":9527", "host name", "user@host", "host:port", ""} {
+	for _, input := range []string{"https://host:9527", "host:0", "host:65536", ":9527", "host name", "user@host", "host:port", "9527", "9527:9527", "127.1", "999.999.999.999", ""} {
 		if _, e := normalizeTailnetAddress(input); e == nil {
 			t.Fatalf("invalid address accepted: %q", input)
 		}
