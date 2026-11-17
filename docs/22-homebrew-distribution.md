@@ -1,6 +1,6 @@
 # Homebrew 分发与自动更新
 
-更新：2026-11-16。当前Homebrew版本[v0.0.1-alpha.4](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.4)已由tag工作流全自动发布并更新[Formula/shikigami.rb](../Formula/shikigami.rb)，bot提交`87883018623b3d78068bab208d7ec4400285a29d`。23公开资产、四目标验签与公式验证见[alpha.4证据](15-implementation-status.md#evidence-public-alpha4-release-20261116)。发布前CI57/57通过；不代表新公开tap四平台重装或新向导真实VPS/Mac首装通过。[alpha.3证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)及下文alpha.2远端tap和macOS工具限制保持历史范围。
+更新：2026-11-17。当前Homebrew版本[v0.0.1-alpha.6](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.6)已由tag工作流自动发布并更新[Formula/shikigami.rb](../Formula/shikigami.rb)，bot提交`25740ba5cb9baeb258bf988f9e32d429bf22d37a`。23公开资产、四目标签名/payload/平台/source及由已认证资产重新生成公式的逐字节一致性验证见[alpha.6证据](15-implementation-status.md#evidence-public-alpha6-release-20261117)。发布前CI57/57通过；发行工作流60项成功、1项条件跳过（不计通过）。发行验签不替代新公开tap四平台重装；用户两端签名升级已完成，实际CLI采样与待完成的浏览器交互复验见[29](29-alpha6-installation-followup.md)。[alpha.3证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)及下文alpha.2远端tap和macOS工具限制保持历史范围。
 
 ## 安装与使用边界
 

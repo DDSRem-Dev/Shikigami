@@ -1,18 +1,18 @@
 # Shikigami 设计文档导航
 
-**alpha.6 修复跟进：** 安装反馈完整清单、连接故障证据、两端升级与开发文件清理状态见[29](29-alpha6-installation-followup.md)。尚未发布时不使用未来版本下载地址。
+**alpha.6 修复跟进：** 安装反馈完整清单、连接故障证据、两端升级与开发文件清理状态见[29](29-alpha6-installation-followup.md)。alpha.6 已公开发布；两端升级、部署后验证和开发产物清理状态单独记录。
 
-**一键体验（2026-11-16）：** alpha.4 实机反馈的终端确认、静默长操作和权限问题由 alpha.5 修复；VPS/Mac 命令、配置和插件说明见 [28 一键安装与首次使用](28-quickstart.md)，当前发行验证状态见[15](15-implementation-status.md)。用户 VPS 已到达并报告安装故障，不把这些步骤当作完整首装、账号和物理重启验收。
+**一键体验（2026-11-17）：** alpha.6 汇总安装输入、worker、配对和浏览器连接修复，延续 alpha.5 的控制终端、阶段进度和公共目录权限修复；VPS/Mac 命令、配置和插件说明见 [28 一键安装与首次使用](28-quickstart.md)，当前发行验证状态见[15](15-implementation-status.md)。公开发行与两端部署、账号和物理重启验收分别记录。
 
-**状态：当前源码 Phase 0–5 验收清单已闭环（42/42）。** [当前支持声明](18-release-readiness.md#current-support)统一功能、平台、证据和未支持范围；[08 路线图](08-roadmap.md)、[15 实施记录](15-implementation-status.md)与[16 架构复核](16-architecture-conformance.md)记录关闭依据。认证生命周期和长稳、资源与性能按用户确认通过；真实 Claude 登录/推理、物理主机重启及生产 heap/object 归因仍保留未实测边界。当前公开安装入口为 v0.0.1-alpha.5，不是beta或稳定版。00–14保留设计契约，不能仅凭示例认定功能已通过所有平台验收。
+**状态：当前源码 Phase 0–5 验收清单已闭环（42/42）。** [当前支持声明](18-release-readiness.md#current-support)统一功能、平台、证据和未支持范围；[08 路线图](08-roadmap.md)、[15 实施记录](15-implementation-status.md)与[16 架构复核](16-architecture-conformance.md)记录关闭依据。认证生命周期和长稳、资源与性能按用户确认通过；真实 Claude 登录/推理、物理主机重启及生产 heap/object 归因仍保留未实测边界。当前公开安装入口为 v0.0.1-alpha.6，不是beta或稳定版。00–14保留设计契约，不能仅凭示例认定功能已通过所有平台验收。
 
-alpha.4固定源CI57/57通过，自动发行及Homebrew更新完成；23公开资产的验证见[公开证据](15-implementation-status.md#evidence-public-alpha4-release-20261116)。[alpha.3历史证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)、[beta候选证据](15-implementation-status.md#evidence-first-beta-candidate)及[beta发布门槛](18-release-readiness.md#beta-readiness)保留，不表示发布了beta。
+alpha.6固定源CI57/57通过，发行工作流60项成功、1项条件跳过（不计通过），自动发行及Homebrew更新完成；23公开资产、四目标验签/来源和公式的独立验证见[公开证据](15-implementation-status.md#evidence-public-alpha6-release-20261117)。[alpha.3历史证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)、[beta候选证据](15-implementation-status.md#evidence-first-beta-candidate)及[beta发布门槛](18-release-readiness.md#beta-readiness)保留，不表示发布了beta。
 
 **新增地区/浏览器扩展（2026-11-15）：** [27 地区环境与远程浏览器](27-region-browser-plugins.md)实现与授权范围内本地/隔离amd64容器验收已完成，并纳入公开alpha.3。新增功能不包含在历史42项或beta57项证据中；08/15/16单列精确源码、产物与发现/修复。新增原生体验、真实账号、物理重启及公网仍未验。
 
 ## 文档清单
 
-共 15 份设计文档（00–14）、实施记录（15）、一致性检查（16）、原型复盘（17）、发布准备（18）、本地验收收敛（19）、资源审查（20）、密钥轮换（21）、Homebrew分发（22）、外部tsnet验收（23）、公开包升级兼容（24）、双主机验收（25）、原生平台验收（26）、地区/浏览器插件（27）、一键安装与首次使用（28）及本索引。
+共 15 份设计文档（00–14）、实施记录（15）、一致性检查（16）、原型复盘（17）、发布准备（18）、本地验收收敛（19）、资源审查（20）、密钥轮换（21）、Homebrew分发（22）、外部tsnet验收（23）、公开包升级兼容（24）、双主机验收（25）、原生平台验收（26）、地区/浏览器插件（27）、一键安装与首次使用（28）、alpha.6安装问题跟进（29）及本索引。
 
 | 文档 | 主要职责 |
 |---|---|
@@ -75,4 +75,4 @@ alpha.4固定源CI57/57通过，自动发行及Homebrew更新完成；23公开�
 
 09 是远端与插件消息形状的唯一来源，13 是本地 agent IPC 的来源；02/03/04/10 规定行为。修改接口时必须同步相关行为、UX 和验收。09 的代码块可用于协议语法验证，但未表示服务已经实现。待实现能力必须列在路线图，不能通过界面示例宣称完成。
 
-实际 module 为 `github.com/DDSRem-Dev/Shikigami`，当前根目录采用[GPL-3.0-only](../LICENSE)，从v0.0.1-alpha.2起随发行包分发；已公开alpha.1及其冻结源码保留原MIT许可证。当前发行源为 [v0.0.1-alpha.5 GitHub Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.5)，公开问题反馈入口为 [GitHub Issues](https://github.com/DDSRem-Dev/Shikigami/issues)，不承诺响应时限；来源及下载验证结果见[公开发行证据](./15-implementation-status.md#evidence-public-alpha5-release-20261116)。文档中的 `yourusername`、`shiki.dev`、其余示例版本/下载地址、未关联22的Homebrew示例包名和邮箱仍是占位示例；真实Homebrew安装命令和平台边界见[22分发与安装](22-homebrew-distribution.md)，其余占位地址不得当作实际安装源。
+实际 module 为 `github.com/DDSRem-Dev/Shikigami`，当前根目录采用[GPL-3.0-only](../LICENSE)，从v0.0.1-alpha.2起随发行包分发；已公开alpha.1及其冻结源码保留原MIT许可证。当前发行源为 [v0.0.1-alpha.6 GitHub Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.6)，公开问题反馈入口为 [GitHub Issues](https://github.com/DDSRem-Dev/Shikigami/issues)，不承诺响应时限；来源及下载验证结果见[公开发行证据](./15-implementation-status.md#evidence-public-alpha6-release-20261117)。文档中的 `yourusername`、`shiki.dev`、其余示例版本/下载地址、未关联22的Homebrew示例包名和邮箱仍是占位示例；真实Homebrew安装命令和平台边界见[22分发与安装](22-homebrew-distribution.md)，其余占位地址不得当作实际安装源。

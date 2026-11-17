@@ -2,7 +2,7 @@
 
 用户要求（2026-11-16）：普通用户在 VPS 和 Mac 各执行一条命令，由工具完成依赖、服务、登录引导和插件配置，不再手工下载公钥、拼接 bundle/pin、编辑 YAML 或串联管理命令。
 
-**版本边界：本页使用 v0.0.1-alpha.5 修复入口，处理 alpha.4 实机反馈中的终端确认、静默长操作和公共目录权限问题。发行状态与验证见[15](15-implementation-status.md)。alpha.3 不含 `shiki-install quickstart` 或 `shiki setup`，历史归档不改写；真实完整双机首装、账号授权和物理重启仍按外部门槛登记。**
+**版本边界：本页使用 v0.0.1-alpha.6 修复入口，处理 alpha.4–alpha.5 实机反馈中的终端确认、耗时提示、目录权限、连接恢复和浏览器操作问题。发行状态与验证见[15](15-implementation-status.md)。alpha.3 不含 `shiki-install quickstart` 或 `shiki setup`，历史归档不改写；真实完整双机首装、账号授权和物理重启仍按外部门槛登记。**
 
 ## 用户入口
 
@@ -18,17 +18,17 @@ Mac 当前登录用户，不加 sudo：
 bash scripts/bootstrap.sh --quickstart --role=client
 ```
 
-直接使用以下 v0.0.1-alpha.5 完整命令。用户无需克隆仓库或另行下载文件：
+直接使用以下 v0.0.1-alpha.6 完整命令。用户无需克隆仓库或另行下载文件：
 
 ```bash
 # VPS
-curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.5/bootstrap.sh | sudo bash -s -- --quickstart --version=v0.0.1-alpha.5
+curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.6/bootstrap.sh | sudo bash -s -- --quickstart --version=v0.0.1-alpha.6
 
 # Mac
-curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.5/bootstrap.sh | bash -s -- --quickstart --role=client --version=v0.0.1-alpha.5
+curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.6/bootstrap.sh | bash -s -- --quickstart --role=client --version=v0.0.1-alpha.6
 ```
 
-同一版本 Release 的 `bootstrap.sh` 也支持管道执行，交互通过 `/dev/tty`，不从脚本输入流读取回答。预发布必须使用明确的 Release/tag 下载 URL，不以 stable-only `latest/download` 推断预发布。加 `--version=v0.0.1-alpha.5` 可固定归档；省略时选择最近公开 Release，旧版本没有向导时明确失败，不退回半套安装冒充完成。脚本应从可信发布/源码取得，归档仍先验证固定发行身份和 Ed25519 签名，再执行包内代码。
+同一版本 Release 的 `bootstrap.sh` 也支持管道执行，交互通过 `/dev/tty`，不从脚本输入流读取回答。预发布必须使用明确的 Release/tag 下载 URL，不以 stable-only `latest/download` 推断预发布。加 `--version=v0.0.1-alpha.6` 可固定归档；省略时选择最近公开 Release，旧版本没有向导时明确失败，不退回半套安装冒充完成。脚本应从可信发布/源码取得，归档仍先验证固定发行身份和 Ed25519 签名，再执行包内代码。
 
 默认安装全部四种插件的支持；只需终端、同步和转发时加 `--components=core`。`--user=<普通用户>` 可覆盖 VPS 默认专用账号 `shiki`。向导不接受自定义布局或 `--non-interactive`，高级/无人值守部署继续使用原安装参数契约。
 
@@ -64,13 +64,28 @@ alpha.4 曾因公共目录被 `umask 077` 限制而出现 `203/EXEC Permission d
 
 ## 恢复与验收
 
+在 Mac 上检查现有连接时，将下面的 `my-vps` 换成向导中保存的服务器标签（不是端口号）：
+
+```bash
+shiki --server my-vps projects list
+shiki plugins --side local list
+shiki --server my-vps plugins --side remote list
+shiki --server my-vps browser status work
+```
+
+本机应有 sync、port、browser，远端另有 region；仅安装 core 的用户不要求 region/browser 就绪。项目列表成功表示一次实际远端请求完成，插件列表仍需检查各项状态；浏览器 `running` 不代表查看器已取得控制权，也不代表 Claude 已登录。
+
+若原有连接报告 `RECONNECT_EXHAUSTED`，网络恢复后执行 `shiki connect my-vps`，使用已保存的地址和凭据重新连接，再运行项目查询。若报告身份或凭据拒绝，按具体诊断核对原服务器；不要用重新登录节点或重签 Token 作为所有故障的通用修复。`shiki` 不在 PATH 时，可暂用 `~/.local/bin/shiki`；不要为写入 PATH 而接管受保护的 shell 文件。
+
+浏览器画面可用但鼠标无法操作时，先点击 **Take control** 并等待 **Controller**。画面冻结或断开时点击 **Reconnect screen**；新连接从只读开始，必要时再次接管。关闭查看器不停止远端 Chrome。系统支持升级若明确要求停止现有实例，可执行 `shiki --server my-vps browser stop work --yes`，完成升级后执行 `shiki --server my-vps browser start work --yes`；保留 profile，但停止前应保存网页中未提交的内容。
+
 重复执行沿用安装事务、版本和身份。同源受信系统支持跳过包更新和密钥环重登记，运行 Chrome 保留；正常中断的密钥环登记继续使用原密码和加密 store。未提交的密文、受保护文件被外部修改等冲突保留人工复核，不自动覆盖。中断事务要求原有显式 rollback，不抹除 receipt。停止向导不等于卸载已完成的服务；安装包/系统依赖不是一个可完整回滚的大事务。
 
 systemd/LaunchAgent 存活、节点 online 或 doctor 输出均不单独代表应用 ready。Claude 未授权时先交付连接凭据解除“需要浏览器登录，却必须先登录才能连接”的引导循环，状态仍为 pending。
 
-本地隔离测试不访问真实账号，不安装宿主包，不修改用户系统服务。公开发行和资产验证见[15](15-implementation-status.md)；真实 VPS/Mac 向导首装、官方 Claude 登录、物理重启及公开包完整服务升级/回滚仍单列外部门槛。11/27 的签名、普通 UID、权限、revision、取消和就绪要求保持，细分命令继续用于高级配置和故障处理。
+本地隔离测试不访问真实账号，不安装宿主包，不修改用户系统服务。公开发行和资产验证见[15](15-implementation-status.md)；本次已使用公开签名包完成现有 VPS/Mac 升级，首次完整向导、官方 Claude 登录、物理重启及本批实机回滚仍单列外部门槛。11/27 的签名、普通 UID、权限、revision、取消和就绪要求保持，细分命令继续用于高级配置和故障处理。
 
-## alpha.6 源码改进（发行前不替代上方公开入口）
+## alpha.6 已发布的体验改进
 
 客户端把服务器标签与地址分开提示，纯端口号会被拒绝并重新询问；已保存地址会显示，可用`shiki setup --server <标签> --tailscale-address <IP或主机名>`显式修正，保留凭据和身份pin。确认支持y/yes/n/no；Token提示说明不回显、Enter提交和Ctrl+C取消。控制面暂时离线不会要求重新授权或误换Token。
 

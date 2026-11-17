@@ -1,6 +1,6 @@
 # 架构与文档一致性检查
 
-## alpha.6 安装问题统一修复（2026-11-16，源码验证完成，公开CI待验）
+## alpha.6 安装问题统一修复（2026-11-17，公开发行与两端升级完成，实机复验进行中）
 
 用户授权发布alpha.6并升级VPS/Mac后清理Shikigami开发产物，明确保留agent-remote。完整问题表与清理边界见[29 安装问题跟进](29-alpha6-installation-followup.md)。本批覆盖：地址/标签与端口输入校验、原地纠正和保留pin的地址修正；y/yes/n/no与秘密输入说明/PTY取消恢复；控制面离线不重新发起登录且不误换Token；准确的启动失败阶段；受保护shell文件逐个处理与批准后仅修正准确home写权限；显式region支持的受管daemon策略及有条件daemon-only重启；插件修改只读状态恢复；短探测不误杀共享流、仅同一成功在途检查合并；浏览器显式重连与旧代回调隔离、独立启动状态/画面。
 
@@ -14,10 +14,18 @@
 
 CI首轮固定源 `ccce4fa72fa3fbfd6f0cfa23bdf574219921eeda` 的 [43896776154](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43896776154) 结束为失败：49项成功、WSL2一项失败、3项macOS ARM作业取消且无执行步骤、2项后置矩阵跳过；取消/跳过不计通过。WSL2产品、E2E、embedded、terminal及发行工具全部通过，systemd-lifecycle在crash-guard阶段扫描 `/proc/*/stat` 失败（test-systemd.py原353行；error_kind=other），原异常类型无法由公开证据确认。
 
-2026-11-17补修仅涉及验收检查器：先筛选准确插件可执行名，再按字节解析stat的最终右括号；仅将ENOENT/ESRCH作为进程退出，权限错误及损坏worker数据仍失败。固定异常分类新增ProcessLookupError/IndexError/UnicodeDecodeError，不导出异常正文或私密路径。旧代码的上述三种脆弱情况均确定性复现，但不冒称已确认原WSL具体异常。工具测试112/112（24.391s）、平台工具30/30（1.234s）、最终专项6/6通过，diff检查通过。七类复核确认生产目录依赖、RPC/授权、状态/事务、进程策略、网络/文件边界、CLI/安装布局不变；仅提高进程快照检查的正确性和失败分类，崩溃恢复断言及时间限制保持。新固定源完整CI待验。
+2026-11-17补修仅涉及验收检查器：先筛选准确插件可执行名，再按字节解析stat的最终右括号；仅将ENOENT/ESRCH作为进程退出，权限错误及损坏worker数据仍失败。固定异常分类新增ProcessLookupError/IndexError/UnicodeDecodeError，不导出异常正文或私密路径。旧代码的上述三种脆弱情况均确定性复现，但不冒称已确认原WSL具体异常。工具测试112/112（24.391s）、平台工具30/30（1.234s）、最终专项6/6通过，diff检查通过。七类复核确认生产目录依赖、RPC/授权、状态/事务、进程策略、网络/文件边界、CLI/安装布局不变；仅提高进程快照检查的正确性和失败分类，崩溃恢复断言及时间限制保持。新固定源完整CI结果见下段。
+
+固定源 `377551af19b2f4a51e1057b782148c14a915797a` 的 [CI43906750506](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43906750506) 最终57/57成功。WSL2复验完整通过：incomplete_stages为空，systemd 13项操作、agent/daemon升级与回滚、清理均通过。期间macOS ARM预检查/终端作业因hosted runner多次未能接收而取消；Intel CLI作业一次达到15分钟上限且日志API返回404，不能确定具体耗时原因。同源补跑后该CLI作业8分50秒成功；没有改变断言或超时，没有移动标签，取消/跳过均待补跑成功后才计通过。不可变alpha.6标签指向该提交；[发行44017118492](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44017118492) 已成功（60项成功、1项条件跳过；跳过的复用Homebrew分支不计通过）。2026-11-17T05:29:09Z公开23资产，draft=false、prerelease=true；四目标独立验签、归档成员/payload/平台/固定源码核对通过。Homebrew由bot提交25740ba5cb9baeb258bf988f9e32d429bf22d37a自动更新，本机用已验公开资产重新生成Formula并逐字节比对通过。
+
+
+
+2026-11-17实机部署：VPS Debian12/amd64与Mac arm64已通过签名alpha.6安装器升级；全部安装payload、VPS两个root支持程序哈希匹配公开manifest，运行daemon及LaunchAgent均指向正式release。首次安装器探测返回node_uninitialized，随后两节点online，Mac local_application_ready，VPS application_pending/CLAUDE_LOGIN_REQUIRED。原daemon ID、tailnet地址、Mac配置/凭据、VPS配置/设备Token/加密凭据/密钥环字节保持；插件持久bucket与升级备份一致，事务记录变化不冒称整个状态文件未改。local sync/port/browser及remote sync/port/region/browser全部alpha.6 ready。旧90-region-helper.conf仅在内容精确匹配且新50受管策略生效后移除。Chrome显式停止后更新runtime；首次恢复请求service unavailable，确认stopped且无systemd待执行任务后再次启动成功，work profile保留。浏览器界面复验因原工具工作区不存在，等待重新创建授权；项目请求短时采样另记，不宣称公网长期稳定。
+
+开发产物清理：确认正式服务接管、路径所有者/inode及运行引用后，删除38个Mac开发/诊断/测试路径（逻辑大小5,273,780,157字节，不等同实际磁盘释放量）；Docker残留共享句柄仅在所有容器均无对应挂载后排除，未停止/删除其他容器。VPS已删除哈希匹配的alpha.4旧脚本、精确旧策略及本批升级staging；Mac另清理26个已完成的alpha.6测试/CI helper与日志，本批私有验签/观察临时目录也已在证据入文档后删除。agent-remote、正式release/backups、身份、配置、项目、profile和密钥环保留。七类复核确认此次仅按既有安装/服务归属和授权完成部署，无接口、权限白名单、持久身份或网络配置新增变更；指南补齐实际CLI诊断和显式重连步骤，跳过/账号/物理重启仍不计通过。
 
 - [x] 已确认问题汇总与源码回归覆盖（29记录）。
-- [ ] alpha.6固定源完整CI、签名公开发行与资产验证。
+- [x] alpha.6固定源完整CI、签名公开发行与资产验证。
 - [ ] 两端签名升级、稳定性复验与开发产物清理。
 
 

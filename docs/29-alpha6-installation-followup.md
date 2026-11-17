@@ -1,6 +1,6 @@
 # alpha.6 安装问题与实机修复记录
 
-本记录整理用户从 alpha.4 至 alpha.5 的真实安装反馈，以及计划纳入 alpha.6 的修复。源码测试、公开发行、两端升级和公网稳定性分别记录；当前尚未完成的验证不记通过。
+本记录整理用户从 alpha.4 至 alpha.5 的真实安装反馈，以及已随 alpha.6 发布的修复。源码测试、公开发行、两端升级和公网稳定性分别记录；当前尚未完成的验证不记通过。
 
 ## 问题清单
 
@@ -38,8 +38,21 @@
 
 用户明确要求保留现有agent-remote。清理仅涉及Shikigami临时hotfix/诊断目录、无运行引用的本地构建bin、测试临时文件和旧下载脚本。签名正式发行目录及正常安装备份不作为dev删除；~/.shiki、/var/lib/shiki、密钥环、Tailscale身份、浏览器profile和用户项目保留。源码仓库中的生产源文件、测试、版本文档保留。
 
-当前状态：源码修复、完整本地测试与独立复核完成；alpha.6发布、两端升级、开发文件清理和部署后验证待完成。
+当前状态：源码修复、公开CI、alpha.6签名发行与两端升级完成；确认的旧开发产物已清理，短时CLI采样及浏览器交互验证状态见下。
 
 ## 发布前CI跟进
 
-首轮CI的WSL2产品、端到端及终端测试通过，systemd进程枚举检查失败。已补修检查器的退出竞态和stat字节解析，权限错误/损坏worker仍失败；112项工具测试及30项平台工具测试通过。原失败及取消/跳过项保留于08/15/16，新固定源CI待验。
+首轮CI的WSL2产品、端到端及终端测试通过，systemd进程枚举检查失败。已补修检查器的退出竞态和stat字节解析，权限错误/损坏worker仍失败；112项工具测试及30项平台工具测试通过。原失败及取消/跳过项保留于08/15/16，新固定源377551a的CI43906750506已57/57成功；WSL2的13项systemd操作及清理通过。macOS容量取消和Intel CLI一次超时在同源补跑后通过，未更改断言/超时。alpha.6发行44017118492已成功（60项成功、1项条件跳过），23公开资产及四目标独立验签、payload/source/平台/Formula一致性核对通过。两端已用公开签名包升级，精确发行证据见[15](15-implementation-status.md#evidence-public-alpha6-release-20261117)。
+
+2026-11-17升级前基线：Mac节点online但已保存服务器为RECONNECT_EXHAUSTED，导致查询立即失败；使用保存连接显式connect恢复ready，未更换凭据。之后三次默认5秒预算的项目查询全部成功（0.534/0.424/0.476秒）。这是升级前的恢复证据，不计alpha.6部署后稳定性通过。
+
+
+## alpha.6 实机升级与清理（2026-11-17）
+
+VPS Debian12/amd64与Mac arm64均运行正式alpha.6/377551a，安装文件全部匹配已签名manifest；VPS region helper/browser runtime和Mac LaunchAgent也已切换正式产物。两节点保持原tailnet地址及daemon身份，Mac配置与凭据、VPS配置、设备Token、加密凭据和keyring逐字节保持；插件配置bucket与升级备份一致。profile列表和保存的地区设置保持。local sync/port/browser与remote sync/port/region/browser全部ready。没有重新登录节点、换Token或修改路由/DNS。
+
+安装器激活后的首次探测为node_uninitialized，之后复查两节点online，Mac local_application_ready；VPS仍为application_pending/CLAUDE_LOGIN_REQUIRED，未执行账号登录。Chrome在支持程序更新前显式停止；首次恢复请求返回service unavailable，查询确认仍stopped且无systemd启动任务后再次启动成功。运行profile为work，Chrome157.0.8103.78，region revision保持；这些过程中的失败不从记录中抹除。
+
+升级后默认5秒预算的项目查询进行12次间隔采样：第1次失败（2.540s，只记录command_failed，未保留原始错误正文），随后11次连续成功（0.293–2.252s）。该约3分钟窗口证明现有连接可继续工作，不能证明公网长期稳定或消除底层网络故障。浏览器界面验证遇到原ego-browser工作区消失，工具列表为空；已请求用户允许新建工作区继续，不把尚未进行的鼠标/重连复验记通过。
+
+清理完成的旧开发产物：Mac的38个确认路径，包括临时hotfix、开发bin/.tools、诊断截图、测试目录和Python缓存，逻辑文件总大小5,273,780,157字节（不是实测磁盘释放量）。删除前核对UID/dev/inode、正式服务接管和运行引用；系统虚拟化文件共享的残留句柄仅在Docker所有容器均无对应挂载后排除，未停止或删除其他容器。VPS删除哈希匹配的旧alpha.4下载脚本，以及验证完成后的本批私有升级staging。原90-region-helper临时策略在新50受管策略确认生效后精确移除。agent-remote、正式发行及安装备份、配置、身份、项目、profile和密钥环完整保留；本机另外26个已完成的alpha.6测试/CI helper与日志已清理；本批本机验签/观察临时目录也已在证据入文档后删除；临时SSH维护连接已关闭。
