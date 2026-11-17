@@ -19,13 +19,106 @@ import (
 	rpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/protocolconnect"
 )
 
+func TestVerifiedRouteProbeUsesRemainingCallerBudget(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+	defer cancel()
+	probe := &cancellableRouteProbe{daemonProbe: daemonProbe{active: map[string]chan struct{}{}}}
+	probe.probe = func(context.Context) (*pb.ProtocolAgreement, error) {
+		return &pb.ProtocolAgreement{Major: 1, DaemonId: "daemon_route", Capabilities: []string{"terminal.v1"}}, nil
+	}
+	s, r := openResourceService(t, ctx, resourceConfig(t))
+	defer r.Close()
+	record := storeRouteServer(t, s, terminalProbeEndpoint(t, probe))
+	client, err := r.Resolve(ctx, record.Config.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entered := make(chan time.Time, 1)
+	release := make(chan struct{})
+	defer close(release)
+	r.mu.Lock()
+	original := r.pools[record.Config.Id]
+	original.nextCheck = time.Now().Add(time.Hour)
+	original.base = connect.NewClient(clientTransport{original.base}, func(next connect.ClientFunc) connect.ClientFunc {
+		return func(ctx context.Context, spec connect.Spec) (connect.ClientStream, error) {
+			deadline, _ := ctx.Deadline()
+			entered <- deadline
+			select {
+			case <-release:
+				return next(ctx, spec)
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+	})
+	r.mu.Unlock()
+	call, stop := context.WithTimeout(ctx, 4*time.Second)
+	defer stop()
+	done := make(chan error, 1)
+	go func() {
+		next, err := r.Resolve(call, record.Config.Id)
+		if err == nil && next != client {
+			err = fmt.Errorf("successful verification replaced the shared client")
+		}
+		done <- err
+	}()
+	select {
+	case deadline := <-entered:
+		t.Logf("probe entered with %s remaining", time.Until(deadline))
+	case <-call.Done():
+		t.Fatal("identity probe never entered", call.Err())
+	}
+	// Release after the former half-budget expires, with 1.5 seconds still
+	// available for authenticated HTTP/2 negotiation and the business call.
+	deadline, _ := call.Deadline()
+	timer := time.NewTimer(time.Until(deadline.Add(-1500 * time.Millisecond)))
+	defer timer.Stop()
+	select {
+	case err := <-done:
+		t.Fatalf("verified route abandoned a delayed identity check while its caller still had %s: %v", time.Until(deadline), err)
+	case <-timer.C:
+	}
+	select {
+	case release <- struct{}{}:
+	case <-call.Done():
+		t.Fatal("caller deadline elapsed before the fixture could release the probe", call.Err())
+	}
+	if err := <-done; err != nil {
+		t.Fatal("identity check did not use the remaining caller budget", err)
+	}
+	terminal, err := rpc.NewShikiDaemonClient(client).TerminalStream(call)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer terminal.Close()
+	if err := terminal.Send(&pb.TerminalInput{Payload: &pb.TerminalInput_Open{Open: &pb.TerminalOpen{SessionId: "sess_delayed"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := terminal.Receive(); err != nil {
+		t.Fatal("business call failed inside the original caller budget", err)
+	}
+	if call.Err() != nil {
+		t.Fatal("verification extended the caller budget", call.Err())
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.pools[record.Config.Id] != original || original.bad.Load() || original.episode.attempts != 0 || original.probeTimeouts != 0 {
+		t.Fatal("successful delayed identity check changed the pool or failure budget")
+	}
+	probe.mu.Lock()
+	defer probe.mu.Unlock()
+	if probe.count != 1 {
+		t.Fatal("business operation was replayed", probe.count)
+	}
+}
+
 // Exercise a real HTTP/2 stream while an independent identity probe exhausts
-// its own fair-share deadline. The cancellation-ordering case forces a local
-// transport status. Both active and legitimately idle terminals must survive
+// its bounded deadline or the caller deadline. The cancellation-ordering case
+// forces a local transport status. Both active and legitimately idle terminals must survive
 // brief stalls; only sustained failure without authenticated progress retires
 // their shared route. Trust rejections never receive this timeout grace.
 func TestProbeTimeoutPreservesSharedTerminalUntilSustainedFailure(t *testing.T) {
-	for _, outcome := range []string{"short callers repeat", "local cancellation after deadline", "full success resets", "active progress resets", "idle sustained timeout", "authentication rejection", "identity rejection", "remote deadline", "remote cancellation"} {
+	for _, outcome := range []string{"short callers repeat", "medium caller full probe", "local cancellation after deadline", "full success resets", "active progress resets", "idle sustained timeout", "authentication rejection", "identity rejection", "remote deadline", "remote cancellation"} {
 		t.Run(outcome, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 			defer cancel()
@@ -97,6 +190,10 @@ func TestProbeTimeoutPreservesSharedTerminalUntilSustainedFailure(t *testing.T) 
 				defer r.mu.Unlock()
 				actions <- action
 				call, stop := context.WithCancel(ctx)
+				if outcome == "medium caller full probe" {
+					stop()
+					call, stop = context.WithTimeout(ctx, 6*time.Second)
+				}
 				if !fullBudget {
 					stop()
 					call, stop = context.WithTimeout(ctx, 400*time.Millisecond)
@@ -107,8 +204,12 @@ func TestProbeTimeoutPreservesSharedTerminalUntilSustainedFailure(t *testing.T) 
 					t.Fatal(err)
 				}
 				next, err := r.resolveLocked(call, record.Config.Id, snapshot)
-				if call.Err() != nil {
-					t.Fatal("fixture exhausted parent deadline, not just the probe budget", call.Err())
+				if fullBudget || action != "timeout" {
+					if call.Err() != nil {
+						t.Fatal("fixture exhausted parent deadline, not just the probe budget", call.Err())
+					}
+				} else if !errors.Is(call.Err(), context.DeadlineExceeded) {
+					t.Fatal("short probe did not retain its caller deadline", call.Err())
 				}
 				return next, err
 			}
@@ -131,8 +232,12 @@ func TestProbeTimeoutPreservesSharedTerminalUntilSustainedFailure(t *testing.T) 
 					t.Fatal("isolated probe timeout replaced the shared pool or consumed its retry budget")
 				}
 			}
-			fullBudget := outcome == "full success resets" || outcome == "active progress resets" || outcome == "idle sustained timeout"
-			if next, err := resolve("timeout", fullBudget); next != nil || connect.CodeOf(err) != connect.CodeUnavailable {
+			fullBudget := outcome == "medium caller full probe" || outcome == "full success resets" || outcome == "active progress resets" || outcome == "idle sustained timeout"
+			wantTimeout := connect.CodeDeadlineExceeded
+			if fullBudget {
+				wantTimeout = connect.CodeUnavailable
+			}
+			if next, err := resolve("timeout", fullBudget); next != nil || connect.CodeOf(err) != wantTimeout {
 				t.Fatalf("first probe timeout must fail only its caller: client=%p error=%v original_bad=%v", next, err, original.bad.Load())
 			}
 			preserved()
@@ -151,14 +256,25 @@ func TestProbeTimeoutPreservesSharedTerminalUntilSustainedFailure(t *testing.T) 
 				original.probeFailedSince = time.Now().Add(-probeFailureRecoveryWindow)
 			}
 			switch outcome {
+			case "medium caller full probe":
+				r.mu.Lock()
+				if original.probeTimeouts != 1 || original.probeFailedSince.IsZero() {
+					t.Error("six-second caller did not admit a full five-second failure observation")
+				}
+				r.mu.Unlock()
 			case "local cancellation after deadline":
 				// The shared terminal and retry budget were checked above.
 			case "short callers repeat":
 				for n := 2; n <= 4; n++ {
-					if next, err := resolve("timeout", false); next != nil || connect.CodeOf(err) != connect.CodeUnavailable {
+					if next, err := resolve("timeout", false); next != nil || connect.CodeOf(err) != connect.CodeDeadlineExceeded {
 						t.Fatal("short caller budgets were treated as route failure", err)
 					}
 					preserved()
+					r.mu.Lock()
+					if original.probeTimeouts != 0 || !original.probeFailedSince.IsZero() {
+						t.Error("caller deadline consumed the route failure observation budget")
+					}
+					r.mu.Unlock()
 					exchange(n)
 				}
 			case "full success resets":
@@ -183,7 +299,7 @@ func TestProbeTimeoutPreservesSharedTerminalUntilSustainedFailure(t *testing.T) 
 					exchange(n)
 				}
 			case "idle sustained timeout":
-				if next, err := resolve("timeout", false); next != nil || connect.CodeOf(err) != connect.CodeUnavailable {
+				if next, err := resolve("timeout", false); next != nil || connect.CodeOf(err) != connect.CodeDeadlineExceeded {
 					t.Fatal("short caller invalidated the route", err)
 				}
 				preserved()

@@ -299,7 +299,9 @@ func (r *Resources) resolveLocked(ctx context.Context, id string, snapshot *stor
 		}
 		if existing.client != nil && !existing.bad.Load() {
 			// Reconfirm application identity after HTTP/2 internal reconnect, without
-			// replaying the caller's operation. Leave budget for route replacement.
+			// replaying the caller's operation. This is one verified route, so its
+			// bounded probe may use the caller's remaining budget without splitting
+			// it between hypothetical replacement candidates.
 			r.mu.Unlock()
 			agreement, path, probeErr := r.verifyRemote(ctx, existing)
 			r.mu.Lock()
@@ -486,7 +488,7 @@ func (r *Resources) failRemote(p *remotePool, err error) {
 }
 
 func (r *Resources) verifyRemote(ctx context.Context, p *remotePool) (*pb.ProtocolAgreement, string, error) {
-	probe, cancel, callerLimited := remoteProbeContext(ctx, 2)
+	probe, cancel, callerLimited := remoteProbeContext(ctx, 1)
 	defer cancel()
 	stop := context.AfterFunc(p.ctx, cancel)
 	defer stop()

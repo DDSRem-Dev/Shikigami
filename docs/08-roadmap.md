@@ -29,7 +29,7 @@ CI首轮固定源 `ccce4fa72fa3fbfd6f0cfa23bdf574219921eeda` 的 [43896776154](h
 
 交付文档提交f0a06bde34124d8881f3d52cea2a884079028af1的[CI44026669305](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44026669305)结束为52项成功、1项失败、2项后置作业跳过，跳过不计通过。失败job133850471668为macOS Intel重型集成：TestRealHostRotationRecoversInflightFiles/server/download在inflight_test.go:95调用resources.Children，直接子进程的Exe查询返回`unknown error: proc_pidpath returned 0`。此错误本身不能证明当次进程退出或权限问题，不能仅凭字符串忽略。
 
-补修仅涉及测试夹具test/fixtures/resources：正常候选仍只查询可执行路径；明确缺失或上述Darwin模糊结果触发现有processidentity.Inspector独立确认，只有ErrDisappeared才能跳过。活进程、权限/未知错误仍失败，expected数量、直接子进程范围、原截止、回收断言不变，不增加重试/超时。真实私有子进程在枚举后、Exe查询时回收的四分支回归，在旧错误处理overlay下全红；修后resources/processidentity专项race三轮通过（2.565s/4.974s），vet与diff检查通过，overlay与子进程均已清理。固定测试源码的受影响整包race复验全部通过：hostrotation219.045s、rotation35.447s、syncack42.019s、port14.586s、architecture1.405s。首次调用误设GOTOOLCHAIN=local而命中本机Go1.26.3，未运行测试；改用项目固定Go1.26.11后获得上述结果，不将前次工具链拒绝计通过。新固定源公开CI待完成。
+补修仅涉及测试夹具test/fixtures/resources：正常候选仍只查询可执行路径；明确缺失或上述Darwin模糊结果触发现有processidentity.Inspector独立确认，只有ErrDisappeared才能跳过。活进程、权限/未知错误仍失败，expected数量、直接子进程范围、原截止、回收断言不变，不增加重试/超时。真实私有子进程在枚举后、Exe查询时回收的四分支回归，在旧错误处理overlay下全红；修后resources/processidentity专项race三轮通过（2.565s/4.974s），vet与diff检查通过，overlay与子进程均已清理。固定测试源码的受影响整包race复验全部通过：hostrotation219.045s、rotation35.447s、syncack42.019s、port14.586s、architecture1.405s。首次调用误设GOTOOLCHAIN=local而命中本机Go1.26.3，未运行测试；改用项目固定Go1.26.11后获得上述结果，不将前次工具链拒绝计通过。随后be7fada固定源CI的进程夹具检查通过，整轮的独立浏览器失败见下段。
 
 七类复核：改动仅为test夹具复用已有test诊断观察器，生产目录/SDK与插件边界不变；RPC、权限、能力、持久状态/revision/事务、生产进程与网络/终端行为、CLI和安装布局均无改动。无法确认消失仍失败，不以重跑或放宽断言掩盖未知结果。已发布alpha.6标签、签名资产和两端生产二进制保持不变；这批不是新的产品版本。
 
@@ -40,9 +40,19 @@ CI首轮固定源 `ccce4fa72fa3fbfd6f0cfa23bdf574219921eeda` 的 [43896776154](h
 
 源码检查与独立确定性复现确认：WebSocket关闭ACK早于旧SDK stream清理及双向pump退出。原实现只看context取消，既可能在取消前拒绝新Dial，也可能在已取消但清理未完成时提前创建第二条远端stream。旧代码在阻塞SDK Close的回归中opened=2；不是把这条复现冒充原WSL未公开的错误正文。
 
-修补限定browser/client：attachment.done在本地SDK Close返回、socket清理及双向pump退出后关闭；这不是远端释放确认；最多一个新请求等待旧done，额外竞争者409，等待不取消既有连接。等待和远端READY共享原operationTimeout截止，取消、scope、Origin/CSRF、单attachment、只读和显式控制权保持，不重放输入。真实loopback测试在旧Close阻塞期间要求新Dial在原预算内504且opened仍1，释放后只创建一次只读新连接；单等待者、额外竞争者及取消隔离有确定性覆盖。专项race十轮、client整包race（2.060s）、前端10/10、vet和diff检查通过；独立只读复核未发现阻塞问题，架构整包race通过（1.659s）；新固定源CI待完成。
+修补限定browser/client：attachment.done在本地SDK Close返回、socket清理及双向pump退出后关闭；这不是远端释放确认；最多一个新请求等待旧done，额外竞争者409，等待不取消既有连接。等待和远端READY共享原operationTimeout截止，取消、scope、Origin/CSRF、单attachment、只读和显式控制权保持，不重放输入。真实loopback测试在旧Close阻塞期间要求新Dial在原预算内504且opened仍1，释放后只创建一次只读新连接；单等待者、额外竞争者及取消隔离有确定性覆盖。专项race十轮、client整包race（2.060s）、前端10/10、vet和diff检查通过；独立只读复核未发现阻塞问题，架构整包race通过（1.659s）。固定源6850e77899f6a8f3424bb9ad393b01ce478c8ab4的[CI44037921171](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44037921171)最终57/57成功；WSL2公开证据无未执行阶段，产品/E2E/embedded/terminal/release及systemd生命周期全部通过，Linux/macOS维护验收通过。该固定源尚不含下述身份复核预算修补。
 
 七类复核：生产业务仍归plugins/browser/client，未引入host依赖或新远端RPC/权限；新增仅内存完成信号与单等待标志，不改持久配置/修订/去重。本地清理完成前不释放连接所有权，所有等待受原预算和生命周期约束；网络/输入限额及安装布局不变，CLI/公开能力不新增。此修补尚未进入已发布且不可覆盖的alpha.6资产；两端当前仍为已验签alpha.6，后续版本发布和升级须单独确认，不能声称该竞态已在用户环境消除。
+
+### 已有连接身份复核预算跟进（2026-11-17）
+
+公开alpha.6两端保持运行。07:21:40–07:31:06 UTC的11次默认5秒项目查询，8次成功（0.180–2.315s），3次失败（2.552/5.057/2.553s）；这三次未保留原始错误正文，不能补造分类。随后独立普通查询捕获2.517s的`shiki: unavailable: service unavailable`。另12次结构化查询均成功（0.181–2.548s）；后半段诊断与原采样交叠，可能共享在途身份检查，不能据此认定输出格式影响可靠性。doctor另次快照为online/direct、7插件ready；这些成功不否定失败或证明公网长期稳定。
+
+只读审查确认一条与2.5s吻合但尚未在现场独立证明的代码路径：已有池的verifyRemote固定将调用剩余预算分成两份；默认5s调用的探测约2.5s到期，callerLimited分支直接返回而不使用为route替换预留的后半预算。探测错误经既有脱敏成为Unavailable/service unavailable；该文案也可能来自其他故障，不能反推唯一根因。
+
+修补只对已有池的身份复核使用原调用剩余预算、最多5s；首次建立多路线的公平分摊保持，CLI/短RPC总预算不变，不增加业务重试或跳过身份验证。父预算≤5s到期仍仅失败该调用，不计池失败；剩余预算>5s且<10s时现在可以完成一次5s探测并进入已有持续失败观察，恢复仍受父截止约束；≥10s或无父截止的5s上限保持。确认的可用性策略缺陷与现场根因分开记录，不能宣称此修补消除公网故障。确定性延迟回归中，旧代码在4s父预算约2.08s返回Unavailable，父仍剩约2s；修后2.5s释放探测，完成真实HTTP/2认证和终端READY，业务计数为1且仍在原父预算内。短400ms调用要求父截止错误、原共享终端仍传输且池/重试/失败观察不变；6s调用验证完整5s失败可计入观察。专项race60.455s通过，最后仅增强测试释放发送的取消保护后专项4.151s通过。独立最终复核未发现阻塞问题；vet、架构race（1.402s）和diff检查通过，最终固定测试源码的agent/connection/architecture整包race分别72.285s/2.776s/1.198s通过；新固定源CI待完成。当前已发布alpha.6不包含它。
+
+七类复核范围：仅host agent连接策略及真实HTTP/2测试，SDK/插件依赖边界不变；无新RPC、权限或能力，pin/凭据代际和每次独立认证保持；只内存探测预算变化，持久状态、revision、原子写和去重不变；父截止/取消、进程所有权和共享流隔离保持；终端输入、文件、端口及网络配置不变；CLI总超时、签名资产和安装布局不变；本地源码验证、固定源CI与未部署的生产修补分开登记。
 
 - [x] 已确认问题汇总与源码回归覆盖（29记录）。
 - [x] alpha.6固定源完整CI、签名公开发行与资产验证。

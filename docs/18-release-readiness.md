@@ -2,7 +2,7 @@
 
 更新：2026-11-17。当前公开预发布为[v0.0.1-alpha.6](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.6)，固定源`377551af19b2f4a51e1057b782148c14a915797a`的[CI43906750506](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43906750506)57/57通过；[Release44017118492](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44017118492)完成60项成功、1项条件跳过（不计通过），于`2026-11-17T05:29:09Z`公开，23资产、`draft=false`、`prerelease=true`。Homebrew自动更新提交`25740ba5cb9baeb258bf988f9e32d429bf22d37a`；四目标独立签名、payload、平台/源码和重新生成公式的一致性验证见[发行证据](15-implementation-status.md#evidence-public-alpha6-release-20261117)。本版汇总安装、配对、插件和浏览器连接修复；两端签名升级完成，短时CLI采样与浏览器交互复验分别记录，真实账号与物理重启仍未验。旧版标签与资产保持不变。
 
-alpha.6 发布后的 CI 另发现浏览器本地 attachment 清理竞态；当前 master 追加修补未进入已发布资产，候选后续版本与授权/验证状态见[29](29-alpha6-installation-followup.md)。
+alpha.6 发布后的 CI 及实机跟进另发现浏览器本地 attachment 清理竞态和已有连接身份复核预算问题；当前 master 追加修补未进入已发布资产，候选后续版本与授权/验证状态见[29](29-alpha6-installation-followup.md)。
 
 历史首个公开预发布 [v0.0.1-alpha.1](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.1) 已通过 tag 全自动工作流发布；固定提交为 `f0b5f83dce599c8e0d715bda5e7806a0ef6aaa72`，[Actions 40895007350](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40895007350) 已完成且成功，包含同源 CI、四目标构建、签名验签和公开发布。Release 于 `2026-10-29T15:13:47Z` 公开，`draft=false`、`prerelease=true`，共22个资产；独立下载与实际产物验证结果见[公开发行证据](15-implementation-status.md#evidence-public-alpha-release-20261029)。本文件保存发布流程、验收边界与剩余门槛；[该版本说明](./releases/v0.0.1-alpha.1.md) 随 tag 冻结。完整范围仍由 [08 路线图](./08-roadmap.md) 决定，预发布不缩小交付要求。
 

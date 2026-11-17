@@ -6,7 +6,7 @@
 
 alpha.6 固定源码的发布前 CI 为 57/57；发行工作流完成 60 项成功、1 项条件跳过（不计通过），自动构建、签名、公开发布和 Homebrew 更新成功。23 个公开资产、四目标签名与产物来源、自动公式已独立核验，见[发行证据](docs/15-implementation-status.md#evidence-public-alpha6-release-20261117)。两端已完成签名升级，部署后CLI采样和浏览器交互验证分别记录；真实账号授权与物理重启仍未实测，见[发行说明](docs/releases/v0.0.1-alpha.6.md)。[alpha.3 历史发行证据](docs/15-implementation-status.md#evidence-public-alpha3-release-20261115)保留，不扩大为新向导验收。
 
-alpha.6 发布后的验收又发现一处浏览器快速重连清理竞态；追加修补尚未进入已发布的 alpha.6，源码与后续版本状态见[问题记录](docs/29-alpha6-installation-followup.md)。
+alpha.6 发布后的验收又发现浏览器快速重连清理竞态和已有连接身份复核的预算问题；追加修补尚未进入已发布的 alpha.6，源码与后续版本状态见[问题记录](docs/29-alpha6-installation-followup.md)。
 
 ## 安装
 
