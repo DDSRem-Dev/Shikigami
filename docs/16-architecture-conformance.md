@@ -1,17 +1,35 @@
 # 架构与文档一致性检查
 
-## alpha.7 发布、两端升级与实测（2026-11-17，已授权，执行中）
+## alpha.7 发布、两端升级与实测（2026-11-17，公开发行、两端升级、交互实测与清理完成）
 
 用户已明确批准发布v0.0.1-alpha.7并升级VPS/Mac，允许新建ego-browser工作区继续画面、鼠标控制及显式重连实测，测试后清理本批Shikigami开发/临时产物。agent-remote、正式版本与安装备份、节点身份、凭据、配置、项目、profile和密钥环保留。账号登录、主机重启及网络/代理/路由变更不属于本次操作。
 
-两项生产补修的固定源c5c8f96a4c6e96b95c7993a0d81fca7bb86b0b1f已完成[CI44043767221](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44043767221)57/57成功；WSL2完整阶段通过，无未执行阶段，新增身份预算回归2.54s、浏览器本地清理回归0.21s通过。此前浏览器补修6850e77的独立CI44037921171亦57/57通过。当前批次仅补齐发布说明与授权/验证记录，生产代码保持该已验源码；alpha.7仍须通过自身标签的完整CI、签名与公开资产验证，再升级两端。
+两项生产补修的固定源c5c8f96a4c6e96b95c7993a0d81fca7bb86b0b1f已完成[CI44043767221](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44043767221)57/57成功；WSL2完整阶段通过，无未执行阶段，新增身份预算回归2.54s、浏览器本地清理回归0.21s通过。此前浏览器补修6850e77的独立CI44037921171亦57/57通过。发布说明冻结时生产代码保持该已验源码；标签的完整CI、签名公开资产及两端部署结果在下文分别记录。
 
 七类复核：目录及SDK/host/plugin依赖、RPC/鉴权/能力、持久状态与去重、进程所有权与取消、文件/终端/网络语义、CLI与签名安装布局均沿用已复核实现，无新接口或配置策略；冻结说明区分本地SDK清理与远端释放确认、原调用预算与网络故障。CI通过不替代真实画面/鼠标、网络长稳、账号或物理重启证据。
 
+标签固定源为`cbf3cdfcec1c598e7d9ee4279c4054cdc2eb96bb`，分支CI44091466319和发行44091646249分别执行。发行首轮WSL2 job134068085354在13:20:03–14:05:03 UTC失去hosted runner通信，GitHub注释明确记录该原因，日志资产返回404/BlobNotFound；无法确认具体测试或底层失联原因。同源分支WSL2 job134067362834已成功。发行macOS Intel internal job134070372881达到既有20分钟上限被取消；已取得日志含1081个测试pass事件、无fail事件，session包尚未结束，因此整项不计通过。后续同源补跑保持原断言和超时，结果另记；不移动标签或覆盖签名资产。发行macOS ARM unit-pkg job134070372451在13:23:58–14:23:30 UTC排队后取消，steps为空；GitHub明确注释hosted runner多次未能领取任务及ARM容量限制。该项未执行，不计通过，保留到同源补跑。分支CI的macOS ARM unit-cmd job134071095835同样因runner未领取而于14:28:30 UTC取消，steps为空；亦须原条件补跑。
+
+发行等待期间的alpha.6交互基线（不是alpha.7验收）：在用户已授权的新工作区中，实际work画面从只读显式接管，新建仅用于测试的远端标签，通过键盘载入本地data测试页；鼠标按钮计数0→1、输入alpha6-test、滚动至END均由画面确认。一次显式重连恢复Connected/Read-only，再次明确接管后关闭测试标签，原about:blank保留；随后关闭本地viewer，未停止Chrome。状态查询多次短暂unavailable后恢复，不能计公网稳定通过。测试脚本一次误等Read-only session，而实际重连文案为Read-only，属于观察条件错误，不能记成产品重连超时。
+
+固定标签源cbf3cdf的[分支CI44091466319](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44091466319)在attempt2达到57/57成功：首轮56成功、1个ARM容量取消；只补跑该未执行作业后通过，未改源码、断言或超时。当时发行自身CI、签名公开资产、部署及实测分别待验；最终结果见下文，不由分支CI替代。
+
+alpha.7已于2026-11-17T15:25:25Z公开（draft=false、prerelease=true），固定标签源cbf3cdf；发行44091646249 attempt2最终60项成功、1项条件跳过（不计通过）。此前三项异常在原源码/原断言/原超时下补跑通过，WSL2为14:48:53–15:16:23 UTC，Intel internal为14:48:54–15:04:04 UTC。23公开资产、四目标Ed25519签名、归档安全成员、checksum pin、payload哈希/大小/可执行模式、PROVENANCE源码与run、bootstrap来源和远端资产元数据均独立核对；Mac原生二进制报告alpha.7/cbf3cdf。Homebrew由bot提交9525301693a8e260b9ae5cd85c5bd477ddb2116c更新，使用已验资产重新生成Formula后逐字节一致。
+
+两端正式升级已验证：Debian12/amd64的18个payload、Mac arm64的14个payload及VPS两项root支持程序均匹配独立已验签bundle；release.json逐字节、SHA256SUMS签名pin、receipt active/current一致且无pending事务，原Plan保持。daemon与LaunchAgent实际可执行路径指向正式alpha.7；daemon active/running、NRestarts=0、显式region的有效NoNewPrivileges=no，keyring/region guard服务active。两节点原地址及daemon身份保持；Mac配置/plist/凭据、VPS配置/Token/加密凭据/keyring/region策略文件逐字节保留，插件持久bucket及profile定义的canonical hash一致。7个local/remote插件均alpha.7 ready。安装器切换后的首次探测返回node_uninitialized/exit3；稍后Mac为local_application_ready、两节点online，VPS仍application_pending/CLAUDE_LOGIN_REQUIRED，未重登或换Token。支持升级按批准计划执行APT与官方Chrome检查并复用密钥环；Chrome显式停止且无pending jobs后更新runtime，随后work一次启动成功，Chrome157.0.8103.78、原region revision保持；浏览器交互结果另记。
+
+alpha.7实机交互已完成：15:42:14–15:50:21 UTC约487秒观察窗口，真实work屏幕中鼠标计数0→1、键盘输入alpha7-test、滚轮至END；显式Reconnect screen约1806ms恢复Connected/read-only，原计数及文本保留，没有自动接管。再次明确Take control后计数1→2、追加-reconnected成功。该窗口未观察到断屏或状态unavailable；只证明本次短时操作，不外推公网长期稳定。仅本轮测试标签被关闭，原about:blank保留；本地viewer关闭后原Chrome实例仍running且attachments=0。测试工作区已finish关闭。早先工作区在长时间CI等待后消失、列表为空，按用户已授权新建工作区继续，未将工具工作区故障记作产品故障。
+
+随后独立CLI采样（查看器已关闭，15:50:59–15:52:58 UTC）：12次默认5秒预算projects list，11次成功（0.175–1.319秒），第8次在5.020秒返回deadline_exceeded/operation deadline exceeded，之后4次恢复成功。保留原超时且未重放修改，不能据此宣称链路完全稳定；该错误本身不能区分底层网络或服务响应的原因。与升级前12/12成功的短窗口并列，不能据样本推断版本导致网络变差或已消除历史故障。交互结束后再次核对两端签名payload、receipt和全部基线保留项通过。
+
 - [x] alpha.7生产源码完整CI与发布授权。
-- [ ] alpha.7签名公开发行及四目标独立验证。
-- [ ] VPS/Mac签名升级、数据保留验证与浏览器实测。
-- [ ] 本轮测试产物清理与最终交付记录。
+- [x] alpha.7签名公开发行及四目标独立验证。
+- [x] VPS/Mac签名升级、数据保留验证与浏览器实测。
+- [x] 本轮测试产物清理与最终交付记录。
+
+本轮清理已完成：核对准确任务目录、所有者、无符号链接及运行引用后，删除VPS升级staging的32个普通文件（逻辑大小427,395,945字节）和Mac私有验签/升级/观察目录的82个普通文件（727,517,002字节）；此前10张alpha.6基线截图已删除。逻辑大小不是实测磁盘释放量。测试标签、viewer和工具工作区已关闭，临时SSH维护连接已关闭；正式Chrome继续运行。清理后VPS仍运行正式alpha.7，daemon active/running、NRestarts=0。agent-remote、正式release/backups、配置、身份、凭据、项目、profile和密钥环保留。
+
+收尾七类复核：本次仅同步发行、部署、清理证据和当前安装指南，生产目录及SDK/host/plugin依赖、RPC准入/授权/能力、持久状态/原子性/revision/去重、进程归属/取消/恢复、文件/终端/网络语义与限额、CLI契约及安装布局均无新增改变。08/15/16状态一致；短时实测、1次CLI超时及未验账号/物理重启分别记录，不将历史稳定性组合项追认通过。
 
 ## alpha.6 安装问题统一修复（2026-11-17，公开发行与两端升级完成，实机复验进行中）
 
@@ -33,7 +51,7 @@ CI首轮固定源 `ccce4fa72fa3fbfd6f0cfa23bdf574219921eeda` 的 [43896776154](h
 
 
 
-2026-11-17实机部署：VPS Debian12/amd64与Mac arm64已通过签名alpha.6安装器升级；全部安装payload、VPS两个root支持程序哈希匹配公开manifest，运行daemon及LaunchAgent均指向正式release。首次安装器探测返回node_uninitialized，随后两节点online，Mac local_application_ready，VPS application_pending/CLAUDE_LOGIN_REQUIRED。原daemon ID、tailnet地址、Mac配置/凭据、VPS配置/设备Token/加密凭据/密钥环字节保持；插件持久bucket与升级备份一致，事务记录变化不冒称整个状态文件未改。local sync/port/browser及remote sync/port/region/browser全部alpha.6 ready。旧90-region-helper.conf仅在内容精确匹配且新50受管策略生效后移除。Chrome显式停止后更新runtime；首次恢复请求service unavailable，确认stopped且无systemd待执行任务后再次启动成功，work profile保留。浏览器界面复验因原工具工作区不存在，等待重新创建授权；项目请求短时采样另记，不宣称公网长期稳定。
+2026-11-17实机部署：VPS Debian12/amd64与Mac arm64已通过签名alpha.6安装器升级；全部安装payload、VPS两个root支持程序哈希匹配公开manifest，运行daemon及LaunchAgent均指向正式release。首次安装器探测返回node_uninitialized，随后两节点online，Mac local_application_ready，VPS application_pending/CLAUDE_LOGIN_REQUIRED。原daemon ID、tailnet地址、Mac配置/凭据、VPS配置/设备Token/加密凭据/密钥环字节保持；插件持久bucket与升级备份一致，事务记录变化不冒称整个状态文件未改。local sync/port/browser及remote sync/port/region/browser全部alpha.6 ready。旧90-region-helper.conf仅在内容精确匹配且新50受管策略生效后移除。Chrome显式停止后更新runtime；首次恢复请求service unavailable，确认stopped且无systemd待执行任务后再次启动成功，work profile保留。当时浏览器界面复验因原工具工作区不存在而未完成；现已获alpha.7新工作区授权，结果见本页alpha.7记录。项目请求短时采样另记，不宣称公网长期稳定。
 
 开发产物清理：确认正式服务接管、路径所有者/inode及运行引用后，删除38个Mac开发/诊断/测试路径（逻辑大小5,273,780,157字节，不等同实际磁盘释放量）；Docker残留共享句柄仅在所有容器均无对应挂载后排除，未停止/删除其他容器。VPS已删除哈希匹配的alpha.4旧脚本、精确旧策略及本批升级staging；Mac另清理26个已完成的alpha.6测试/CI helper与日志，本批私有验签/观察临时目录也已在证据入文档后删除。agent-remote、正式release/backups、身份、配置、项目、profile和密钥环保留。七类复核确认此次仅按既有安装/服务归属和授权完成部署，无接口、权限白名单、持久身份或网络配置新增变更；指南补齐实际CLI诊断和显式重连步骤，跳过/账号/物理重启仍不计通过。
 
@@ -55,17 +73,17 @@ CI首轮固定源 `ccce4fa72fa3fbfd6f0cfa23bdf574219921eeda` 的 [43896776154](h
 
 修补限定browser/client：attachment.done在本地SDK Close返回、socket清理及双向pump退出后关闭；这不是远端释放确认；最多一个新请求等待旧done，额外竞争者409，等待不取消既有连接。等待和远端READY共享原operationTimeout截止，取消、scope、Origin/CSRF、单attachment、只读和显式控制权保持，不重放输入。真实loopback测试在旧Close阻塞期间要求新Dial在原预算内504且opened仍1，释放后只创建一次只读新连接；单等待者、额外竞争者及取消隔离有确定性覆盖。专项race十轮、client整包race（2.060s）、前端10/10、vet和diff检查通过；独立只读复核未发现阻塞问题，架构整包race通过（1.659s）。固定源6850e77899f6a8f3424bb9ad393b01ce478c8ab4的[CI44037921171](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44037921171)最终57/57成功；WSL2公开证据无未执行阶段，产品/E2E/embedded/terminal/release及systemd生命周期全部通过，Linux/macOS维护验收通过。该固定源尚不含下述身份复核预算修补。
 
-七类复核：生产业务仍归plugins/browser/client，未引入host依赖或新远端RPC/权限；新增仅内存完成信号与单等待标志，不改持久配置/修订/去重。本地清理完成前不释放连接所有权，所有等待受原预算和生命周期约束；网络/输入限额及安装布局不变，CLI/公开能力不新增。此修补尚未进入已发布且不可覆盖的alpha.6资产；两端当前仍为已验签alpha.6，后续版本发布和升级须单独确认，不能声称该竞态已在用户环境消除。
+七类复核：生产业务仍归plugins/browser/client，未引入host依赖或新远端RPC/权限；新增仅内存完成信号与单等待标志，不改持久配置/修订/去重。本地清理完成前不释放连接所有权，所有等待受原预算和生命周期约束；网络/输入限额及安装布局不变，CLI/公开能力不新增。此修补尚未进入已发布且不可覆盖的alpha.6资产；该次记录时两端仍为已验签alpha.6；用户随后已授权alpha.7发布及升级，部署与实测结果见本页alpha.7记录，不能由源码回归直接声称该竞态已在用户环境消除。
 
 ### 已有连接身份复核预算跟进（2026-11-17）
 
-公开alpha.6两端保持运行。07:21:40–07:31:06 UTC的11次默认5秒项目查询，8次成功（0.180–2.315s），3次失败（2.552/5.057/2.553s）；这三次未保留原始错误正文，不能补造分类。随后独立普通查询捕获2.517s的`shiki: unavailable: service unavailable`。另12次结构化查询均成功（0.181–2.548s）；后半段诊断与原采样交叠，可能共享在途身份检查，不能据此认定输出格式影响可靠性。doctor另次快照为online/direct、7插件ready；这些成功不否定失败或证明公网长期稳定。
+下列采样时两端运行公开alpha.6。07:21:40–07:31:06 UTC的11次默认5秒项目查询，8次成功（0.180–2.315s），3次失败（2.552/5.057/2.553s）；这三次未保留原始错误正文，不能补造分类。随后独立普通查询捕获2.517s的`shiki: unavailable: service unavailable`。另12次结构化查询均成功（0.181–2.548s）；后半段诊断与原采样交叠，可能共享在途身份检查，不能据此认定输出格式影响可靠性。doctor另次快照为online/direct、7插件ready；这些成功不否定失败或证明公网长期稳定。
 
 只读审查确认一条与2.5s吻合但尚未在现场独立证明的代码路径：已有池的verifyRemote固定将调用剩余预算分成两份；默认5s调用的探测约2.5s到期，callerLimited分支直接返回而不使用为route替换预留的后半预算。探测错误经既有脱敏成为Unavailable/service unavailable；该文案也可能来自其他故障，不能反推唯一根因。
 
-修补只对已有池的身份复核使用原调用剩余预算、最多5s；首次建立多路线的公平分摊保持，CLI/短RPC总预算不变，不增加业务重试或跳过身份验证。父预算≤5s到期仍仅失败该调用，不计池失败；剩余预算>5s且<10s时现在可以完成一次5s探测并进入已有持续失败观察，恢复仍受父截止约束；≥10s或无父截止的5s上限保持。确认的可用性策略缺陷与现场根因分开记录，不能宣称此修补消除公网故障。确定性延迟回归中，旧代码在4s父预算约2.08s返回Unavailable，父仍剩约2s；修后2.5s释放探测，完成真实HTTP/2认证和终端READY，业务计数为1且仍在原父预算内。短400ms调用要求父截止错误、原共享终端仍传输且池/重试/失败观察不变；6s调用验证完整5s失败可计入观察。专项race60.455s通过，最后仅增强测试释放发送的取消保护后专项4.151s通过。独立最终复核未发现阻塞问题；vet、架构race（1.402s）和diff检查通过，最终固定测试源码的agent/connection/architecture整包race分别72.285s/2.776s/1.198s通过；新固定源CI待完成。当前已发布alpha.6不包含它。
+修补只对已有池的身份复核使用原调用剩余预算、最多5s；首次建立多路线的公平分摊保持，CLI/短RPC总预算不变，不增加业务重试或跳过身份验证。父预算≤5s到期仍仅失败该调用，不计池失败；剩余预算>5s且<10s时现在可以完成一次5s探测并进入已有持续失败观察，恢复仍受父截止约束；≥10s或无父截止的5s上限保持。确认的可用性策略缺陷与现场根因分开记录，不能宣称此修补消除公网故障。确定性延迟回归中，旧代码在4s父预算约2.08s返回Unavailable，父仍剩约2s；修后2.5s释放探测，完成真实HTTP/2认证和终端READY，业务计数为1且仍在原父预算内。短400ms调用要求父截止错误、原共享终端仍传输且池/重试/失败观察不变；6s调用验证完整5s失败可计入观察。专项race60.455s通过，最后仅增强测试释放发送的取消保护后专项4.151s通过。独立最终复核未发现阻塞问题；vet、架构race（1.402s）和diff检查通过，最终固定测试源码的agent/connection/architecture整包race分别72.285s/2.776s/1.198s通过；该生产源码c5c8f96的CI44043767221已57/57通过；alpha.7标签cbf3cdf的发行门槛另记。不可变alpha.6资产不包含它。
 
-七类复核范围：仅host agent连接策略及真实HTTP/2测试，SDK/插件依赖边界不变；无新RPC、权限或能力，pin/凭据代际和每次独立认证保持；只内存探测预算变化，持久状态、revision、原子写和去重不变；父截止/取消、进程所有权和共享流隔离保持；终端输入、文件、端口及网络配置不变；CLI总超时、签名资产和安装布局不变；本地源码验证、固定源CI与未部署的生产修补分开登记。
+七类复核范围：仅host agent连接策略及真实HTTP/2测试，SDK/插件依赖边界不变；无新RPC、权限或能力，pin/凭据代际和每次独立认证保持；只内存探测预算变化，持久状态、revision、原子写和去重不变；父截止/取消、进程所有权和共享流隔离保持；终端输入、文件、端口及网络配置不变；CLI总超时、签名资产和安装布局不变；本地源码验证、固定源CI与当时尚未部署的生产修补分开登记。
 
 - [x] 已确认问题汇总与源码回归覆盖（29记录）。
 - [x] alpha.6固定源完整CI、签名公开发行与资产验证。
@@ -107,7 +125,7 @@ CI首轮固定源 `ccce4fa72fa3fbfd6f0cfa23bdf574219921eeda` 的 [43896776154](h
 
 本批后续实机证据：新本地构建 `local-hotfix-ec0873d4a3e0` 已在 `~/.local/share/shiki/hotfixes/coalescing-20261116T135216Z/` 保存源码补丁、构建摘要、上一版LaunchAgent/CLI链接及回退脚本；已切换Mac agent与默认CLI链接，未改签名release/current目录。CLI整包race47.204s通过。重启后节点短暂offline随后online；五次默认期限项目查询仍全部Unavailable（4.972/2.523/2.519/2.525/2.524s），之后真实PTY裸命令成功进入“Create a new remote project / Project:”提示并主动Ctrl+C退出，未创建项目/映射。浏览器open仍返回Unavailable，未获得可验的查看器，不计浏览器通过。
 
-独立SSH对照：三个已有SSH连接上的true命令分别超过8s、超过8s和3.925s成功；后续只读状态命令8.004s完成。用SSH_CONNECTION确认所测TCP连接，服务器ss记录其累计重传34次、bytes_retrans9368、rtt847.39ms、rto14916ms（并非丢包率或逐包根因）。20秒有界strace仅统计flock/fsync/fdatasync：34次flock、无syscall错误、未观察到fsync；汇总CPU计时不是锁等待时长。daemon持续active、I/O压力avg10/60/300为0。证明额外SSH路径也出现慢响应与重传，不确定具体ISP/NAT/主机网络段，不将这些短采样推导为Shikigami已修复或所有延迟都来自同一根因。新热修复尚未提交/推送/发布，当前公网稳定性仍PENDING。
+独立SSH对照：三个已有SSH连接上的true命令分别超过8s、超过8s和3.925s成功；后续只读状态命令8.004s完成。用SSH_CONNECTION确认所测TCP连接，服务器ss记录其累计重传34次、bytes_retrans9368、rtt847.39ms、rto14916ms（并非丢包率或逐包根因）。20秒有界strace仅统计flock/fsync/fdatasync：34次flock、无syscall错误、未观察到fsync；汇总CPU计时不是锁等待时长。daemon持续active、I/O压力avg10/60/300为0。证明额外SSH路径也出现慢响应与重传，不确定具体ISP/NAT/主机网络段，不将这些短采样推导为Shikigami已修复或所有延迟都来自同一根因。当时新热修复尚未提交/推送/发布，当前公网稳定性仍PENDING。
 
 
 ## alpha.4 实机反馈修复复核（2026-11-16，本地与公开发行验证完成）

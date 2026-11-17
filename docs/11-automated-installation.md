@@ -1,14 +1,14 @@
 # 自动化安装与运维契约
 
-alpha.6 已公开发布，四目标签名、payload与来源已独立核验；两端签名升级完成，浏览器交互复验待完成。新增引导输入、worker路径、region服务策略、配对和浏览器连接修复见[29](29-alpha6-installation-followup.md)，旧版修复和验收保留各自版本边界。
+当前公开安装入口为 alpha.7，纳入浏览器快速重连清理竞态与已有连接身份复核预算修补；发行验签见[15](15-implementation-status.md#evidence-public-alpha7-release-20261117)，部署后复验另行登记。历史 alpha.6 已公开发布，四目标签名、payload与来源已独立核验；该版两端签名升级完成，浏览器交互复验状态见29。新增引导输入、worker路径、region服务策略、配对和浏览器连接修复见[29](29-alpha6-installation-followup.md)，旧版修复和验收保留各自版本边界。
 
 alpha.5 修复增量：在管道/sudo PTY 中正确读取确认与秘密输入；长操作显示阶段和耗时且在提示输入前停止刷新；严格 umask 下显式设置公共目录/服务文件权限，批准后修复已知旧版应用目录，保留私密凭据和管理员共享祖先权限。恢复命令与口令说明见[28](28-quickstart.md)，精确验证范围见08/15/16。
 
-v0.0.1-alpha.4 已提供 `bootstrap.sh --quickstart` / `shiki-install quickstart` / `shiki setup` 组合入口。普通用户从 [28 一键安装](28-quickstart.md)复制 VPS/Mac 各一条命令即可开始；向导处理依赖、服务、节点登录和插件配置。以下验签、服务、身份、授权和就绪要求继续作为基线。公开发布证据见[15](15-implementation-status.md#evidence-public-alpha6-release-20261117)；真实新向导双机首装、账号授权和物理重启仍未实测。
+v0.0.1-alpha.4 已提供 `bootstrap.sh --quickstart` / `shiki-install quickstart` / `shiki setup` 组合入口。普通用户从 [28 一键安装](28-quickstart.md)复制 VPS/Mac 各一条命令即可开始；向导处理依赖、服务、节点登录和插件配置。以下验签、服务、身份、授权和就绪要求继续作为基线。公开发布证据见[15](15-implementation-status.md#evidence-public-alpha7-release-20261117)；真实新向导双机首装、账号授权和物理重启仍未实测。
 
-**本文保留安装流程契约。仓库已实现固定版本bundle校验、事务安装/回滚、服务渲染、异步登录引导与就绪诊断。当前公开预发布v0.0.1-alpha.6已由tag自动构建、签名、发布并更新Homebrew Formula，验证见[15](15-implementation-status.md#evidence-public-alpha6-release-20261117)。[alpha.3历史证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)保留；下文既有systemd/LaunchAgent、五平台产品及升级/恢复验收保持各自历史源码与环境范围，不冒充全部在新公开包重跑。真实Claude登录/推理不纳入原Phase0–5交付验收且未实测，见[验收范围](#claude-acceptance-scope-20261031)；物理Mac/VPS重启仍未实测，见[替代验收](#no-host-reboot-acceptance-20261031)。**
+**本文保留安装流程契约。仓库已实现固定版本bundle校验、事务安装/回滚、服务渲染、异步登录引导与就绪诊断。当前公开预发布为v0.0.1-alpha.7，固定源与公开验签见[15](15-implementation-status.md#evidence-public-alpha7-release-20261117)；Homebrew更新状态以该发行证据和实际Formula为准。[alpha.6历史发行证据](15-implementation-status.md#evidence-public-alpha6-release-20261117)保留。[alpha.3历史证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)保留；下文既有systemd/LaunchAgent、五平台产品及升级/恢复验收保持各自历史源码与环境范围，不冒充全部在新公开包重跑。真实Claude登录/推理不纳入原Phase0–5交付验收且未实测，见[验收范围](#claude-acceptance-scope-20261031)；物理Mac/VPS重启仍未实测，见[替代验收](#no-host-reboot-acceptance-20261031)。**
 
-`scripts/install.sh`、`install-client.sh`、`uninstall.sh`及短时运维helper `shiki-install`已存在。[当前公开Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.6)来自固定源`377551af19b2f4a51e1057b782148c14a915797a`及成功运行`44017118492`，四目标独立验签见[发行证据](15-implementation-status.md#evidence-public-alpha6-release-20261117)。安装接受本地bundle、固定版本和独立可信checksum pin；`scripts/release-trust.go fetch`可从显式HTTPS地址使用独立可信公钥认证归档，并生成私有副本/pin/receipt，但不建立公钥信任。GitHub下载会重定向，而`fetch`拒绝重定向；可用`gh release download v0.0.1-alpha.6 --repo DDSRem-Dev/Shikigami`取回资产，再由可信verifier和预置信任公钥离线验签。解包、安装和服务激活仍须显式执行；预发布成功不降低完整就绪与运维要求。
+`scripts/install.sh`、`install-client.sh`、`uninstall.sh`及短时运维helper `shiki-install`已存在。[当前公开Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.7)来自固定源`cbf3cdfcec1c598e7d9ee4279c4054cdc2eb96bb`；发行运行`44091646249`的结果与四目标独立验签见[发行证据](15-implementation-status.md#evidence-public-alpha7-release-20261117)。安装接受本地bundle、固定版本和独立可信checksum pin；`scripts/release-trust.go fetch`可从显式HTTPS地址使用独立可信公钥认证归档，并生成私有副本/pin/receipt，但不建立公钥信任。GitHub下载会重定向，而`fetch`拒绝重定向；可用`gh release download v0.0.1-alpha.7 --repo DDSRem-Dev/Shikigami`取回资产，再由可信verifier和预置信任公钥离线验签。解包、安装和服务激活仍须显式执行；预发布成功不降低完整就绪与运维要求。
 
 ## 地区/浏览器系统支持扩展（本地/容器验收完成）
 
@@ -22,7 +22,7 @@ setup的root二进制来源须由独立可信、root拥有的公钥验证固定�
 
 卸载先停止daemon并取得宿主维护锁、持久禁用受管插件，再停止身份匹配的浏览器实例；保留profile。region在root状态锁中封闭新变更并处理待恢复事务，只有无pending且状态为`disabled`才能移除恢复守卫/helper/授权。冲突或失败保留恢复组件和证据，报告未完成，不能遗留活动root守卫却宣称卸载成功。
 
-使用已独立验证的alpha.6发行产物，将`BUNDLE`、`ARCHIVE`、`SIGNATURE`、`VERSION`设为同一固定版本的真实绝对路径/版本；公钥须从独立可信渠道预置为root所有。以下命令不适用于alpha.2：
+使用已独立验证的alpha.7发行产物，将`BUNDLE`、`ARCHIVE`、`SIGNATURE`、`VERSION`设为同一固定版本的真实绝对路径/版本；公钥须从独立可信渠道预置为root所有。以下命令不适用于alpha.2：
 
 ```sh
 sudo shiki-install setup --component all --user <普通用户> \
@@ -129,7 +129,7 @@ HTTPS 限制覆盖每次重定向，下载/解包有大小、数量、时间和�
 
 `scripts/bootstrap.sh`是下载、Ed25519验签、解包和安装helper入口，从alpha.3起提供固定源码的公开脚本资产，alpha.4新增交互向导。必须从可信且已审查的checkout或已核对来源的固定tag取得脚本；内嵌公钥SPKI DER SHA-256为`e21f6dd671ea5042c43c492b759b933dda73985f89a823b43c651ff7c787c17d`，可与独立可信的`configs/release-signing.pub`核验。脚本本身不是独立签名的信任根。
 
-**alpha.4的23公开资产包含带向导的`bootstrap.sh`；历史alpha.3为23资产但不含向导，alpha.1/alpha.2为22资产且没有该脚本。** 不补传或覆盖旧资产。下列命令从已审查checkout执行，目标为固定公开alpha.6。公开脚本URL为`https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.6/bootstrap.sh`；下载不等于已建立脚本信任。alpha/beta/rc须显式指定tag，`releases/latest`不代表预发布；未传`--version`时查询最近公开Release（可为预发布），不把它冒充稳定渠道。
+**alpha.4的23公开资产包含带向导的`bootstrap.sh`；历史alpha.3为23资产但不含向导，alpha.1/alpha.2为22资产且没有该脚本。** 不补传或覆盖旧资产。下列命令从已审查checkout执行，目标为固定公开alpha.7。公开脚本URL为`https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.7/bootstrap.sh`；下载不等于已建立脚本信任。alpha/beta/rc须显式指定tag，`releases/latest`不代表预发布；未传`--version`时查询最近公开Release（可为预发布），不把它冒充稳定渠道。
 
 运行前要求 Bash、`curl`、`gzip`、`tar`、`base64`、`/usr/bin/perl`、SHA-256 工具（`sha256sum` 或 `shasum`）及支持 Ed25519 `pkeyutl -rawin` 的 **OpenSSL 3+** CLI。macOS 自带的 LibreSSL 不足以验签；可先 `brew install openssl@3`，脚本会检查标准 Homebrew keg 路径。高级模式缺少工具时停止；`--quickstart` 可在明确确认后安装所需验签工具，不以同源 `.sha256` 替代签名，也不回退到无法保证 HTTPS 重定向约束的 wget 路径。
 
@@ -138,7 +138,7 @@ HTTPS 限制覆盖每次重定向，下载/解包有大小、数量、时间和�
 **服务端（VPS）安装**（从已审查源码 checkout 的仓库根目录执行）：
 
 ```bash
-VERSION=v0.0.1-alpha.6
+VERSION=v0.0.1-alpha.7
 
 # 交互式；rem 必须是已存在的普通运行用户
 sudo bash scripts/bootstrap.sh --version="$VERSION" --user=rem
@@ -161,14 +161,14 @@ brew info ddsrem-dev/shikigami/shikigami
 # 检查 service review 后，显式移除 --stage-only 才会激活本地受管服务。
 
 # 或从已审查源码 checkout 执行，仍固定到真实公开包
-bash scripts/bootstrap.sh --version=v0.0.1-alpha.6 --role=client
+bash scripts/bootstrap.sh --version=v0.0.1-alpha.7 --role=client
 ```
 
 **升级或重复安装**：
 
 ```bash
 # 将 VERSION 显式设为选择的已公开版本；同版本是重复安装，不是假称跨版本升级
-VERSION=v0.0.1-alpha.6
+VERSION=v0.0.1-alpha.7
 sudo bash scripts/bootstrap.sh --version="$VERSION" --user=rem
 
 # Homebrew 先更新下载的 bundle，再按新 caveats 显式升级受管服务

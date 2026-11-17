@@ -65,11 +65,31 @@ VPS Debian12/amd64与Mac arm64均运行正式alpha.6/377551a，安装文件全�
 
 be7fada的CI44031253619中，WSL2唯一产品失败落在显式WebSocket重连的新Dial；systemd维护13操作仍通过。进一步构造真实loopback回归，确认关闭ACK早于本地SDK attachment清理完成，旧context取消判断可能拒绝正常重连或提前开启第二条stream。源码已改为本地SDK Close返回、socket清理及双向pump退出后的完成信号（不代表远端释放确认），最多一个有界等待者，等待和READY共享原预算，不取消现有连接或自动接管；旧代码确定性失败，修后专项/整包race和前端10/10通过。固定源6850e77的[CI44037921171](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44037921171)最终57/57成功；它尚不含下述身份复核预算修补。
 
-已发布alpha.6标签和签名资产保持不变，因此两端目前的alpha.6不含此追加修补。拟用后续alpha.7交付，候选说明见[alpha.7](releases/v0.0.1-alpha.7.md)；发布、升级和浏览器界面验收仍需确认，不能宣称所有重连问题已在实机解决。
+已发布alpha.6标签和签名资产保持不变，因此该次记录时两端的alpha.6不含此追加修补。现已通过alpha.7交付，发行说明见[alpha.7](releases/v0.0.1-alpha.7.md)；用户已授权alpha.7发布、两端升级和新建浏览器工作区；发行及部署状态见08/15/16，不能由源码验证宣称所有重连问题已在实机解决。
 
 
 ## 追加的调用预算修补（尚未进入 alpha.6 安装包）
 
 新一轮约10分钟的默认5秒项目查询11次中8次成功、3次失败；另次查询捕获2.517s的`service unavailable`。后续doctor和12次结构化查询成功，但诊断有交叠，不能推断输出格式或共享探测就是差异原因，也不能覆盖之前失败。
 
-独立源码审查确认已有连接的身份复核会将剩余预算额外折半，而短caller超时直接返回、未使用预留给替换连接的后半时间。它与现场耗时吻合，尚非现场根因的直接证据。修补仅使这次复核在原调用剩余预算内最多等待5秒；不延长CLI总超时、不改首次多路线分摊、不跳过鉴权或重放操作。旧代码提前失败、修后同预算完成认证和业务的回归已通过，agent/connection/architecture整包race通过。精确预算区间、回归及CI见08/15/16；这项修补也拟随后续alpha.7交付，当前两端仍是公开alpha.6。
+独立源码审查确认已有连接的身份复核会将剩余预算额外折半，而短caller超时直接返回、未使用预留给替换连接的后半时间。它与现场耗时吻合，尚非现场根因的直接证据。修补仅使这次复核在原调用剩余预算内最多等待5秒；不延长CLI总超时、不改首次多路线分摊、不跳过鉴权或重放操作。旧代码提前失败、修后同预算完成认证和业务的回归已通过，agent/connection/architecture整包race通过。精确预算区间、回归及CI见08/15/16；这项修补现已随alpha.7交付并升级两端，结果见末节。
+
+
+## alpha.7升级前追加基线（2026-11-17）
+
+用户授权新建工作区后，正式alpha.6两端完成一次真实work浏览器基线：显式接管后鼠标创建测试标签、按钮计数0→1、键盘输入alpha6-test、滚动至END；显式重连后恢复只读，再次接管后关闭测试标签，原about:blank保留。关闭本地viewer未停止远程Chrome。状态查询仍多次出现unavailable并恢复，因此这次可操作结果不等于网络稳定。观察脚本一次误等Read-only session，而实际重连状态是Read-only；该脚本超时不算产品失败。
+
+14:25:39–14:27:39 UTC的12次默认5秒预算项目查询全部成功（0.196–3.141秒），采样与上面的查看器测试分开进行，不覆盖历史失败或替代alpha.7部署后验证。最初两次误用不存在的单数project命令已排除，不属于网络样本。
+
+
+## alpha.7公开发行与两端升级（2026-11-17）
+
+alpha.7固定源cbf3cdf，分支CI57/57；发行44091646249 attempt2为60成功、1条件跳过，三项失联、作业超时及容量异常在原条件补跑后通过。23资产、四目标签名/成员/哈希/大小/来源和Homebrew Formula独立核对完成，精确证据见[15](15-implementation-status.md#evidence-public-alpha7-release-20261117)。
+
+两端正式升级已验证：Debian12/amd64的18个payload、Mac arm64的14个payload及VPS两项root支持程序均匹配独立已验签bundle；release.json逐字节、SHA256SUMS签名pin、receipt active/current一致且无pending事务，原Plan保持。daemon与LaunchAgent实际可执行路径指向正式alpha.7；daemon active/running、NRestarts=0、显式region的有效NoNewPrivileges=no，keyring/region guard服务active。两节点原地址及daemon身份保持；Mac配置/plist/凭据、VPS配置/Token/加密凭据/keyring/region策略文件逐字节保留，插件持久bucket及profile定义的canonical hash一致。7个local/remote插件均alpha.7 ready。安装器切换后的首次探测返回node_uninitialized/exit3；稍后Mac为local_application_ready、两节点online，VPS仍application_pending/CLAUDE_LOGIN_REQUIRED，未重登或换Token。支持升级按批准计划执行APT与官方Chrome检查并复用密钥环；Chrome显式停止且无pending jobs后更新runtime，随后work一次启动成功，Chrome157.0.8103.78、原region revision保持；浏览器交互结果另记。
+
+alpha.7实机交互已完成：15:42:14–15:50:21 UTC约487秒观察窗口，真实work屏幕中鼠标计数0→1、键盘输入alpha7-test、滚轮至END；显式Reconnect screen约1806ms恢复Connected/read-only，原计数及文本保留，没有自动接管。再次明确Take control后计数1→2、追加-reconnected成功。该窗口未观察到断屏或状态unavailable；只证明本次短时操作，不外推公网长期稳定。仅本轮测试标签被关闭，原about:blank保留；本地viewer关闭后原Chrome实例仍running且attachments=0。测试工作区已finish关闭。早先工作区在长时间CI等待后消失、列表为空，按用户已授权新建工作区继续，未将工具工作区故障记作产品故障。
+
+随后独立CLI采样（查看器已关闭，15:50:59–15:52:58 UTC）：12次默认5秒预算projects list，11次成功（0.175–1.319秒），第8次在5.020秒返回deadline_exceeded/operation deadline exceeded，之后4次恢复成功。保留原超时且未重放修改，不能据此宣称链路完全稳定；该错误本身不能区分底层网络或服务响应的原因。与升级前12/12成功的短窗口并列，不能据样本推断版本导致网络变差或已消除历史故障。交互结束后再次核对两端签名payload、receipt和全部基线保留项通过。
+
+本轮清理已完成：核对准确任务目录、所有者、无符号链接及运行引用后，删除VPS升级staging的32个普通文件（逻辑大小427,395,945字节）和Mac私有验签/升级/观察目录的82个普通文件（727,517,002字节）；此前10张alpha.6基线截图已删除。逻辑大小不是实测磁盘释放量。测试标签、viewer和工具工作区已关闭，临时SSH维护连接已关闭；正式Chrome继续运行。清理后VPS仍运行正式alpha.7，daemon active/running、NRestarts=0。agent-remote、正式release/backups、配置、身份、凭据、项目、profile和密钥环保留。
