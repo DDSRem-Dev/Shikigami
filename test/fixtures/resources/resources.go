@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DDSRem-Dev/Shikigami/test/diagnostics/processidentity"
 	"github.com/shirou/gopsutil/v4/process"
 )
 
@@ -119,11 +120,38 @@ func Children(t *testing.T, executable string, expected int) []int {
 	if err != nil {
 		t.Fatal(err)
 	}
+	result, err := matchingChildren(t.Context(), children, want, expected, func(ctx context.Context, child *process.Process) (string, error) {
+		return child.ExeWithContext(ctx)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
+}
+
+func matchingChildren(ctx context.Context, children []*process.Process, want string, expected int, executable func(context.Context, *process.Process) (string, error)) ([]int, error) {
 	var result []int
 	for _, child := range children {
-		path, err := child.ExeWithContext(t.Context())
+		path, err := executable(ctx, child)
 		if err != nil {
-			t.Fatal(err)
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			// proc_pidpath loses errno on Darwin. The exact ambiguous result
+			// and missing-image errors justify another observation, never an
+			// assumption that the enumerated child has exited. Normal children
+			// keep the cheap executable-only path; full inspection is exceptional.
+			ambiguous := runtime.GOOS == "darwin" && err.Error() == "unknown error: proc_pidpath returned 0"
+			if ambiguous || errors.Is(err, process.ErrorProcessNotRunning) || errors.Is(err, syscall.ESRCH) || errors.Is(err, os.ErrNotExist) {
+				_, check := (processidentity.Inspector{}).Inspect(ctx, child.Pid)
+				if errors.Is(check, processidentity.ErrDisappeared) {
+					continue
+				}
+				if check != nil {
+					return nil, fmt.Errorf("direct child %d executable: %w; disappearance check: %w", child.Pid, err, check)
+				}
+			}
+			return nil, fmt.Errorf("direct child %d executable: %w", child.Pid, err)
 		}
 		path, err = filepath.EvalSymlinks(path)
 		if err == nil && path == want {
@@ -131,9 +159,9 @@ func Children(t *testing.T, executable string, expected int) []int {
 		}
 	}
 	if len(result) != expected {
-		t.Fatal(fmt.Sprintf("expected %d direct workers for %s, got %v", expected, executable, result))
+		return nil, fmt.Errorf("expected %d direct workers for %s, got %v", expected, want, result)
 	}
-	return result
+	return result, nil
 }
 
 // Reaped rejects both live processes and zombies after the owning supervisor

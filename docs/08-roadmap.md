@@ -24,6 +24,15 @@ CI首轮固定源 `ccce4fa72fa3fbfd6f0cfa23bdf574219921eeda` 的 [43896776154](h
 
 开发产物清理：确认正式服务接管、路径所有者/inode及运行引用后，删除38个Mac开发/诊断/测试路径（逻辑大小5,273,780,157字节，不等同实际磁盘释放量）；Docker残留共享句柄仅在所有容器均无对应挂载后排除，未停止/删除其他容器。VPS已删除哈希匹配的alpha.4旧脚本、精确旧策略及本批升级staging；Mac另清理26个已完成的alpha.6测试/CI helper与日志，本批私有验签/观察临时目录也已在证据入文档后删除。agent-remote、正式release/backups、身份、配置、项目、profile和密钥环保留。七类复核确认此次仅按既有安装/服务归属和授权完成部署，无接口、权限白名单、持久身份或网络配置新增变更；指南补齐实际CLI诊断和显式重连步骤，跳过/账号/物理重启仍不计通过。
 
+
+### 发布后交付记录 CI 的进程观测补修（2026-11-17）
+
+交付文档提交f0a06bde34124d8881f3d52cea2a884079028af1的[CI44026669305](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44026669305)结束为52项成功、1项失败、2项后置作业跳过，跳过不计通过。失败job133850471668为macOS Intel重型集成：TestRealHostRotationRecoversInflightFiles/server/download在inflight_test.go:95调用resources.Children，直接子进程的Exe查询返回`unknown error: proc_pidpath returned 0`。此错误本身不能证明当次进程退出或权限问题，不能仅凭字符串忽略。
+
+补修仅涉及测试夹具test/fixtures/resources：正常候选仍只查询可执行路径；明确缺失或上述Darwin模糊结果触发现有processidentity.Inspector独立确认，只有ErrDisappeared才能跳过。活进程、权限/未知错误仍失败，expected数量、直接子进程范围、原截止、回收断言不变，不增加重试/超时。真实私有子进程在枚举后、Exe查询时回收的四分支回归，在旧错误处理overlay下全红；修后resources/processidentity专项race三轮通过（2.565s/4.974s），vet与diff检查通过，overlay与子进程均已清理。固定测试源码的受影响整包race复验全部通过：hostrotation219.045s、rotation35.447s、syncack42.019s、port14.586s、architecture1.405s。首次调用误设GOTOOLCHAIN=local而命中本机Go1.26.3，未运行测试；改用项目固定Go1.26.11后获得上述结果，不将前次工具链拒绝计通过。新固定源公开CI待完成。
+
+七类复核：改动仅为test夹具复用已有test诊断观察器，生产目录/SDK与插件边界不变；RPC、权限、能力、持久状态/revision/事务、生产进程与网络/终端行为、CLI和安装布局均无改动。无法确认消失仍失败，不以重跑或放宽断言掩盖未知结果。已发布alpha.6标签、签名资产和两端生产二进制保持不变；这批不是新的产品版本。
+
 - [x] 已确认问题汇总与源码回归覆盖（29记录）。
 - [x] alpha.6固定源完整CI、签名公开发行与资产验证。
 - [ ] 两端签名升级、稳定性复验与开发产物清理。
