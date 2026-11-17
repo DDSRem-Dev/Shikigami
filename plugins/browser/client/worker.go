@@ -117,6 +117,7 @@ type viewer struct {
 	fileSlot      chan struct{}
 	mu            sync.Mutex
 	connection    *attachment
+	reconnecting  bool // at most one bounded claimant waiting for attachment cleanup
 }
 
 func New() *Worker {

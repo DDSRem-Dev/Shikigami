@@ -8,10 +8,12 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"connectrpc.com/connect/v2"
 	sdk "github.com/DDSRem-Dev/Shikigami/pkg/plugin"
 	epb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/extensions"
 	"github.com/coder/websocket"
@@ -226,5 +228,147 @@ func TestViewerExplicitReconnectReleasesPreviousAttachment(t *testing.T) {
 			t.Fatal(err)
 		}
 		// The next Dial intentionally races handler cleanup after the close handshake.
+	}
+}
+
+type cleanupBlockedScreen struct {
+	*viewerTestScreen
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (s *cleanupBlockedScreen) Close() error {
+	s.once.Do(func() { close(s.entered); <-s.release })
+	return s.viewerTestScreen.Close()
+}
+
+// A successful WebSocket close handshake is not proof that its handler has
+// released the SDK attachment. Hold that cleanup after the ACK, then attempt
+// replacement under the existing handshake budget.
+func TestViewerReconnectWaitsForAttachmentCleanup(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	closing, release := make(chan struct{}), make(chan struct{})
+	var releaseOnce sync.Once
+	defer releaseOnce.Do(func() { close(release) })
+	var opened atomic.Int32
+	w := startViewerTestWorker(t, &viewerTestBrowser{stream: func(ctx context.Context) (sdk.BrowserClientStream, error) {
+		screen := newViewerTestScreen(ctx)
+		if opened.Add(1) == 1 {
+			return &cleanupBlockedScreen{viewerTestScreen: screen, entered: closing, release: release}, nil
+		}
+		return screen, nil
+	}})
+	w.config.operationTimeout = 200 * time.Millisecond
+	viewer, client, csrf := bootstrapViewerTest(t, w, false)
+	target := strings.Replace(w.origin, "http:", "ws:", 1) + "/v/" + viewer.Id + "/rfb"
+	dial := func() (*websocket.Conn, *http.Response, error) {
+		return websocket.Dial(ctx, target, &websocket.DialOptions{HTTPClient: client, HTTPHeader: http.Header{"Origin": []string{w.origin}}, Subprotocols: []string{viewerSubprotocol, "csrf." + csrf}})
+	}
+	first, _, err := dial()
+	if err != nil {
+		t.Fatal(err)
+	}
+	readViewerScreenEvent(t, ctx, first)
+	if err := first.Close(websocket.StatusNormalClosure, "Viewer detached"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-closing:
+	case <-ctx.Done():
+		t.Fatal("old SDK cleanup not reached")
+	}
+	second, response, err := dial()
+	if second != nil {
+		second.CloseNow()
+	}
+	if response != nil && response.Body != nil {
+		response.Body.Close()
+	}
+	if err == nil || response == nil || response.StatusCode != http.StatusGatewayTimeout || opened.Load() != 1 {
+		t.Fatalf("replacement bypassed unfinished SDK cleanup: opened=%d status=%v err=%v", opened.Load(), response, err)
+	}
+	releaseOnce.Do(func() { close(release) })
+	third, _, err := dial()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer third.CloseNow()
+	ready := readViewerScreenEvent(t, ctx, third)
+	if ready.Controller || !ready.ReadOnly || opened.Load() != 2 {
+		t.Fatal("replacement was replayed or silently promoted")
+	}
+}
+
+// Observe the admission wait without scheduler sleeps or polling. Done is
+// evaluated only after the claimant has reserved its one waiting slot.
+type observedWaitContext struct {
+	context.Context
+	entered chan struct{}
+	once    sync.Once
+}
+
+func (ctx *observedWaitContext) Done() <-chan struct{} {
+	ctx.once.Do(func() { close(ctx.entered) })
+	return ctx.Context.Done()
+}
+
+func TestViewerAttachmentAdmissionPreservesActiveConnection(t *testing.T) {
+	for _, complete := range []bool{false, true} {
+		name := "canceled claimant"
+		if complete {
+			name = "completed cleanup"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			oldCtx, oldCancel := context.WithCancel(ctx)
+			defer oldCancel()
+			old := &attachment{ctx: oldCtx, cancel: oldCancel, done: make(chan struct{})}
+			v := &viewer{connection: old}
+			next := &attachment{ctx: ctx, done: make(chan struct{})}
+			waitCtx, cancelWait := context.WithCancel(ctx)
+			defer cancelWait()
+			observed := &observedWaitContext{Context: waitCtx, entered: make(chan struct{})}
+			result := make(chan error, 1)
+			go func() { result <- v.claimAttachment(observed, next) }()
+			select {
+			case <-observed.entered:
+			case <-ctx.Done():
+				t.Fatal("claimant did not enter bounded wait")
+			}
+			if err := v.claimAttachment(ctx, &attachment{}); connect.CodeOf(err) != connect.CodeAlreadyExists {
+				t.Fatalf("extra claimant must be refused: %v", err)
+			}
+			if oldCtx.Err() != nil {
+				t.Fatal("new request canceled the active attachment")
+			}
+			if complete {
+				v.mu.Lock()
+				v.connection = nil
+				close(old.done)
+				v.mu.Unlock()
+			} else {
+				cancelWait()
+			}
+			select {
+			case err := <-result:
+				if complete && err != nil || !complete && !errors.Is(err, context.Canceled) {
+					t.Fatalf("claim result: %v", err)
+				}
+			case <-ctx.Done():
+				t.Fatal("claimant did not return after cancellation/cleanup")
+			}
+			v.mu.Lock()
+			defer v.mu.Unlock()
+			want := old
+			if complete {
+				want = next
+			}
+			if v.connection != want || v.reconnecting || oldCtx.Err() != nil {
+				t.Fatal("admission lost its attachment, retained its waiter, or took over control")
+			}
+		})
 	}
 }

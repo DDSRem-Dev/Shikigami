@@ -26,6 +26,7 @@ type attachment struct {
 	id         string
 	instance   string
 	canControl bool
+	done       chan struct{} // closed only after SDK/socket cleanup and both pumps return
 }
 
 type screenEvent struct {
@@ -67,28 +68,32 @@ func (w *Worker) handleRFB(out http.ResponseWriter, r *http.Request, v *viewer) 
 	}
 	w.mu.Unlock()
 	ctx, cancel := context.WithCancel(v.ctx)
-	connection := &attachment{ctx: ctx, cancel: cancel}
+	connection := &attachment{ctx: ctx, cancel: cancel, done: make(chan struct{})}
 	defer cancel()
 	stopRequest := context.AfterFunc(r.Context(), cancel)
 	defer stopRequest()
-	v.mu.Lock()
-	if v.connection != nil && v.connection.ctx.Err() == nil {
-		v.mu.Unlock()
-		writeHTTPError(out, connect.NewError(connect.CodeAlreadyExists, "VIEWER_ALREADY_ATTACHED"))
+	// Admission and remote READY share the original handshake budget. A local
+	// WebSocket close ACK may precede the old SDK stream's teardown; do not
+	// treat cancellation alone as proof that the attachment was released.
+	handshakeDeadline := time.Now().Add(w.config.operationTimeout)
+	claimCtx, claimCancel := context.WithDeadline(ctx, handshakeDeadline)
+	err := v.claimAttachment(claimCtx, connection)
+	claimCancel()
+	if err != nil {
+		writeHTTPError(out, err)
 		return
 	}
-	v.connection = connection
-	v.mu.Unlock()
 	defer func() {
 		v.mu.Lock()
 		if v.connection == connection {
 			v.connection = nil
 		}
+		close(connection.done)
 		v.mu.Unlock()
 	}()
 	// A bounded handshake is distinct from the long-lived screen context.
 	// Ending this RPC or the launching CLI must not cancel other viewers.
-	handshake := time.AfterFunc(w.config.operationTimeout, cancel)
+	handshake := time.AfterFunc(time.Until(handshakeDeadline), cancel)
 	defer handshake.Stop()
 	stream, err := w.remote.BrowserStream(ctx)
 	if err != nil {
@@ -145,6 +150,36 @@ func (w *Worker) handleRFB(out http.ResponseWriter, r *http.Request, v *viewer) 
 	stream.Close()
 	socket.CloseNow()
 	<-results
+}
+
+// claimAttachment never cancels the current attachment. One explicit new
+// connection may wait for its complete teardown; extra contenders are refused
+// instead of accumulating an unbounded queue. All waiting honors the caller's
+// handshake deadline and the viewer/worker lifetime.
+func (v *viewer) claimAttachment(ctx context.Context, next *attachment) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if v.reconnecting {
+		return connect.NewError(connect.CodeAlreadyExists, "VIEWER_ALREADY_ATTACHED")
+	}
+	if previous := v.connection; previous != nil {
+		v.reconnecting = true
+		v.mu.Unlock()
+		select {
+		case <-previous.done:
+		case <-ctx.Done():
+		}
+		v.mu.Lock()
+		v.reconnecting = false
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if v.connection != nil {
+		return connect.NewError(connect.CodeAlreadyExists, "VIEWER_ALREADY_ATTACHED")
+	}
+	v.connection = next
+	return nil
 }
 
 func sendScreenInput(ctx context.Context, socket *websocket.Conn, stream sdk.BrowserClientStream, v *viewer, connection *attachment) error {

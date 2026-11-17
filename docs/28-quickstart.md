@@ -4,6 +4,8 @@
 
 **版本边界：本页使用 v0.0.1-alpha.6 修复入口，处理 alpha.4–alpha.5 实机反馈中的终端确认、耗时提示、目录权限、连接恢复和浏览器操作问题。发行状态与验证见[15](15-implementation-status.md)。alpha.3 不含 `shiki-install quickstart` 或 `shiki setup`，历史归档不改写；真实完整双机首装、账号授权和物理重启仍按外部门槛登记。**
 
+alpha.6 发布后发现的旧 attachment 本地清理竞态已另行补修源码，尚未进入下方 alpha.6 安装包；后续版本与实际验收状态见[29](29-alpha6-installation-followup.md)。连接失败时不要把更换 Token 当作通用恢复步骤。
+
 ## 用户入口
 
 从受信源码 checkout 启动，VPS（Debian 12 / Ubuntu 24.04）：

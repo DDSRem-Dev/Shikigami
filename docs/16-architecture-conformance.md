@@ -33,6 +33,17 @@ CI首轮固定源 `ccce4fa72fa3fbfd6f0cfa23bdf574219921eeda` 的 [43896776154](h
 
 七类复核：改动仅为test夹具复用已有test诊断观察器，生产目录/SDK与插件边界不变；RPC、权限、能力、持久状态/revision/事务、生产进程与网络/终端行为、CLI和安装布局均无改动。无法确认消失仍失败，不以重跑或放宽断言掩盖未知结果。已发布alpha.6标签、签名资产和两端生产二进制保持不变；这批不是新的产品版本。
 
+
+### alpha.6 发布后发现的本地 attachment 清理竞态（2026-11-17）
+
+固定源be7fada的[CI44031253619](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44031253619)已结束（56成功、1失败）；WSL2 job133863472571的唯一产品失败为plugins/browser/client/TestViewerExplicitReconnectReleasesPreviousAttachment（stream_test.go:220，新的WebSocket Dial失败，耗时0.01s）；公共证据不含原始错误正文，不能补造HTTP状态。该轮systemd维护13项操作、升级/回滚与清理通过；产品阶段失败导致E2E/embedded/terminal/release阶段未执行，不能计通过。macOS进程观察夹具的补修在本轮原平台及WSL已通过。
+
+源码检查与独立确定性复现确认：WebSocket关闭ACK早于旧SDK stream清理及双向pump退出。原实现只看context取消，既可能在取消前拒绝新Dial，也可能在已取消但清理未完成时提前创建第二条远端stream。旧代码在阻塞SDK Close的回归中opened=2；不是把这条复现冒充原WSL未公开的错误正文。
+
+修补限定browser/client：attachment.done在本地SDK Close返回、socket清理及双向pump退出后关闭；这不是远端释放确认；最多一个新请求等待旧done，额外竞争者409，等待不取消既有连接。等待和远端READY共享原operationTimeout截止，取消、scope、Origin/CSRF、单attachment、只读和显式控制权保持，不重放输入。真实loopback测试在旧Close阻塞期间要求新Dial在原预算内504且opened仍1，释放后只创建一次只读新连接；单等待者、额外竞争者及取消隔离有确定性覆盖。专项race十轮、client整包race（2.060s）、前端10/10、vet和diff检查通过；独立只读复核未发现阻塞问题，架构整包race通过（1.659s）；新固定源CI待完成。
+
+七类复核：生产业务仍归plugins/browser/client，未引入host依赖或新远端RPC/权限；新增仅内存完成信号与单等待标志，不改持久配置/修订/去重。本地清理完成前不释放连接所有权，所有等待受原预算和生命周期约束；网络/输入限额及安装布局不变，CLI/公开能力不新增。此修补尚未进入已发布且不可覆盖的alpha.6资产；两端当前仍为已验签alpha.6，后续版本发布和升级须单独确认，不能声称该竞态已在用户环境消除。
+
 - [x] 已确认问题汇总与源码回归覆盖（29记录）。
 - [x] alpha.6固定源完整CI、签名公开发行与资产验证。
 - [ ] 两端签名升级、稳定性复验与开发产物清理。
