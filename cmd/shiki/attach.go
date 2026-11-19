@@ -133,7 +133,7 @@ func (a *app) runTerminal(ctx context.Context, initial *client.Client, server st
 			return ctx.Err()
 		case <-timer.C:
 		}
-		next, e := client.Open(ctx, a.configPath, client.Options{AutoStart: true, Timeout: a.timeout})
+		next, e := client.Open(ctx, a.configPath, a.clientOptions(true))
 		if e != nil {
 			err = e
 			continue

@@ -25,6 +25,7 @@ import (
 	"github.com/DDSRem-Dev/Shikigami/internal/connection"
 	host "github.com/DDSRem-Dev/Shikigami/internal/plugin"
 	"github.com/DDSRem-Dev/Shikigami/internal/server"
+	rpcerrors "github.com/DDSRem-Dev/Shikigami/pkg/errors"
 	sdk "github.com/DDSRem-Dev/Shikigami/pkg/plugin"
 	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
 	ppb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/plugin"
@@ -37,6 +38,14 @@ import (
 // server-worker stream. Rejecting one over-capacity stream must not cancel the
 // listener or the two already admitted streams that share that route.
 func TestProductionPortRemoteLimitKeepsExistingConnectionsAndListener(t *testing.T) {
+	testProductionPortHandshakeIsolation(t, false)
+}
+
+func TestProductionPortTargetRestartKeepsExistingConnectionsAndListener(t *testing.T) {
+	testProductionPortHandshakeIsolation(t, true)
+}
+
+func testProductionPortHandshakeIsolation(t *testing.T, targetRefusal bool) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
 	dir, err := os.MkdirTemp("/tmp", "shiki-port-isolation-")
@@ -77,10 +86,10 @@ func TestProductionPortRemoteLimitKeepsExistingConnectionsAndListener(t *testing
 	acceptDone := make(chan struct{})
 	targetErrors := make(chan error, 4)
 	const tail = "after-client-half-close"
-	go func() {
-		defer close(acceptDone)
+	serveTarget := func(listener net.Listener, done chan struct{}) {
+		defer close(done)
 		for {
-			conn, err := target.Accept()
+			conn, err := listener.Accept()
 			if err != nil {
 				return
 			}
@@ -112,7 +121,8 @@ func TestProductionPortRemoteLimitKeepsExistingConnectionsAndListener(t *testing
 				}
 			}()
 		}
-	}()
+	}
+	go serveTarget(target, acceptDone)
 	t.Cleanup(func() {
 		_ = target.Close()
 		<-acceptDone // No further WaitGroup Add or owned-connection registration.
@@ -228,65 +238,126 @@ func TestProductionPortRemoteLimitKeepsExistingConnectionsAndListener(t *testing
 			return err == nil && found != nil && found.State == "listening" && found.ReasonCode == "" && found.BoundPort == bound && found.Connections == want
 		})
 	}
-	first, second := dial(), dial()
-	echo(first, "first-before-limit")
-	echo(second, "second-before-limit")
-	waitCount(2)
-	if accepted.Load() != 2 || active.Load() != 2 {
-		t.Fatal("two held streams did not reach the real target", accepted.Load(), active.Load())
+	if targetRefusal {
+		first := dial()
+		echo(first, "held-before-target-stop")
+		waitCount(1)
+		address := target.Addr().String()
+		_ = target.Close()
+		<-acceptDone
+
+		// Exercise the genuine ECONNREFUSED over worker gRPC and daemon TLS,
+		// independently of the client's recovery classification.
+		probeCtx, stopProbe := context.WithTimeout(ctx, 5*time.Second)
+		probe, err := remote.ForwardPort(probeCtx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := probe.Send(&pb.PortData{Type: pb.PortData_CONNECT, ConnectionId: "refused_probe", RemoteAddress: "127.0.0.1", Port: int32(remotePort)}); err != nil && !errors.Is(err, io.EOF) {
+			t.Fatal(err)
+		}
+		_, err = probe.Receive()
+		_ = probe.Close()
+		stopProbe()
+		var remoteError *connect.Error
+		if !rpcerrors.IsPortTargetRefused(err) || !errors.As(err, &remoteError) || !remoteError.IsRemote() || remoteError.Message() != "service unavailable" {
+			t.Fatalf("actual target refusal lost safe diagnostic: %v", err)
+		}
+		rejected := dial()
+		if err := rejected.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.WriteString(rejected, "failed-connection-must-not-replay")
+		n, rejectErr := rejected.Read(make([]byte, 1))
+		_ = rejected.Close()
+		var timeout net.Error
+		if n != 0 || rejectErr == nil || (errors.As(rejectErr, &timeout) && timeout.Timeout()) {
+			t.Fatalf("refused connection not promptly closed: n=%d err=%v", n, rejectErr)
+		}
+		echo(first, "held-connection-survives-refusal")
+		waitCount(1)
+		if accepted.Load() != 1 || active.Load() != 1 {
+			t.Fatal("refusal disturbed established target connection")
+		}
+		restarted, err := net.Listen("tcp4", address)
+		if err != nil {
+			t.Fatal(err)
+		}
+		target = restarted
+		acceptDone = make(chan struct{})
+		go serveTarget(target, acceptDone)
+		replacement := dial()
+		echo(replacement, "new-application-connection-after-restart")
+		echo(first, "held-connection-survives-restart")
+		waitCount(2)
+		if accepted.Load() != 2 || active.Load() != 2 {
+			t.Fatal("unexpected connection retry or loss", accepted.Load(), active.Load())
+		}
+		finish(first)
+		finish(replacement)
+		waitCount(0)
+		wait(t, func() bool { return active.Load() == 0 })
+	} else {
+		first, second := dial(), dial()
+		echo(first, "first-before-limit")
+		echo(second, "second-before-limit")
+		waitCount(2)
+		if accepted.Load() != 2 || active.Load() != 2 {
+			t.Fatal("two held streams did not reach the real target", accepted.Load(), active.Load())
+		}
+		// Confirm the server worker's actual quota and final status independently;
+		// the subsequent third local socket still exercises the whole client chain.
+		probeCtx, stopProbe := context.WithTimeout(ctx, 5*time.Second)
+		defer stopProbe()
+		probe, err := remote.ForwardPort(probeCtx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer probe.Close()
+		if err := probe.Send(&pb.PortData{Type: pb.PortData_CONNECT, ConnectionId: "quota_probe", RemoteAddress: "127.0.0.1", Port: int32(remotePort)}); err != nil && !errors.Is(err, io.EOF) {
+			t.Fatal(err)
+		}
+		_, err = probe.Receive()
+		_ = probe.Close()
+		stopProbe()
+		var remoteError *connect.Error
+		if connect.CodeOf(err) != connect.CodeResourceExhausted || !errors.As(err, &remoteError) || !remoteError.IsRemote() || remoteError.Message() != "resource limit exceeded" {
+			t.Fatalf("actual remote connection quota status: %v", err)
+		}
+		overflow := dial()
+		if err := overflow.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.WriteString(overflow, "overflow-must-not-reach-target")
+		n, rejected := overflow.Read(make([]byte, 1))
+		_ = overflow.Close()
+		var timeout net.Error
+		if n != 0 || rejected == nil || (errors.As(rejected, &timeout) && timeout.Timeout()) {
+			t.Fatalf("third local connection was not actively rejected: n=%d err=%v", n, rejected)
+		}
+		// These writes are the regression assertion: the old worker cancels both
+		// streams and its listener when the third handshake is ResourceExhausted.
+		echo(first, "first-still-live-after-rejection")
+		echo(second, "second-still-live-after-rejection")
+		waitCount(2)
+		if accepted.Load() != 2 || active.Load() != 2 {
+			t.Fatal("rejection reached target or canceled admitted streams", accepted.Load(), active.Load())
+		}
+		finish(first)
+		waitCount(1)
+		wait(t, func() bool { return active.Load() == 1 })
+		replacement := dial()
+		echo(replacement, "replacement-uses-exactly-one-released-slot")
+		echo(second, "second-survives-slot-replacement")
+		waitCount(2)
+		if accepted.Load() != 3 || active.Load() != 2 {
+			t.Fatal("released server slot did not admit exactly one replacement", accepted.Load(), active.Load())
+		}
+		finish(second)
+		finish(replacement)
+		waitCount(0)
+		wait(t, func() bool { return active.Load() == 0 })
 	}
-	// Confirm the server worker's actual quota and final status independently;
-	// the subsequent third local socket still exercises the whole client chain.
-	probeCtx, stopProbe := context.WithTimeout(ctx, 5*time.Second)
-	defer stopProbe()
-	probe, err := remote.ForwardPort(probeCtx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer probe.Close()
-	if err := probe.Send(&pb.PortData{Type: pb.PortData_CONNECT, ConnectionId: "quota_probe", RemoteAddress: "127.0.0.1", Port: int32(remotePort)}); err != nil && !errors.Is(err, io.EOF) {
-		t.Fatal(err)
-	}
-	_, err = probe.Receive()
-	_ = probe.Close()
-	stopProbe()
-	var remoteError *connect.Error
-	if connect.CodeOf(err) != connect.CodeResourceExhausted || !errors.As(err, &remoteError) || !remoteError.IsRemote() || remoteError.Message() != "resource limit exceeded" {
-		t.Fatalf("actual remote connection quota status: %v", err)
-	}
-	overflow := dial()
-	if err := overflow.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
-		t.Fatal(err)
-	}
-	_, _ = io.WriteString(overflow, "overflow-must-not-reach-target")
-	n, rejected := overflow.Read(make([]byte, 1))
-	_ = overflow.Close()
-	var timeout net.Error
-	if n != 0 || rejected == nil || (errors.As(rejected, &timeout) && timeout.Timeout()) {
-		t.Fatalf("third local connection was not actively rejected: n=%d err=%v", n, rejected)
-	}
-	// These writes are the regression assertion: the old worker cancels both
-	// streams and its listener when the third handshake is ResourceExhausted.
-	echo(first, "first-still-live-after-rejection")
-	echo(second, "second-still-live-after-rejection")
-	waitCount(2)
-	if accepted.Load() != 2 || active.Load() != 2 {
-		t.Fatal("rejection reached target or canceled admitted streams", accepted.Load(), active.Load())
-	}
-	finish(first)
-	waitCount(1)
-	wait(t, func() bool { return active.Load() == 1 })
-	replacement := dial()
-	echo(replacement, "replacement-uses-exactly-one-released-slot")
-	echo(second, "second-survives-slot-replacement")
-	waitCount(2)
-	if accepted.Load() != 3 || active.Load() != 2 {
-		t.Fatal("released server slot did not admit exactly one replacement", accepted.Load(), active.Load())
-	}
-	finish(second)
-	finish(replacement)
-	waitCount(0)
-	wait(t, func() bool { return active.Load() == 0 })
 	select {
 	case err := <-targetErrors:
 		t.Fatal("real target stream failed", err)

@@ -34,7 +34,7 @@ async function viewer({holdStatus = false, holdClose = false} = {}) {
         disconnect() { this.disconnected = true; this.listeners.disconnect?.({detail: {clean: true}}); }
     }
     const fetch = async (url, options = {}) => {
-        requests.push({url, method: options.method || 'GET', body: options.body});
+        requests.push({url, method: options.method || 'GET', body: options.body, signal: options.signal});
         if (url === 'api/session') return response({csrf: 'a'.repeat(43), maxFileBytes: 1048576, expiresAt: Date.now()/1000 + 3600, readOnly: false});
         if (url === 'api/control') { const d = deferred(); controls.push(d); return d.promise; }
         if (url === 'api/status') {
@@ -44,7 +44,7 @@ async function viewer({holdStatus = false, holdClose = false} = {}) {
         throw new Error(`Unexpected request ${url}`);
     };
     const context = vm.createContext({
-        TestRFB: RFB, WebSocket: Socket, TextEncoder, Uint8Array, ArrayBuffer, URL, URLSearchParams,
+        TestRFB: RFB, WebSocket: Socket, TextEncoder, Uint8Array, ArrayBuffer, URL, URLSearchParams, AbortController,
         fetch, clearInterval() {}, clearTimeout() {}, document: {getElementById: element, hidden: false},
         window: {location: {href: 'http://127.0.0.1:1234/v/session/'}, confirm: () => true,
             addEventListener() {}, setInterval() {}, setTimeout() {}},
@@ -186,4 +186,92 @@ test('native noVNC failure retains the closing socket barrier and invalidates ol
     v.connect();
     assert.equal(v.rfbs[1].viewOnly, true);
     assert.equal(v.controls.length, 1, 'reconnect must not replay a takeover');
+});
+
+for (const timeoutFirst of [false, true]) test(`current screen confirms control ${timeoutFirst ? 'after' : 'before'} HTTP timeout`, async () => {
+    const v = await viewer(); v.connect(); await flush();
+    const takeover = await v.click('take-control');
+    const confirm = () => v.rfbs[0].channel.onEvent({type: 'control', attachment: 'attachment-0', instance: 'instance', revision: 'confirmed', controller: true, readOnly: false});
+    if (!timeoutFirst) confirm();
+    v.controls[0].resolve(response({message: 'The browser operation timed out; its outcome may be unknown.'}, 504));
+    await takeover.pending; await flush();
+    if (timeoutFirst) {
+        assert.equal(v.rfbs[0].viewOnly, true, 'timeout alone must not grant control');
+        assert.match(v.element('message').textContent, /outcome may be unknown/);
+        confirm();
+    }
+    assert.equal(v.element('control-status').textContent, 'Controller');
+    assert.match(v.element('message').textContent, /You control/);
+    assert.equal(v.controls.length, 1, 'never retry automatically');
+});
+
+test('control POST pins the clicked attachment and reconnect aborts its request', async () => {
+    const v = await viewer(); v.connect(); await flush();
+    const takeover = await v.click('take-control');
+    const request = v.requests.find(r => r.url === 'api/control');
+    assert.deepEqual(JSON.parse(request.body), {revision: 'revision-0', attachment: 'attachment-0', instance: 'instance'});
+    await v.click('reconnect'); v.connect(); await flush();
+    assert.equal(request.signal.aborted, true);
+    v.controls[0].resolve(response({})); await takeover.pending;
+    assert.equal(v.rfbs[1].viewOnly, true);
+});
+
+test('replacement status owns its refresh slot even when an aborted older request completes', async () => {
+    const v = await viewer({holdStatus: true}); v.connect(); await flush();
+    const oldRequest = v.requests.find(r => r.url === 'api/status');
+    await v.click('reconnect'); v.connect(1, 'replacement'); await flush();
+    assert.equal(oldRequest.signal?.aborted, true);
+    assert.equal(v.statuses.length, 2, 'replacement can refresh while old fetch cancellation completes');
+    v.statuses[0].resolve(response({state: 'running', instance_id: 'old-instance'})); await flush();
+    await v.click('refresh-status');
+    assert.equal(v.statuses.length, 2, 'old finally must not release the new in-flight slot');
+    v.statuses[1].resolve(response({state: 'running', instance_id: 'replacement'})); await flush();
+    assert.equal(v.rfbs[1].disconnected, undefined);
+    await v.click('refresh-status');
+    assert.equal(v.statuses.length, 3);
+});
+
+test('HTTP success and status snapshot never grant control without a current stream event', async () => {
+    const v = await viewer({holdStatus: true}); v.connect(); await flush();
+    const takeover = await v.click('take-control');
+    v.controls[0].resolve(response({controller_id: 'attachment-0', control_revision: 'new'})); await takeover.pending;
+    v.statuses[0].resolve(response({state: 'running', instance_id: 'instance', controller_id: 'attachment-0', control_revision: 'new'})); await flush();
+    assert.equal(v.rfbs[0].viewOnly, true);
+    assert.equal(v.element('control-status').textContent, 'Read-only');
+    assert.match(v.element('message').textContent, /waiting for the screen/);
+});
+
+test('control events from a different attachment cannot authorize the current screen', async () => {
+    const v = await viewer(); v.connect(); await flush();
+    for (const scope of [{attachment: 'other', instance: 'instance'}, {attachment: 'attachment-0', instance: 'other'}]) {
+        assert.throws(() => v.rfbs[0].channel.onEvent({type: 'control', ...scope, revision: 'foreign', controller: true, readOnly: false}), /another attachment/);
+        assert.equal(v.rfbs[0].viewOnly, true);
+        assert.equal(v.element('control-status').textContent, 'Read-only');
+    }
+});
+
+test('late HTTP failure cannot restore control after a confirmed takeover was revoked', async () => {
+    const v = await viewer(); v.connect(); await flush();
+    const takeover = await v.click('take-control');
+    v.rfbs[0].channel.onEvent({type: 'control', attachment: 'attachment-0', instance: 'instance', revision: 'confirmed', controller: true, readOnly: false});
+    v.rfbs[0].channel.onEvent({type: 'control', attachment: 'attachment-0', instance: 'instance', revision: 'revoked', controller: false, readOnly: true});
+    v.controls[0].resolve(response({message: 'The browser operation timed out; its outcome may be unknown.'}, 504));
+    await takeover.pending; await flush();
+    assert.equal(v.rfbs[0].viewOnly, true);
+    assert.equal(v.element('control-status').textContent, 'Read-only');
+    assert.match(v.element('message').textContent, /confirmed.*now read-only/);
+    assert.equal(v.controls.length, 1);
+});
+
+test('stream revocation updates confirmed control text after HTTP already completed', async () => {
+    const v = await viewer(); v.connect(); await flush();
+    const takeover = await v.click('take-control');
+    v.controls[0].resolve(response({})); await takeover.pending;
+    v.rfbs[0].channel.onEvent({type: 'control', attachment: 'attachment-0', instance: 'instance', revision: 'confirmed', controller: true, readOnly: false});
+    assert.match(v.element('message').textContent, /You control/);
+    v.rfbs[0].channel.onEvent({type: 'control', attachment: 'attachment-0', instance: 'instance', revision: 'revoked', controller: false, readOnly: true});
+    assert.equal(v.rfbs[0].viewOnly, true);
+    assert.equal(v.element('control-status').textContent, 'Read-only');
+    assert.match(v.element('message').textContent, /confirmed.*now read-only/);
+    assert.equal(v.controls.length, 1);
 });

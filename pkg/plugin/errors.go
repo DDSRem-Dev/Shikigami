@@ -7,7 +7,6 @@ import (
 
 	"connectrpc.com/connect/v2"
 	rpcerrors "github.com/DDSRem-Dev/Shikigami/pkg/errors"
-	"github.com/DDSRem-Dev/Shikigami/pkg/protocol/version"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -22,6 +21,14 @@ var grpcToConnect = map[codes.Code]connect.Code{
 	codes.Unimplemented: connect.CodeUnimplemented, codes.Internal: connect.CodeInternal, codes.Unavailable: connect.CodeUnavailable,
 	codes.DataLoss: connect.CodeDataLoss, codes.Unauthenticated: connect.CodeUnauthenticated,
 }
+
+// PortTargetRefused marks an authorized loopback dial's ECONNREFUSED before
+// CONNECTED. The SDK carries only a fixed diagnostic, never target metadata.
+func PortTargetRefused() *connect.Error { return rpcerrors.PortTargetRefused() }
+
+// IsPortTargetRefused validates that diagnostic with cancellation taking
+// precedence. Clients may isolate it only before CONNECTED, without replay.
+func IsPortTargetRefused(err error) bool { return rpcerrors.IsPortTargetRefused(err) }
 
 // FromGRPC reconstructs a safe, local Connect error at the worker boundary.
 // Neither metadata nor unapproved error details cross this boundary.
@@ -64,7 +71,7 @@ func ToGRPC(err error) error {
 			var ce *connect.Error
 			errors.As(safe, &ce)
 			out := status.New(code, ce.Message())
-			if detail := version.SafeDetail(safe); detail != nil {
+			if detail := rpcerrors.SafeDetail(safe); detail != nil {
 				var info errdetails.ErrorInfo
 				if proto.Unmarshal(detail.Value, &info) == nil {
 					if enriched, err := out.WithDetails(&info); err == nil {

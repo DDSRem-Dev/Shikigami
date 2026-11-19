@@ -320,7 +320,7 @@ WatchEvents 首帧发送 rescan_required，随后发送有序状态提示；客�
 
 队列默认最多 256 个提示；溢出结束为 ResourceExhausted，前端重订阅并重查。终端另用 TerminalStream，文件预览另用 ReadConflictFile；二者不进入状态事件队列。普通消息上限 1 MiB、文件块 256 KiB；列表超过 1 MiB 返回 ResourceExhausted，首版按该有界容量验收，扩容需版本化分页。错误详情只暴露可诊断的 reason_code，不暴露 Token/登录 key。
 
-短 RPC 默认 5 秒，启动/停止调用 15 秒，登录完成是异步状态，不用一个无限时长 unary 等浏览器。数据流继承前端/worker 可取消 context；任一代理断流取消下游，禁止遗留第二个 writer。重连只恢复订阅与终端当前屏幕，不重放输入或旧 TCP 字节。
+短 RPC 默认 5 秒，启动/停止调用 15 秒；ResolveConflict为多步文件操作，当前源码默认总预算15分钟（推导及单流限制见14），显式timeout和更早父截止优先。登录完成是异步状态，不用一个无限时长 unary 等浏览器。数据流继承前端/worker 可取消 context；任一代理断流取消下游，禁止遗留第二个 writer。重连只恢复订阅与终端当前屏幕，不重放输入或旧 TCP 字节。
 
 明确错误：AGENT_RESTARTED/HANDSHAKE_REQUIRED/PROTOCOL_INCOMPATIBLE 用 FailedPrecondition；scope 越界用 PermissionDenied；revision/generation 竞争用 Aborted；节点未认证用 FailedPrecondition/NODE_AUTH_REQUIRED；远端 Token 无效保留 Unauthenticated。
 

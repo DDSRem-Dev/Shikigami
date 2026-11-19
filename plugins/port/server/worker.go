@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"connectrpc.com/connect/v2"
@@ -251,6 +252,12 @@ func (w *Worker) ForwardPort(parent context.Context, s sdk.PortServerStream) err
 	dialer := net.Dialer{Timeout: w.config.DialTimeout}
 	conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(first.RemoteAddress, strconv.Itoa(int(first.Port))))
 	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if errors.Is(err, syscall.ECONNREFUSED) {
+			return sdk.PortTargetRefused().WithCause(err)
+		}
 		return connect.NewError(connect.CodeUnavailable, "PORT_TARGET_UNAVAILABLE")
 	}
 	tcp, ok := conn.(*net.TCPConn)

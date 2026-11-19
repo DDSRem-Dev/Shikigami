@@ -71,7 +71,7 @@ revision 覆盖 daemon 已观察到的磁盘内容；在提交前重新读取/�
 
 客户端下载同样校验 expected local hash，避免读到远端后覆盖本地新修改。保留本地操作使用基于已展示远端 revision 的条件提交，不再次调用普通 uploadFile 触发递归冲突菜单；revision 变化则重新展示冲突。
 
-keep_both 使用唯一副本名，记录原路径并避免副本再次触发冲突循环。show_diff 临时文件用 os.CreateTemp、0600、检查返回值，不能固定 `/tmp/` + basename。插件向宿主发送冲突事件，不能直接接管终端输入。
+keep_both 使用唯一副本名，记录原路径并避免副本再次触发冲突循环。 中途中断的副本须先重新观察；若两端不一致，保留日志并标记`CONFLICT_COPY_REVIEW_REQUIRED`，由用户核对副本最新generation后显式keep-local或keep-remote。副本尚无共同基线/有未知操作时不允许再keep-both，原路径存在未决副本时也不继续生成新副本；已建立共同基线的历史副本若后来出现真正的新修改，仍可按普通冲突处理。仅缺失一端不证明该端从未提交，不据此自动补写或忽略用户删除。恢复副本不自动解决原文件冲突；成功同ID重放只返回原结果，未知结果同ID不重新执行。show_diff 临时文件用 os.CreateTemp、0600、检查返回值，不能固定 `/tmp/` + basename。插件向宿主发送冲突事件，不能直接接管终端输入。
 
 ### 路径、权限和 ignore
 
@@ -87,6 +87,7 @@ ignore matcher 在无配置文件时也用默认规则初始化；检查 Scanner
 
 - 数据块先检查上限；Read n>0 先发送再处理 err。
 - 每方向只有一个发送者。TCP EOF 转成 HALF_CLOSE；接收方 CloseWrite，继续另一方向直到结束。
+- 已授权loopback目标明确拒绝新连接（ECONNREFUSED）只结束尚未CONNECTED的该TCP连接，保留监听和其它已准入连接；通过14的固定安全诊断区分，不按错误文本或所有Unavailable推断。目标恢复后由应用发起新的连接，不重放旧字节。
 - 硬错误取消 context 并关闭 conn 使阻塞读写退出。正常半关闭不提前全关；最终等待两方向结束再回收。
 - CloseSend 只由发送者调用；不能一边发送数据一边另一个协程 Send(CLOSE)。
 - 统计用锁/原子计数，连接结束递减。不要依赖可变 Active bool 无锁终止循环。

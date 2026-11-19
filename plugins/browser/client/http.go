@@ -287,9 +287,15 @@ func (w *Worker) handleControl(out http.ResponseWriter, r *http.Request, v *view
 		return
 	}
 	var request struct {
-		Revision string `json:"revision"`
+		Revision   string `json:"revision"`
+		Attachment string `json:"attachment"`
+		Instance   string `json:"instance"`
 	}
 	if !decodeJSON(out, r, &request) {
+		return
+	}
+	if request.Revision == "" || len(request.Revision) > 256 || request.Attachment == "" || len(request.Attachment) > 128 || request.Instance == "" || len(request.Instance) > 128 {
+		writeHTTPError(out, connect.NewError(connect.CodeInvalidArgument, "CONTROL_SCOPE_REQUIRED"))
 		return
 	}
 	v.mu.Lock()
@@ -299,10 +305,19 @@ func (w *Worker) handleControl(out http.ResponseWriter, r *http.Request, v *view
 		writeHTTPError(out, connect.NewError(connect.CodeFailedPrecondition, "VIEWER_NOT_ATTACHED"))
 		return
 	}
+	// The page confirms a specific attachment. A delayed request from an old
+	// page generation must never inherit the replacement connection's scope.
+	if request.Attachment != connection.id || request.Instance != connection.instance {
+		v.mu.Unlock()
+		writeHTTPError(out, connect.NewError(connect.CodeAborted, "VIEWER_ATTACHMENT_CHANGED"))
+		return
+	}
 	id, instance := connection.id, connection.instance
 	v.mu.Unlock()
 	ctx, cancel := viewerRequestContext(r, v, w.config.operationTimeout)
 	defer cancel()
+	stop := context.AfterFunc(connection.ctx, cancel)
+	defer stop()
 	status, err := w.remote.TakeBrowserControl(ctx, &epb.BrowserControlRequest{ServerId: v.serverID, ProfileId: v.profileID, InstanceId: instance, AttachmentId: id, ExpectedControlRevision: request.Revision})
 	if err != nil {
 		writeHTTPError(out, err)

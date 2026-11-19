@@ -34,7 +34,9 @@ type Options struct {
 	ExplicitStart    bool
 	AutoStart        bool
 	Timeout          time.Duration
-	AgentBinary      string
+	// TimeoutExplicit disables operation-specific defaults, even for 5 seconds.
+	TimeoutExplicit bool
+	AgentBinary     string
 }
 type Client struct {
 	endpoint           *connection.Endpoint
@@ -44,6 +46,7 @@ type Client struct {
 	cancel             context.CancelFunc
 	once               sync.Once
 	timeout            time.Duration
+	timeoutExplicit    bool
 	capabilities       []string
 	ConfigPath         string
 	Config             *config.Client
@@ -93,6 +96,9 @@ func Open(ctx context.Context, path string, opts Options) (*Client, error) {
 		opts.Timeout = 5 * time.Second
 	}
 	c, e := dial(ctx, path, cfg, opts.Timeout)
+	if c != nil {
+		c.timeoutExplicit = opts.TimeoutExplicit
+	}
 	if e == nil && opts.RecoverCrashLoop {
 		status, statusErr := c.Agent().GetStatus(ctx, &pb.Empty{})
 		if statusErr != nil {
@@ -127,6 +133,9 @@ func Open(ctx context.Context, path string, opts Options) (*Client, error) {
 }
 
 func startupResult(ctx context.Context, c *Client, err error, opts Options) (*Client, error) {
+	if c != nil {
+		c.timeoutExplicit = opts.TimeoutExplicit
+	}
 	if err != nil || !opts.AutoStart {
 		return c, err
 	}
@@ -229,8 +238,15 @@ func (c *Client) identity(server string) connect.ClientInterceptor {
 			var cancel context.CancelFunc
 			if spec.StreamType == connect.StreamTypeUnary {
 				timeout := c.timeout
-				if timeout == 5*time.Second {
-					if extensionTimeout := extensionProcedureTimeout(spec.Procedure); extensionTimeout != 0 {
+				if timeout == 5*time.Second && !c.timeoutExplicit {
+					if spec.Procedure == arpc.AgentResolveConflictProcedure {
+						// keep-both may read the remote twice and write it twice.
+						// Four default 10 MiB transfers allow 4*190s; 15m also
+						// reserves time for metadata, staging and commit. This is
+						// a bounded operation budget, not a completion guarantee
+						// for larger configured files or a slower connection.
+						timeout = 15 * time.Minute
+					} else if extensionTimeout := extensionProcedureTimeout(spec.Procedure); extensionTimeout != 0 {
 						timeout = extensionTimeout
 					} else if lifecycleProcedure(spec.Procedure) {
 						timeout = 15 * time.Second

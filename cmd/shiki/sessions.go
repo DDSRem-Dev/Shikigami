@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"fmt"
 
+	"connectrpc.com/connect/v2"
 	"github.com/DDSRem-Dev/Shikigami/internal/client"
 	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
 	"github.com/spf13/cobra"
@@ -43,15 +46,16 @@ func (a *app) sessionCommands() *cobra.Command {
 		return a.withClient(cmd.Context(), true, func(c *client.Client) error {
 			server, project, e := a.selected(cmd.Context(), c)
 			if e != nil {
-				return e
+				return fmt.Errorf("resolve session creation server/project; CreateSession request has not been sent: %w", e)
 			}
 			if project == "" {
 				return errors.New("sessions create requires --project")
 			}
 			start := !noClaude
-			session, e := c.Remote(server).CreateSession(cmd.Context(), &pb.CreateSessionRequest{ProjectId: project, Name: args[0], WorkingDir: workingDir, Description: description, Tags: tags, AutoStartClaude: &start, RequestId: a.id()})
+			requestID := a.id()
+			session, e := c.Remote(server).CreateSession(cmd.Context(), &pb.CreateSessionRequest{ProjectId: project, Name: args[0], WorkingDir: workingDir, Description: description, Tags: tags, AutoStartClaude: &start, RequestId: requestID})
 			if e != nil {
-				return e
+				return sessionCreateError(e, requestID)
 			}
 			return a.print(session)
 		})
@@ -178,4 +182,12 @@ func (a *app) sessionCommands() *cobra.Command {
 	}
 	a.addSnapshotCommands(root)
 	return root
+}
+
+func sessionCreateError(err error, requestID string) error {
+	code := connect.CodeOf(err)
+	if code == connect.CodeCanceled || code == connect.CodeDeadlineExceeded || code == connect.CodeUnavailable || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Errorf("CreateSession result may be unknown; first run shiki sessions list with the same --server and --project to check. Absence from the list does not prove failure. While the result remains unknown, keep all original arguments and use --request-id %q to retrieve the original outcome; this does not rerun a recorded failure. Only after confirming the original request failed, explicitly create with a new request ID: %w", requestID, err)
+	}
+	return fmt.Errorf("CreateSession failed: %w", err)
 }

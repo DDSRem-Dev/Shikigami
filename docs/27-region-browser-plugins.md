@@ -54,6 +54,8 @@ agent继续持有连接和scope；CLI不得启动插件或拥有loopback listene
 
 本地查看入口只loopback，短期单次引导凭据，Host/Origin/CSRF/WebSocket校验，不暴露daemon Token、完整agent API、VNC/CDP公网端口。静态资源本地分发。画面协议仅固定受管实例，不是通用WSS回退或任意TCP隧道。
 
+查看器控制请求必须绑定用户确认时的attachment、instance和control revision；本地插件在锁内核对当前连接，转发固定旧scope并随该attachment取消，不能将迟到请求改绑到重连后的连接。前端只接受当前generation且匹配scope的流事件授予/撤销控制，HTTP成功和状态快照不能授权。已由流确认的控制结果不被迟到HTTP超时提示覆盖，撤权同步更新只读提示；显式重连取消旧控制/状态请求，旧请求完成不能占用或释放新一代刷新槽。这些修补目前为未发布源码，正式alpha.7实机超时记录仍待发行后复验。
+
 状态持久化原子写与revision/request_id去重；runtime连接、PID、listener不当作持久真相。配置生效版本和进程启动版本分开。stop/disable与正常宿主shutdown须区分，避免重启误杀浏览器。
 
 ## 实现与验证取舍

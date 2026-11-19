@@ -5,7 +5,6 @@ import (
 	"connectrpc.com/connect/v2"
 	"context"
 	"errors"
-	"github.com/DDSRem-Dev/Shikigami/pkg/protocol/version"
 	"io"
 	"net"
 )
@@ -47,5 +46,5 @@ func RebuildError(err error) error {
 		code = connect.CodeInternal
 		message = messages[code]
 	}
-	return connect.NewError(code, message).WithDetail(version.SafeDetail(err)).WithCause(err)
+	return connect.NewError(code, message).WithDetail(SafeDetail(err)).WithCause(err)
 }

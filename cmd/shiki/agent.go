@@ -18,7 +18,9 @@ func (a *app) agentCommands() *cobra.Command {
 		if a.timeout <= 0 {
 			return errors.New("--timeout must be positive")
 		}
-		c, e := client.Open(cmd.Context(), a.configPath, client.Options{AutoStart: true, ExplicitStart: true, RecoverCrashLoop: recoverLoop, Timeout: a.timeout})
+		opts := a.clientOptions(true)
+		opts.ExplicitStart, opts.RecoverCrashLoop = true, recoverLoop
+		c, e := client.Open(cmd.Context(), a.configPath, opts)
 		if e != nil {
 			return e
 		}

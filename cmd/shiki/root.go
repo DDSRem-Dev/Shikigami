@@ -28,6 +28,7 @@ type app struct {
 	json, noColor                          bool
 	verbose                                bool
 	timeout                                time.Duration
+	timeoutSet                             func() bool
 	input                                  *os.File
 	output, errorOutput                    io.Writer
 }
@@ -51,7 +52,8 @@ func newRoot(input *os.File, output, errorOutput io.Writer) *cobra.Command {
 	root.PersistentFlags().BoolVar(&a.json, "json", false, "Print structured JSON to stdout")
 	root.PersistentFlags().BoolVar(&a.noColor, "no-color", false, "Disable color (plain output is the default)")
 	root.PersistentFlags().BoolVar(&a.verbose, "verbose", false, "Show bounded plugin log tails after detach and in the dashboard Plugins panel")
-	root.PersistentFlags().DurationVar(&a.timeout, "timeout", 5*time.Second, "Timeout for each short IPC call")
+	root.PersistentFlags().DurationVar(&a.timeout, "timeout", 5*time.Second, "Override each unary IPC call timeout, including conflict resolution; otherwise use operation-specific defaults")
+	a.timeoutSet = func() bool { return root.PersistentFlags().Changed("timeout") }
 	root.AddCommand(a.agentCommands(), a.serverCommands(), a.connectCommand(), a.projectCommands(), a.sessionCommands(), a.attachCommand(), a.doctorCommand(), a.pluginCommands(), a.nodeCommands(), a.syncCommands(), a.portCommands(), a.statsCommand(), a.logsCommand(), a.dashboardCommand())
 	root.AddCommand(a.regionCommands(), a.browserCommands())
 	root.AddCommand(a.setupCommand())
@@ -71,12 +73,15 @@ func (a *app) withClient(ctx context.Context, auto bool, run func(*client.Client
 	if a.timeout <= 0 {
 		return errors.New("--timeout must be positive")
 	}
-	c, e := client.Open(ctx, a.configPath, client.Options{AutoStart: auto, Timeout: a.timeout})
+	c, e := client.Open(ctx, a.configPath, a.clientOptions(auto))
 	if e != nil {
 		return e
 	}
 	defer c.Close()
 	return run(c)
+}
+func (a *app) clientOptions(auto bool) client.Options {
+	return client.Options{AutoStart: auto, Timeout: a.timeout, TimeoutExplicit: a.timeoutSet != nil && a.timeoutSet()}
 }
 func (a *app) id() string {
 	if a.requestID != "" {

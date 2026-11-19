@@ -65,6 +65,12 @@ func (w *Worker) ResolveConflict(ctx context.Context, in *ppb.ResolveConflictReq
 	if err != nil {
 		return nil, err
 	}
+	// A partially completed copy is already evidence of this user's choice.
+	// Reinspect and explicitly settle that path instead of creating another
+	// copy under a fresh request ID or recursively copying the copy itself.
+	if in.Choice == ppb.ResolveConflictRequest_KEEP_BOTH && t.data.keepBothNeedsCopyReview(conflict.Path) {
+		return nil, fail(connect.CodeFailedPrecondition, "CONFLICT_COPY_REQUIRES_KEEP_LOCAL_OR_REMOTE")
+	}
 	copyPath := ""
 	if in.Choice == ppb.ResolveConflictRequest_KEEP_BOTH && conflict.Remote.Exists {
 		copyPath = path.Join(path.Dir(conflict.Path), path.Base(conflict.Path)+".conflict-"+id(""))
@@ -120,7 +126,7 @@ func (w *Worker) ResolveConflict(ctx context.Context, in *ppb.ResolveConflictReq
 		t.data.Reason = ""
 		if len(t.data.Conflicts) > 0 {
 			t.data.State = "conflicted"
-			t.data.Reason = "CONFLICTS_PENDING"
+			t.data.Reason = t.data.conflictReason()
 		}
 	}
 	out := t.data.status()

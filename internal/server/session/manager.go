@@ -213,9 +213,12 @@ func (m *Manager) Create(ctx context.Context, request *pb.CreateSessionRequest) 
 			result.ClaudeStatus = "unknown"
 		}
 		code := connect.CodeFailedPrecondition
-		if errors.Is(createErr, context.Canceled) {
+		// Worker RPC errors retain their code across the transport boundary,
+		// but need not wrap the local context sentinel. Persist that same
+		// cancellation/deadline outcome for subsequent request_id replays.
+		if errors.Is(createErr, context.Canceled) || connect.CodeOf(createErr) == connect.CodeCanceled {
 			code = connect.CodeCanceled
-		} else if errors.Is(createErr, context.DeadlineExceeded) {
+		} else if errors.Is(createErr, context.DeadlineExceeded) || connect.CodeOf(createErr) == connect.CodeDeadlineExceeded {
 			code = connect.CodeDeadlineExceeded
 		}
 		if err := m.completeCreation(request.RequestId, result, code.String(), errors.Is(inspectErr, tmux.ErrNotFound)); err != nil {

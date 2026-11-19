@@ -23,7 +23,7 @@ func (a *app) dashboardCommand() *cobra.Command {
 		server, project := a.server, a.project
 		retries := 0
 		for {
-			c, err := client.Open(cmd.Context(), a.configPath, client.Options{AutoStart: true, Timeout: a.timeout})
+			c, err := client.Open(cmd.Context(), a.configPath, a.clientOptions(true))
 			if err != nil {
 				return err
 			}

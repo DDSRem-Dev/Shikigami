@@ -1,5 +1,7 @@
 # Shikigami（式神）
 
+**alpha.8发行准备：** 用户已授权发布下一轮修复测试版，变更与已知限制见[alpha.8说明](docs/releases/v0.0.1-alpha.8.md)。签名资产公开前，下面的alpha.7入口保持有效；发布不等于两端已升级或beta验收通过。
+
 通过本地 CLI/TUI 和常驻 agent，使用远端 VPS 上的 tmux / Claude Code。核心链路采用 Connect/protobuf over HTTP/2；文件同步和 TCP 转发由双端插件执行。
 
 **当前源码的 Phase 0–5 验收清单已闭环（42/42）。** 功能、已验平台、证据来源及未支持范围见[支持声明](docs/18-release-readiness.md#current-support)，逐项进度见[路线图](docs/08-roadmap.md)。认证生命周期及长稳、资源与性能按用户确认测试通过关闭；真实 Claude 登录/推理、物理主机重启和生产 heap/object 归因仍保留未实测边界。当前公开安装入口为 alpha.7，补修浏览器快速重连清理竞态和已有连接身份复核预算问题，包含 VPS/Mac 一键安装向导及地区环境与远程浏览器插件；不是 beta 或稳定版。

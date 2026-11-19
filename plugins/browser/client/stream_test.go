@@ -120,7 +120,7 @@ func TestViewerRFBBridgeScopeControllerAndQueuedRevision(t *testing.T) {
 		return &epb.BrowserStatus{ProfileId: "profile", InstanceId: "instance", State: "running", ControllerId: "attachment", ControlRevision: "revision-3"}, nil
 	}
 	browser.controlMu.Unlock()
-	taken := viewerTestRequest(t, client, http.MethodPost, w.origin+"/v/"+viewer.Id+"/api/control", w.origin, csrf, []byte(`{"revision":"revision-2"}`))
+	taken := viewerTestRequest(t, client, http.MethodPost, w.origin+"/v/"+viewer.Id+"/api/control", w.origin, csrf, []byte(`{"revision":"revision-2","attachment":"attachment","instance":"instance"}`))
 	taken.Body.Close()
 	if taken.StatusCode != http.StatusOK {
 		t.Fatalf("typed takeover: %d", taken.StatusCode)

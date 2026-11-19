@@ -374,11 +374,10 @@ func (w *Worker) forward(t *task, conn *net.TCPConn) {
 	}
 }
 func (w *Worker) handshakeFailed(t *task, err error) {
-	// Resource admission rejects this new stream, not the authenticated route
-	// or its admitted connections. Proxy boundaries deliberately sanitize the
-	// message, so use the preserved code only before CONNECTED. Established
-	// stream failures still take the separate task-level path below.
-	if connect.CodeOf(err) == connect.CodeResourceExhausted {
+	// Resource admission and a positively identified target refusal reject only
+	// this new TCP connection. Other route failures still stop the task. This
+	// exception never applies after CONNECTED and never retries application data.
+	if connect.CodeOf(err) == connect.CodeResourceExhausted || sdk.IsPortTargetRefused(err) {
 		return
 	}
 	w.failed(t, err)

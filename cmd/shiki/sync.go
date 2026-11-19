@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"time"
 
+	"connectrpc.com/connect/v2"
 	"github.com/DDSRem-Dev/Shikigami/internal/client"
 	apb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/agent"
 	ppb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/plugin"
@@ -122,18 +125,21 @@ func (a *app) syncCommands() *cobra.Command {
 		return a.withClient(cmd.Context(), true, func(c *client.Client) error {
 			mapping, e := a.syncMapping(cmd.Context(), c, mappingID)
 			if e != nil {
-				return e
+				return fmt.Errorf("resolve conflict mapping; ResolveConflict request has not been sent: %w", e)
 			}
 			conflict, e := findConflict(cmd.Context(), c, mapping, args[0], generation)
 			if e != nil {
-				return e
+				return fmt.Errorf("check conflict generation; ResolveConflict request has not been sent (including any requested replay). Inspect sync status/conflicts and both file trees; an absent conflict does not prove the earlier request succeeded: %w", e)
 			}
 			if e = a.confirm(cmd.Context(), conflictDecisionLabel(conflict, choice), confirm); e != nil {
 				return e
 			}
-			result, e := c.Agent().ResolveConflict(cmd.Context(), &ppb.ResolveConflictRequest{MappingId: mapping.Id, ConflictId: conflict.Id, ExpectedGeneration: generation, Choice: selected, RequestId: a.id()})
+			requestID := a.id()
+			stopProgress := syncResolveProgress(cmd.Context(), a.errorOutput, a.interactive() && !a.json)
+			result, e := c.Agent().ResolveConflict(cmd.Context(), &ppb.ResolveConflictRequest{MappingId: mapping.Id, ConflictId: conflict.Id, ExpectedGeneration: generation, Choice: selected, RequestId: requestID})
+			stopProgress()
 			if e != nil {
-				return e
+				return syncResolveError(e, mapping.Id, requestID)
 			}
 			return a.print(result)
 		})
@@ -162,6 +168,40 @@ func (a *app) syncCommands() *cobra.Command {
 	diff.Flags().StringVar(&diffGeneration, "generation", "", "Required generation from sync conflicts")
 	root.AddCommand(diff)
 	return root
+}
+
+func syncResolveProgress(ctx context.Context, output io.Writer, heartbeat bool) func() {
+	fmt.Fprintln(output, "Resolving conflict; file transfers may take several minutes. Ctrl-C cancels waiting; files may already have changed, so inspect both sides before another decision.")
+	if !heartbeat {
+		return func() {}
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if ctx.Err() != nil {
+					return
+				}
+				fmt.Fprintln(output, "Still resolving conflict; waiting for file transfers and confirmation. Ctrl-C cancels.")
+			}
+		}
+	}()
+	return func() { cancel(); <-done }
+}
+
+func syncResolveError(err error, mappingID, requestID string) error {
+	code := connect.CodeOf(err)
+	if code == connect.CodeCanceled || code == connect.CodeDeadlineExceeded || code == connect.CodeUnavailable || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Errorf("ResolveConflict result may be unknown and files may be partially changed; first inspect shiki sync status and shiki sync conflicts with --mapping %q, and verify both file trees. Preserve request ID %q for checking the original result; do not blindly retry or switch to a new request ID. The CLI cannot replay a conflict that is no longer listed; absence alone does not prove success: %w", mappingID, requestID, err)
+	}
+	return fmt.Errorf("ResolveConflict failed: %w", err)
 }
 func mappingArgument(flag string, args []string) string {
 	if len(args) > 0 {

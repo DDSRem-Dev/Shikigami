@@ -9,7 +9,7 @@ const state = {
     screenReady: false, attached: false, controller: false, canControl: false,
     attachment: "", instance: "", revision: "", controllerId: "",
     pendingControl: false, connecting: false, closed: false, transferring: false,
-    refreshing: false, statusTimer: null, screenClosing: null,
+    statusRequest: null, controlRequest: null, statusTimer: null, screenClosing: null,
 };
 
 function showMessage(message, info = false) {
@@ -19,14 +19,14 @@ function showMessage(message, info = false) {
     element.hidden = !message;
 }
 
-async function api(endpoint, {method = "GET", json, body, binary = false} = {}) {
+async function api(endpoint, {method = "GET", json, body, binary = false, signal} = {}) {
     const headers = {"X-Shiki-CSRF": state.csrf};
     if (json !== undefined) headers["Content-Type"] = "application/json";
     if (body !== undefined) headers["Content-Type"] = "application/octet-stream";
     let response;
     try {
         response = await fetch(`api/${endpoint}`, {
-            method, headers, credentials: "same-origin", mode: "same-origin",
+            method, headers, signal, credentials: "same-origin", mode: "same-origin",
             cache: "no-store", redirect: "error",
             body: json === undefined ? body : JSON.stringify(json),
         });
@@ -72,6 +72,10 @@ function detachScreen() {
     // Invalidate callbacks before closing the old channel. A delayed HTTP
     // takeover/status response must not affect a replacement attachment.
     ++state.generation;
+    const statusRequest = state.statusRequest, controlRequest = state.controlRequest;
+    state.statusRequest = state.controlRequest = null;
+    statusRequest?.abort.abort();
+    controlRequest?.abort.abort();
     const rfb = state.rfb;
     const channel = state.channel;
     state.rfb = null;
@@ -179,6 +183,7 @@ function screenEvent(event, generation) {
     if (generation !== state.generation || state.closed) return;
     if (event.type === "ready" || event.type === "control") {
         if (typeof event.attachment !== "string" || typeof event.instance !== "string" || typeof event.revision !== "string") throw new Error("Incomplete control metadata");
+        if (event.type === "control" && (!state.attached || event.attachment !== state.attachment || event.instance !== state.instance)) throw new Error("Control metadata belongs to another attachment");
         state.attached = true;
         state.attachment = event.attachment;
         state.instance = event.instance;
@@ -186,10 +191,13 @@ function screenEvent(event, generation) {
         state.controllerId = event.controllerId || "";
         if (event.type === "ready") state.canControl = !state.session.readOnly && event.canControl === true;
         state.controller = state.canControl && event.controller === true && event.readOnly === false;
-        const controlWasPending = state.pendingControl;
         state.pendingControl = false;
         renderAuthority();
-        if (controlWasPending && state.controller) showMessage("You control this remote browser. Click inside the screen to use the mouse and keyboard.", true);
+        const request = state.controlRequest;
+        if (currentControlRequest(request)) {
+            if (state.controller) request.confirmed = true;
+            if (request.confirmed) showMessage(controlResultMessage(request), true);
+        }
     } else if (event.type === "closed" || event.type === "error") {
         detachScreen();
         showMessage(event.message || "Unknown screen failure. Refresh status; the independent browser may still be running.");
@@ -276,12 +284,13 @@ async function connectScreen() {
 }
 
 async function refreshStatus() {
-    if (!state.session || state.closed || state.refreshing) return;
-    state.refreshing = true;
+    if (!state.session || state.closed || state.statusRequest) return;
     const generation = state.generation;
+    const request = {generation, abort: new AbortController()};
+    state.statusRequest = request;
     try {
-        const status = await api("status");
-        if (state.closed || generation !== state.generation) return;
+        const status = await api("status", {signal: request.abort.signal});
+        if (state.closed || generation !== state.generation || state.statusRequest !== request) return;
         const details = [`State: ${status.state || "unknown"}`, `Attachments: ${status.attachments || 0}`, `Chrome: ${status.chrome_version || "unknown"}`];
         if (status.restart_required) details.push("Configuration changed: remote restart required (not automatic)");
         if (status.reason) details.push(`Reason: ${status.reason}`);
@@ -295,8 +304,19 @@ async function refreshStatus() {
             showMessage("The managed browser instance changed. Reconnect the screen explicitly; no input will be replayed.");
         }
     } catch (error) {
-        if (!state.closed && generation === state.generation) byId("remote-status").textContent = `Remote browser status: unknown. ${error.message}`;
-    } finally { state.refreshing = false; }
+        if (!state.closed && generation === state.generation && state.statusRequest === request) byId("remote-status").textContent = `Remote browser status: unknown. ${error.message}`;
+    } finally { if (state.statusRequest === request) state.statusRequest = null; }
+}
+
+function currentControlRequest(request) {
+    return request && state.controlRequest === request && !state.closed && request.generation === state.generation && request.attachment === state.attachment && request.instance === state.instance;
+}
+
+function controlResultMessage(request) {
+    if (request.confirmed) return state.controller
+        ? "You control this remote browser. Click inside the screen to use the mouse and keyboard."
+        : "The screen confirmed the takeover; this viewer is now read-only.";
+    return "Takeover accepted; waiting for the screen to confirm control. If the screen stays unresponsive, use Reconnect screen and take control again.";
 }
 
 byId("refresh-status").addEventListener("click", refreshStatus);
@@ -306,22 +326,24 @@ byId("take-control").addEventListener("click", async () => {
     if (!state.screenReady || !state.canControl || state.controller || state.pendingControl) return;
     const expected = state.revision;
     const generation = state.generation;
+    const attachment = state.attachment, instance = state.instance;
     const description = state.controllerId ? "The current controller will become read-only." : "No viewer will be promoted automatically.";
     if (!window.confirm(`Take control of this remote browser? ${description}\nExpected control revision: ${expected}`)) return;
+    state.controlRequest?.abort.abort();
+    const request = {generation, attachment, instance, confirmed: false, abort: new AbortController()};
+    state.controlRequest = request;
     state.pendingControl = true;
     renderAuthority();
     try {
-        await api("control", {method: "POST", json: {revision: expected}});
-        if (state.closed || generation !== state.generation) return;
-        showMessage(state.controller
-            ? "You control this remote browser. Click inside the screen to use the mouse and keyboard."
-            : "Takeover accepted; waiting for the screen to confirm control. If the screen stays unresponsive, use Reconnect screen and take control again.", true);
+        await api("control", {method: "POST", json: {revision: expected, attachment, instance}, signal: request.abort.signal});
+        if (!currentControlRequest(request)) return;
+        showMessage(controlResultMessage(request), true);
         refreshStatus();
     } catch (error) {
-        if (state.closed || generation !== state.generation) return;
+        if (!currentControlRequest(request)) return;
         state.pendingControl = false;
         renderAuthority();
-        showMessage(error.message);
+        showMessage(request.confirmed ? controlResultMessage(request) : error.message, request.confirmed);
         refreshStatus();
     }
 });

@@ -1,0 +1,481 @@
+# alpha.7 到 beta.1：实机测试执行手册
+
+当前执行方式：用户已授权助手自动执行命令与可自动化项目；账号登录、主观体验和影响现有环境的操作单独交接。本轮已完成冲突恢复、同步功能、终端保活/配置快照、端口与浏览器自动化实测；端口恢复及间歇超时仍失败，源码修补尚未部署。resolve使用显式2分钟预算，原默认超时门槛不因此关闭。
+
+当前执行顺序（按用户最新要求）：暂时跳过网络专项，保留未完成；先从已有terminal-check的终端保活开始，随后同步、端口、浏览器及快照，逐项反馈后再进入下一项。Claude账号授权继续暂停，不重新创建已有项目或会话。
+
+热点复测补充（2026-11-19）：一次显式connect恢复后18次远端查询全部成功，新空shell创建0.485秒；相同画面8次点击更新0.904–2.122秒，较原网络改善但仍有迟滞。有限测试不替代B06/B09长稳，Claude登录继续暂停；切网耗尽重连后可使用`shiki connect "$SHIKI_SERVER"`显式恢复，无须重新配对。
+
+当前阻塞（2026-11-19）：用户两次创建会话超时，真实浏览器点击至画面更新复现约1.3–8秒；现场还观察到有限网络损耗证据，尚未完成端到端归因。`jp-auth-check`已由一次有固定request_id的后续请求创建成功，勿重复创建；Claude授权继续暂停。B02/B06/B09当前不能计为整体通过，先处理稳定性再推进账号测试或beta发行。详见[本轮诊断与源码修补](15-implementation-status.md#alpha7会话超时与浏览器卡顿实测2026-11-19稳定性未通过)。
+
+编制日期：2026-11-18。命令已对照正式 alpha.7 的帮助与源码；本文是待执行计划，不是测试通过报告。测试对象先固定为 `v0.0.1-alpha.7`；如果修复后版本变化，记录新版本并补跑受影响项。现有安装、配置、凭据、正式备份、浏览器 work profile 和 agent-remote 保留。
+
+## 1. 当前结论、分工与完成条件
+
+alpha.7 已完成公开签名验证和 VPS Debian12/amd64、Mac arm64 升级，7 个插件实例 ready；487 秒浏览器实测覆盖鼠标、输入、滚动、显式重连。随后 12 次 CLI 请求中有 1 次超时、之后恢复。它仍需排查，不能由 CI 全绿宣称消失。交付文档固定源 `9f55e5a` 的 [CI44120621767](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44120621767) 最终57/57成功；首轮3项ARM Mac因托管runner未领取而取消，原条件补跑成功。
+
+[18 的原 beta 发布前清单](18-release-readiness.md#beta-readiness)已有通过证据，但部分是较早候选；beta 发布时必须绑定最终源码。真实 Claude 登录和物理重启在既有验收中明确保留为未实测，并非早已存在但被漏掉的硬阻塞。为本次“实际可用后再发 beta”的目标，建议补齐以下用户路径；新增建议不追改历史门槛或宣称旧记录已覆盖新插件。
+
+| 编号 | 项目与建议时长 | 谁执行 | 本轮状态/通过依据 |
+|---|---|---|---|
+| B01 | 安装/连接基线，5分钟 | 我可检查，你可复制命令复查 | 用户已回传版本/实际请求/7插件ready；后续偶发超时另列，非持续健康保证 |
+| B02 | 测试项目、终端、detach/attach，10分钟 | 我自动执行，你只体验 | 终端detach/attach同PID/标记、配置快照新PID且不恢复环境标记已验；默认shell及偶发超时待候选复验 |
+| B03 | Claude Code真实授权与一次任务，10–20分钟 | 你登录和使用，我核对状态 | 按用户要求暂停；尚无CLI授权与实际任务通过证据 |
+| B04 | sync双向同步、暂停、冲突、删除，15–20分钟 | 我自动执行 | 原部分keep-both已安全恢复；双向/暂停/冲突/重命名/删除功能通过（resolve显式2m），候选默认预算仍待复验 |
+| B05 | port真实HTTP转发、断流和重连，10分钟 | 我自动执行 | HTTP及仅loopback绑定通过；后端恢复后forward保持offline，源码已修补，候选实机复验未完成 |
+| B06 | browser控制/中日输入/剪贴板/文件/持久化，20–30分钟 | 我自动执行功能，你体验长用 | 鼠标/英文/中日IME/显式剪贴板/上传下载/双查看器接管通过；状态及控制超时仍保留，源码修补未部署，持续低延迟未通过 |
+| B07 | region实际值和只读计划，5分钟 | 我可完成，你核对预期 | 实际日本时区/语言已按追加明确授权应用并复查；IP地理库分歧未解决，DNS未改 |
+| B08 | 自然断线/切网/睡眠恢复，10–15分钟 | 你选择时机操作，我取证 | 待测；恢复不换身份、不重放输入 |
+| B09 | 日常工作2小时＋可选隔夜8–12小时 | 你正常使用，我分析采样 | 待测；所有失败保留并归因，不只报成功率 |
+| B10 | 干净环境一键首装、取消后续装 | 我负责隔离环境；你只做新节点授权和体验 | 新向导真实双机完整首装未闭环；现有升级不替代 |
+| B11 | 实际重启、启动解锁/登录恢复 | 你另选维护窗口，我前后检查 | 可选补验；执行前先完成B02–B09，见第11节 |
+| B12 | 候选回归、故障注入、升级/回滚、签名发行 | 我负责 | 固定最终候选后执行；beta公开验收尚未执行 |
+
+你不需要手工运行 Go 测试、构建插件、检查签名或学习 CI。你必须亲自完成的是账号授权、主观交互体验，以及你选择进行的断网/睡眠/重启操作。需要额外机器时先明确用途和可用环境；本手册不会要求擦除现有Mac/VPS来模拟首次安装。
+
+建议用一个晚上完成B01–B08，随后正常使用B09。耗时是人工安排估计，不是软件性能承诺。GUI、原生Windows、对话历史恢复、三方自动合并、代理/地区“防封保证”不是本次验收对象。
+
+### 助手自动化结果补充（2026-11-19～20）
+
+正式两端保持alpha.7。本轮已实际使用shiki完成同步恢复与功能子项、真实attach/保活、配置快照恢复、loopback HTTP转发、浏览器输入/IME/显式剪贴板/暂存文件及双查看器接管。每项实现和现场失败详见08/15/16顶部同名记录。B04的显式2分钟resolve预算仅用于功能核验；B05后端重启后转发未恢复、B06状态/接管超时、收尾会话列表一次5秒超时均保留。同步最终还出现REMOTE_RETRY_EXHAUSTED，显式恢复和数据核验结果见同记录。源码隔离回归通过不能代替候选部署后的默认体验。
+
+当前无需用户再次复制上述命令。仍需用户参与的范围为Claude真实账号授权（继续暂停）、主观长用体验，以及其自行选择时机的切网/睡眠/物理重启；尚未遇到需要用户立即操作的步骤。首装环境/新节点登录与最终候选发布另有前置条件，未以现有安装上的功能测试代替。beta尚不具备本次实机稳定性闭环证据。
+
+## 2. B01：固定环境并建立最小记录
+
+以下未特别说明的命令在 **Mac终端** 执行。先查看已有服务器标签：
+
+```sh
+~/.local/bin/shiki version
+~/.local/bin/shiki servers list
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+把下一行 `my-vps` 换成上一步已有标签或ID；不填端口，不新建服务器。在同一个Mac终端保留这些变量：
+
+```sh
+export SHIKI_SERVER='my-vps'
+export SHIKI_TEST_NAME="beta-accept-$(date +%Y%m%d-%H%M%S)"
+export SHIKI_TEST_DIR="$HOME/Shikigami-Acceptance/$SHIKI_TEST_NAME"
+export SHIKI_TEST_REMOTE="/home/shiki/projects/$SHIKI_TEST_NAME"
+export SHIKI_EVIDENCE="$HOME/Shikigami-Acceptance/${SHIKI_TEST_NAME}-evidence"
+mkdir -p "$SHIKI_TEST_DIR" "$SHIKI_EVIDENCE"
+chmod 700 "$SHIKI_TEST_DIR" "$SHIKI_EVIDENCE"
+shiki --server "$SHIKI_SERVER" doctor
+shiki --server "$SHIKI_SERVER" projects list
+shiki plugins --side local list
+shiki --server "$SHIKI_SERVER" plugins --side remote list
+shiki --server "$SHIKI_SERVER" browser status work
+```
+
+上面的PATH只对本窗口生效，不修改受保护的 `.zshrc`。
+
+预期：正式alpha.7；实际项目请求成功；本机sync/port/browser和远端sync/port/region/browser ready。`doctor` 即使退出码为0也可能包含degraded/errors，必须阅读字段。Claude尚未登录此时允许记录pending，B03后再核对。`tailscale-relay`本身不是失败，不要求为了测试强制direct或改路由。
+
+`SHIKI_TEST_REMOTE`使用默认专用账号的项目根目录；若安装配置使用不同 `projects_dir`，由我确认后替换，不去放宽服务权限。每个新Mac终端需重新设定变量；优先保持此窗口用于管理命令，另开终端用于交互会话。
+
+只记录版本、时间、测试编号、是否通过及错误码。不要把设备Token、SSH密码、授权URL、查看器带`#`的完整URL、Cookie或整个配置目录贴进反馈。
+
+## 3. B02：建立独立项目并验证终端保活
+
+最新用户回传：按detach/attach流程前后PID及临时环境标记相同，原文件内容保留，本终端保活子项通过；使用现有项目/terminal-check，无须重跑下方创建命令。下一项为已存在paused映射的初始同步。
+
+2026-11-19用户反馈：B01基线正常；B02的用户/路径/文件读写通过，但方向键在`/bin/sh`显示转义序列，交互编辑未通过。源码的地区环境包装存在空argv显式选择`/bin/sh`路径。临时对照：在当前远端shell先Ctrl+C清除输入，再执行`exec /bin/bash --noprofile --norc -i`，检查上下历史及左右编辑。用户随后确认切换后方向键均正常；此操作只替换当前测试shell，不能把绕过后的通过记作默认shell缺陷已修复。
+
+在Mac管理窗口执行：
+
+```sh
+shiki --server "$SHIKI_SERVER" projects create "$SHIKI_TEST_NAME" \
+  --path "$SHIKI_TEST_REMOTE" --map "$SHIKI_TEST_DIR"
+shiki --server "$SHIKI_SERVER" --project "$SHIKI_TEST_NAME" sessions create terminal-check --no-claude
+shiki --server "$SHIKI_SERVER" --project "$SHIKI_TEST_NAME" attach terminal-check
+```
+
+最后一条进入 **VPS普通用户shell**，后续这三条在该远程shell中输入：
+
+```sh
+id -un
+pwd
+printf 'terminal-pass\n' > terminal-check.txt
+```
+
+预期用户`shiki`，目录是刚创建的测试项目。输入中文/英文、移动光标、扩大/缩小Mac终端窗口，确认不乱码或重复按键。按 **Ctrl+Q** 回到Mac；再次运行上面的attach命令，远程执行：
+
+```sh
+cat terminal-check.txt
+```
+
+预期显示`terminal-pass`，仍是同一个session。不要用`exit`代替detach测试。再Ctrl+Q回Mac：
+
+```sh
+shiki --server "$SHIKI_SERVER" --project "$SHIKI_TEST_NAME" sessions list
+cd "$SHIKI_TEST_DIR"
+shiki
+```
+
+智能入口应识别映射/已有项目并允许选择会话，不创建第二个项目。首次同步提示先保持暂停；同步在B04单独处理。若命令超时，先`projects list`或`sessions list`查是否已经创建，禁止连续重复创建来“碰运气”。
+
+可选双窗口控制：另一Mac终端复制实际服务器/项目名，运行`shiki --server 标签 --project 项目名 attach terminal-check --read-only`；只能看不能输入。使用显式`--take-control`的新attachment验证接管，旧窗口应失去写权限。只测试这个临时会话。
+
+配置快照和诊断的补充冒烟可在Mac执行：
+
+```sh
+shiki --server "$SHIKI_SERVER" --project "$SHIKI_TEST_NAME" sessions snapshot terminal-check --description beta-test
+shiki --server "$SHIKI_SERVER" --project "$SHIKI_TEST_NAME" sessions snapshots
+shiki --server "$SHIKI_SERVER" --project "$SHIKI_TEST_NAME" sessions restore '刚返回的snapshot-id' --name snapshot-check
+shiki --server "$SHIKI_SERVER" stats
+shiki --server "$SHIKI_SERVER" dashboard
+```
+
+确认restore提示后只创建新的测试会话；它恢复启动配置，不恢复文件或Claude对话。stats应展示实际值或明确unavailable，dashboard不能把失败插件显示为ready。模板、清理策略、权限和其余管理命令的完整矩阵由B12自动化回归覆盖，无需你逐条重复CI。
+
+## 4. B03：由你完成 Claude Code 授权和真实工作
+
+继续attach到`terminal-check`。在远程shell确认：
+
+```sh
+command -v claude
+claude --version
+claude auth status --json
+```
+
+如果PATH没有找到，但使用默认quickstart安装，可用`/home/shiki/.local/bin/claude`替代下列`claude`。不要在root用户下登录。
+
+未登录时执行：
+
+```sh
+claude auth login
+```
+
+按官方CLI提示，由你在浏览器授权。需要远程Chrome时，先Ctrl+Q脱离会话，在Mac运行第7节的`browser open`；在远程Chrome中打开CLI显示的官方授权链接。若流程要求回贴授权码，只贴回你自己的远程终端。不要发给我。网页Claude账号登录并不自动证明Claude Code已获授权。
+
+再次attach到同一shell：
+
+```sh
+claude auth status --json
+```
+
+应报告已登录。Ctrl+Q回Mac，再创建真实Claude会话：
+
+```sh
+shiki --server "$SHIKI_SERVER" --project "$SHIKI_TEST_NAME" sessions create claude-check
+shiki --server "$SHIKI_SERVER" --project "$SHIKI_TEST_NAME" attach claude-check
+```
+
+在Claude输入：
+
+> 只在当前测试目录中新建 beta-check.txt，内容为 SHIKI_BETA_OK。不要读取或修改其他目录，不提交Git。完成后说明文件路径。
+
+按正常提示审阅并允许这项测试文件写入。随后Ctrl+Q、重新attach，确认当前进程的会话仍可继续。让Claude读取刚才文件，内容应一致。真实请求可能消耗你的账号额度；账单/账号资格问题单独记录，不归为Shikigami通过或失败。
+
+回Mac执行`shiki --server "$SHIKI_SERVER" doctor`。向我反馈“已登录/未登录、任务成功/失败、detach后恢复情况”即可，不发送完整账号JSON。若网页登录成功但CLI仍未登录，记录为B03未完成。
+
+## 5. B04：sync双向、冲突与删除
+
+当前暂停点：固定请求beta-keep-both-v5-01超时后仅本地副本已落盘，原冲突和副本差异均保留，B04不通过。先保留现场，不再对原冲突换ID反复keep-both；源码修补与隔离安全恢复验证已完成，尚未发行/部署；现场下一步由用户对已确认保存REMOTE_CONFLICT_V5的本地副本显式keep-local，将其同步回远端；成功并核对两端后，再以最新generation处理原文件。此两步是保留两份内容的现场恢复，不把alpha.7临时显式延长timeout计作新版实机通过。网络专项仍暂跳，Claude授权继续暂停。
+
+本轮反馈：首次keep-remote连续三次前台超时；助手随后只读确认active、无冲突且本地两文件正确，后台共同基线已建立，持久记录保留结果未知失败。不要重复旧resolve；先核验VPS两文件，再继续已有基线更新。数据收敛不等于resolve交互通过，详见15的用户终端保活/同步记录。
+
+先Ctrl+Q回Mac管理窗口：
+
+```sh
+cd "$SHIKI_TEST_DIR"
+printf 'from-mac-v1\n' > from-mac.txt
+shiki --server "$SHIKI_SERVER" sync status
+shiki --server "$SHIKI_SERVER" sync resume
+shiki --server "$SHIKI_SERVER" sync conflicts
+```
+
+新映射没有共同基线，初始差异显示冲突是预期行为。对每个测试文件复制其`id`与`generation`，逐项审阅：
+
+```sh
+shiki --server "$SHIKI_SERVER" sync show-diff '实际conflict-id' --generation '实际generation'
+shiki --server "$SHIKI_SERVER" sync resolve '实际conflict-id' \
+  --generation '实际generation' --choice keep-local
+```
+
+`from-mac.txt`选keep-local；远程创建的`terminal-check.txt`、`beta-check.txt`选keep-remote。按提示确认。每次使用最新generation，不能套用同一个ID/版本批量覆盖。`show-diff`显示差异时可能返回非零，不能单凭该退出码判同步失败。
+
+检查`sync status`与`sync conflicts`直到无未处理项。预期两端有相同文件：Mac用`cat`，远程attach后用`cat`；需要摘要时Mac用`shasum -a 256 文件`、VPS用`sha256sum 文件`。
+
+按以下顺序测试，所有文件只放本次测试目录：
+
+| 子项 | 动作 | 预期 |
+|---|---|---|
+| 已有基线的本地修改 | Mac `printf 'from-mac-v2\n' > from-mac.txt` | 等实际同步完成，VPS内容相同 |
+| 远程新增 | 在远程测试shell `printf 'from-vps\n' > from-vps.txt` | Mac收到同名同内容；如产生需确认项，按状态处理 |
+| 暂停 | Mac `shiki --server "$SHIKI_SERVER" sync pause`，修改from-mac.txt | 暂停期间远端不跟随；resume后协调，按实际冲突处理 |
+| 双端冲突 | pause后，Mac把from-mac.txt写为LOCAL；VPS同文件写为REMOTE；再resume | 两边不同内容不被静默覆盖，出现冲突 |
+| 保留两份 | 对上述最新冲突执行resolve，`--choice keep-both` | 两份内容都能找回，不要求人为猜测备份文件名 |
+| 重命名 | 基线稳定后，Mac把from-vps.txt改名为renamed.txt | 等状态稳定后两端名称/内容一致；不宣称协议具有原子rename语义 |
+| 删除 | 新建delete-me.txt，等两端均有基线后，只在Mac删除它 | 远端按已建立基线删除；若远端被修改，则应冲突而非覆盖 |
+
+报告冲突ID、generation、选择和结果，不把整份项目内容发给我。B04未通过时先暂停本测试映射，保留现场，勿将真实agent-remote加入测试。
+
+## 6. B05：port真实服务转发
+
+本例使用远端3000。先由我核对已有allowlist和端口占用；如果未允许，需保留完整既有配置，仅审阅后增加测试端口。`plugins config`替换完整配置，**不能用只有allow_ports的JSON覆盖不明现有设置**。ready不是已允许端口的证明。
+
+在Mac新建专用远程shell：
+
+```sh
+shiki --server "$SHIKI_SERVER" --project "$SHIKI_TEST_NAME" sessions create port-check --no-claude
+shiki --server "$SHIKI_SERVER" --project "$SHIKI_TEST_NAME" attach port-check
+```
+
+在该远程shell运行（若3000占用则停止本项并换已审阅的空闲端口，不结束其他进程）：
+
+```sh
+mkdir -p port-web
+printf 'SHIKI_PORT_OK\n' > port-web/index.html
+python3 -m http.server 3000 --bind 127.0.0.1 --directory port-web
+```
+
+Ctrl+Q回Mac，服务应继续运行：
+
+```sh
+shiki --server "$SHIKI_SERVER" ports forward 3000 --local-port 0 --bind-address 127.0.0.1
+shiki --server "$SHIKI_SERVER" ports list
+```
+
+从输出复制本次forward ID与实际本地端口；显式0由系统选空闲端口，避免占用现有本地3000。Mac执行：
+
+```sh
+curl --fail --max-time 10 http://127.0.0.1:实际本地端口/
+```
+
+应返回`SHIKI_PORT_OK`。用本机浏览器打开同一URL也应成功。若返回`not allowlisted`，记录配置前提未满足，交由我处理，不关鉴权、不公开VPS端口。
+
+再次attach到port-check，按Ctrl+C结束本次Python HTTP服务；Mac请求应失败，不能仍显示旧响应作为成功。远端重启同一HTTP命令后，新的Mac HTTP请求应恢复；既有TCP连接不保证保活。最后Mac运行`shiki ports stop '本次forward-id'`，确认本次转发停止；再在port-check按Ctrl+C结束本次服务。
+
+## 7. B06：浏览器、输入法、剪贴板与文件
+
+先看`browser status work`；如果确实stopped且你准备使用，再执行`browser start work --yes`。不要替换另一个正在运行的profile。Mac打开可申请控制的查看器：
+
+```sh
+shiki --server "$SHIKI_SERVER" browser open work --read-only=false --launch
+```
+
+打开后仍需 **Take control → 明确确认 → Controller**。记录viewer ID，但不分享带凭据的URL。用新测试标签，保留原有标签。
+
+| 次序 | 操作 | 通过标准 |
+|---|---|---|
+| 1 | 鼠标点击链接、选中文字、滚轮上下滚动、英文输入和退格 | 反馈正常，没有重复/丢失到无法使用的按键 |
+| 2 | 本机键盘切英文布局，使用远程Fcitx切换中文/日文，在文本框输入“中文测试”“日本語テスト” | 远程候选框可见、能选择并上屏；本机输入法粘贴不算此项通过 |
+| 3 | 查看器Explicit clipboard中手动填测试文本，点击Send；在远程文本框粘贴 | 只有明确Send才传输，内容相同 |
+| 4 | 在远端复制测试文本，在面板明确Copy remote text to local clipboard | 本机粘贴内容相同；浏览器权限拒绝时单独记，不假装成功 |
+| 5 | 连续5次Reconnect screen；每次Connected后确认read-only，再Take control | 每次能恢复，输入不重放、不会自动成为Controller |
+| 6 | 第二个查看器先用默认只读打开；关闭它后，再用`--read-only=false`新开第二个查看器并Take control | 强制只读查看器不能申请控制；允许控制的新查看器明确接管后，第一个失去控制，只能有一个Controller |
+| 7 | Close viewer；重新执行open | Chrome实例及已有页面仍在，不因关闭本地查看器结束 |
+| 8 | 连续使用30分钟，至少10次导航/滚动/输入 | 记录每次冻结、断线、恢复方式及用时，不以最后一次成功覆盖失败 |
+
+alpha.7受管默认快捷键：**Ctrl+Space**开关服务端输入法，**Ctrl+Shift+Space**在中文拼音/日文Mozc之间切换。先点击远程文本框，再用英文键盘输入拼音或罗马字，观察远端候选框。若Mac拦截快捷键或实际受管配置不同，记录现象由我核对，不随意改本机设置。网站本身打不开与远程画面断开分别记录。
+
+浏览器文件通道先做不涉及网站的往返：
+
+```sh
+printf 'browser-file-roundtrip\n' > "$SHIKI_EVIDENCE/browser-upload.txt"
+shiki --server "$SHIKI_SERVER" browser files upload work "$SHIKI_EVIDENCE/browser-upload.txt" --yes
+shiki --server "$SHIKI_SERVER" browser files list work --area uploads
+shiki --server "$SHIKI_SERVER" browser files download work browser-upload.txt \
+  --area uploads --output "$SHIKI_EVIDENCE/browser-returned.txt" --yes
+cmp "$SHIKI_EVIDENCE/browser-upload.txt" "$SHIKI_EVIDENCE/browser-returned.txt"
+```
+
+`cmp`无输出且退出0才通过。若同名已存在，选新的测试文件名，勿直接覆盖。此项证明上传暂存与取回，不等于网页上传/下载完整通过。另在你选择的网站手动选取本测试文件上传，下载一个非敏感小文件，再用`browser files list work --area downloads`和download取回并对比；不要以网站上传为名传输真实项目或凭据。
+
+Cookie持久化安排在你已保存网页内容后：由你手动登录一个允许测试的网站，记录登录状态；Close viewer再打开应仍保持。随后显式stop/start work，再open检查。若网站要求重新认证，记录网站/时间与Chrome状态，由我区分站点策略、Cookie或密钥环问题；不承诺所有网站永不掉登录。停止Chrome会丢失网页未提交内容，先保存。
+
+## 8. B07：region检查，不改整机网络
+
+2026-11-19额外实测/授权：用户明确批准IPinfo/ipapi.co出口核对及日本系统时区/语言应用。主机和实际work Chrome观察到同一出口IPv4，但两库分别标JP与US；分歧未定。系统已复查为Asia/Tokyo、ja_JP.UTF-8，原Chrome仍是东京/日语；DNS、路由和运行应用保持。旧shell环境不自动刷新，账号授权继续暂停。下面保留一般测试流程，不据这次配置成功宣称Claude登录或IP地区判断已通过。
+
+Mac执行：
+
+```sh
+shiki --server "$SHIKI_SERVER" region inspect
+shiki --server "$SHIKI_SERVER" browser profile list
+shiki --server "$SHIKI_SERVER" browser diagnose work
+cat > "$SHIKI_EVIDENCE/jp-plan.json" <<'JSON'
+{"country":"JP","timezone":"Asia/Tokyo","locale":"ja_JP.UTF-8","languages":["ja_JP","ja"]}
+JSON
+shiki --server "$SHIKI_SERVER" region plan --file "$SHIKI_EVIDENCE/jp-plan.json"
+```
+
+检查helper可用、当前值、revision和pending_operation_id；计划应列出变化，但不应用。work的JP浏览器设置与整机设置可以不同，不能因浏览器日文就推定VPS整机已切JP。诊断默认不访问外部供应商，缺失观察可为unknown，不全部强求pass。
+
+整机apply/confirm/rollback、DNS超时恢复与冲突保护由我在隔离机补验。若要在当前VPS实测，另外约定目标配置、带外恢复和窗口；本流程不执行apply、DNS/代理改动或外部检测授权。
+
+## 9. B08–B09：断线恢复与持续使用
+
+先运行B02测试shell和浏览器。仅在没有重要传输/未保存操作时，由你选择做以下测试；它们会短暂影响Mac上的其他联网应用。
+
+1. 关闭本地查看器再打开：远程Chrome持续运行。
+2. Mac手动断网约30秒后恢复：记录终端自动恢复结果；浏览器必要时点Reconnect screen，再明确接管。
+3. Mac睡眠5分钟后唤醒：检查原会话、同一Chrome实例、文件同步状态和转发新连接。
+4. 有手机热点时再测试一次自然切网；没有则记“未执行”，不用安装VPN或改服务器网络来制造路线。
+
+每次恢复后，在Mac管理终端运行：
+
+```sh
+shiki --server "$SHIKI_SERVER" projects list
+shiki --server "$SHIKI_SERVER" --project "$SHIKI_TEST_NAME" sessions list
+shiki --server "$SHIKI_SERVER" browser status work
+shiki --server "$SHIKI_SERVER" ports list
+cd "$SHIKI_TEST_DIR"
+shiki --server "$SHIKI_SERVER" sync status
+```
+
+若明确`RECONNECT_EXHAUSTED`，网络恢复后执行`shiki connect "$SHIKI_SERVER"`复用已保存连接。身份拒绝时停下来核对；不要签发新Token或重登节点来绕过。连接恢复后不得出现重复终端输入、自动接管、文件静默覆盖或新daemon身份。
+
+下面是一段**只读采样**，Mac复制整段执行。项目正文直接丢弃，只记录时间/耗时/退出码及有限错误分类，不自动connect、不改超时、不重试原请求。环境中的`SHIKI_SERVER`与`SHIKI_EVIDENCE`须已设置，Mac需要python3。
+
+```sh
+export SHIKI_SAMPLES=60
+export SHIKI_INTERVAL=10
+python3 - <<'PY'
+import csv, datetime, os, pathlib, subprocess, time, statistics
+server = os.environ['SHIKI_SERVER']
+folder = pathlib.Path(os.environ['SHIKI_EVIDENCE'])
+count = int(os.environ.get('SHIKI_SAMPLES', '60'))
+interval = float(os.environ.get('SHIKI_INTERVAL', '10'))
+assert 1 <= count <= 10000 and 1 <= interval <= 3600
+path = folder / ('requests-' + datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f') + '.csv')
+os.umask(0o077)
+durations, failures = [], 0
+with path.open('x', newline='') as f:
+    writer = csv.writer(f)
+    writer.writerow(['utc', 'sample', 'milliseconds', 'exit_code', 'result'])
+    try:
+        for number in range(1, count + 1):
+            stamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            begin = time.monotonic()
+            try:
+                result = subprocess.run(
+                    [str(pathlib.Path.home()/'.local/bin/shiki'), '--server', server,
+                     '--json', 'projects', 'list'], stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE, text=True, timeout=30)
+                code = result.returncode
+                reason = 'ok' if code == 0 else 'other_error'
+                if code:
+                    for token in ('IDENTITY_VERIFICATION_DENIED', 'RECONNECT_EXHAUSTED',
+                                  'deadline_exceeded', 'unavailable', 'unauthenticated',
+                                  'permission_denied'):
+                        if token.lower() in result.stderr.lower():
+                            reason = token
+                            break
+            except subprocess.TimeoutExpired:
+                code, reason = 124, 'sampler_watchdog_30s'
+            elapsed = round((time.monotonic() - begin) * 1000)
+            durations.append(elapsed)
+            failures += code != 0
+            writer.writerow([stamp, number, elapsed, code, reason])
+            f.flush()
+            print(f'{number}/{count} {elapsed}ms {reason}', flush=True)
+            if number < count:
+                time.sleep(interval)
+    except KeyboardInterrupt:
+        print('Interrupted; partial samples retained, not a completed run.')
+print('CSV:', path)
+if durations:
+    print('completed_samples=', len(durations), 'failures=', failures,
+          'median_ms=', statistics.median(durations), 'max_ms=', max(durations))
+PY
+```
+
+默认约10–15分钟，实际取决于请求耗时；隔夜如需约12小时，设`SHIKI_SAMPLES=720`、`SHIKI_INTERVAL=60`后重跑同一段Python。不要同时开多个采样器。CLI默认5秒是每个短IPC调用预算，整条命令可含多次调用；脚本30秒只是外层卡死保护，`sampler_watchdog_30s`必须另计，不冒充产品deadline错误。采样通过也不证明浏览器流或同步通过。
+
+先保持原网络完成一轮；切网/睡眠测试另起一轮并记录事件时间，预期人为断网期间失败不能混成正常在线失败率。日常工作2小时期间体验Claude、同步、浏览器与端口；隔夜主要看空闲恢复及后台存活，不伪称12小时持续负载。
+
+本轮目标是没有未解释的产品错误、数据损失、权限绕过或不可恢复故障。不是自创延迟SLA。任何超时都保留；我需结合当时agent/daemon/plugin状态、CPU/内存和SSH/网络对照归因。再次出现alpha.7的偶发超时则优先调查，不能仅把5秒调大后宣布修复。若确认多步文件操作误用短查询预算，应同时验证新预算、较早父截止、部分提交恢复和真实交互；延长预算不替代这些验收。
+
+## 10. B10：干净首装、重复向导与中断恢复
+
+我在隔离Linux系统和独立Mac测试环境执行，不卸载当前两端。Mac另一个用户可覆盖新用户安装，但不能称为整机全新环境；整机首装需要独立VM/设备。测试范围：
+
+1. 使用[28](28-quickstart.md)的官方alpha.7两条命令，从无Shikigami状态安装；正确签名通过、错误签名拒绝在隔离测试完成。
+2. 记录y/yes/n/no、隐藏输入与Enter/Ctrl+C、每10秒等待提示、纯端口误填原地纠正。
+3. 无Claude授权也能交付连接并打开浏览器，最终应用状态仍pending。
+4. 授权阶段正常取消后重跑；已完成步骤复用，既有keyring、地址与Token不重建。
+5. 再执行同版向导，端口留空保留、已有profile/配置保留；取消不是卸载。
+6. 测试结束只卸载隔离环境本次安装，记录正式安装和数据保留边界。
+
+需要你做的只有新测试节点的Tailscale人工授权，以及可选的全新Mac向导体验。测试使用独立身份，不撤销当前正常节点。生产APT过程中强杀、损坏密钥环、撤销真实Token等故障注入由我在隔离夹具做。
+
+## 11. B11：可选实际重启，独立维护窗口
+
+这不是让你现在重启。先保存工作、结束测试HTTP进程、暂停本测试同步，确认VPS提供商控制台可以登录；Mac本机重启会中断当前协作。先VPS、后Mac，不能同时重启后再排障。没有安排窗口则保持未实测，不伪装通过。
+
+VPS重启前，如果你要验证Chrome自动启动，在Mac明确选择work：
+
+```sh
+shiki --server "$SHIKI_SERVER" browser profile list
+shiki --server "$SHIKI_SERVER" browser profile boot work --yes
+```
+
+如果已有其他boot目标，先停下核对，不直接追加`--replace-boot`。记录原boot选择以便恢复；本次改变是持久设置。未选择boot目标时，重启后Chrome不自动运行是预期，不应判失败。
+
+在VPS root终端记录状态，然后由你确认窗口后执行最后一条：
+
+```sh
+systemctl show shiki-daemon.service -p ActiveState -p SubState -p NRestarts
+systemctl is-active shikigami-browser-keyring-1000.service shikigami-region-guard.service
+systemctl reboot
+```
+
+恢复SSH后再次检查这些服务，Mac检查projects list、profile list、browser status和doctor。预期服务普通UID、节点身份与配置保持，keyring自动解锁；已选择boot且插件有效时只启动一个受管Chrome。不要求VPS重启后旧tmux/Claude进程仍活着：主机重启会结束进程，不能把服务重启保活承诺扩大到跨主机重启或对话恢复。
+
+Chrome自动启动验证后显式stop，观察同一次开机不自动复活；再由你显式start恢复使用。若原来未设boot目标，测试后用`browser profile boot work --enabled=false --yes`恢复；原有其他目标按原记录恢复，不猜测。
+
+Mac由你通过苹果菜单重启并登录，再运行`shiki agent status`、doctor与projects list。验证的是登录后的LaunchAgent恢复，不是未登录时后台已启动。失败时我取日志定位，不清空身份或重装来掩盖问题。
+
+## 12. 我负责的B12与beta发布检查
+
+| 工作 | 执行方法/必须留下的证据 |
+|---|---|
+| 连接故障分析 | 对齐B09时间戳，记录原超时、route、服务状态和相邻恢复；复现后先红后绿回归，保留默认调用预算 |
+| 四插件及主功能回归 | 单元/race、真实CLI→agent→daemon→worker、协议/权限/能力、取消、冲突/重复请求、终端控制与浏览器重连 |
+| 高风险故障注入 | 隔离夹具覆盖认证拒绝/撤销、插件崩溃、磁盘满/中断、同步恢复、region DNS guard；不污染用户身份和项目 |
+| 签名marketplace | 受信/不受信包、更新/失败回滚、重启恢复、卸载；公开第三方目录/发行者互操作没有环境则单独列未验 |
+| 原生平台矩阵 | 最终源码CI57项、Linux/macOS/WSL2已有必需验收；新增浏览器ARM/Linux/WSL2完整交互需真实环境，交叉编译不代替 |
+| 公开包迁移 | 可恢复隔离环境验证alpha.7→beta候选，兼容范围内回滚，再升回；核对配置/凭据/profile保留和运行路径 |
+| 支持声明与文档 | 08/15/16同步，首装/升级/账号/物理重启/实际平台分别登记，历史42/42不冒充新插件全验 |
+| 发布 | 冻结最终提交，CI通过后不可变beta.1 tag；同源构建/签名/23资产/公开Release/Homebrew均成功；四目标独立验签与公开包验收 |
+
+本轮只交付测试计划，不因“争取发布beta”立即创建tag。真实账号、重启及新增平台边界可保留为明确未实测，但不能把选择暂不验证写成通过。是否进入发布，应依据本轮发现、明确支持范围与最终验收记录，不是简单凑够测试数量。数据损坏、越权、错误身份接受、明文凭据泄露和正常流程不可恢复是停止发布的缺陷。
+
+## 13. 给我的反馈与测试后的清理
+
+复制这个模板即可，不必写长报告：
+
+```text
+版本：alpha.7
+时间与时区：
+B01 基线：通过/失败/未测
+B02 终端与detach：
+B03 Claude：CLI已登录？任务完成？重新attach正常？
+B04 sync：双向/暂停/冲突/保留两份/删除分别如何？
+B05 port：实际HTTP内容/停止/重新请求是否正确？
+B06 browser：中文/日文/剪贴板/文件/5次重连/30分钟使用结果
+B07 region：helper状态、是否有pending（不贴秘密）
+B08 恢复：断网/睡眠/切网动作与时间、恢复方式和秒数
+B09 采样：总数/失败数、CSV路径
+B10/B11：未执行或实际环境及结果
+失败操作：
+错误码/错误原文（先移除Token、授权URL、账号信息）：
+是否影响其他网站/SSH：
+```
+
+我最需要的是**第一次失败的时间、精确操作、错误码、恢复动作和CSV**。只发“又断了”不足以区分查看器、插件、agent、daemon或链路；也不要为了重现反复粘贴Token。日志优先由我按失败时间截取必要片段，完整doctor/配置/系统日志不作为默认公开附件。
+
+清理先保留失败现场，等结论记录后再执行。仅针对本次名称/ID：关闭测试viewer、停止本次HTTP与forward；暂停并解除测试映射；删除本次session和project记录（项目文件仍保留）；核对后删除测试目录/暂存文件。work profile、密钥环、真实项目和agent-remote不删除。测试期间设定的boot/端口配置按记录恢复；不使用`rm -rf ~/.shiki`、全局`pkill`或批量清空浏览器数据。
+
+```sh
+# Mac：确认位于本测试目录，且冲突/传输已处理完再解除映射
+cd "$SHIKI_TEST_DIR"
+shiki --server "$SHIKI_SERVER" sync pause
+shiki --server "$SHIKI_SERVER" sync unmap
+# session、forward、snapshot等按实际创建的ID逐个清理，由我核对清单。
+```
+
+若unmap报告pending，先处理或保存证据，不默认使用`--archive-pending`绕过。最终报告分别列已通过、失败已修复、未执行和不适用；正式版本与安装备份继续保留。

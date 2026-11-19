@@ -136,6 +136,12 @@ func (t *task) reconcile(ctx context.Context) (result error) {
 	for name := range t.data.Conflicts {
 		paths[name] = true
 	}
+	// A crash can leave the unique copy intent before any file operation was
+	// prepared. Reobserve it even when neither filesystem lists that path;
+	// matching absence settles the intent without inventing a write direction.
+	for name := range t.data.Copies {
+		paths[name] = true
+	}
 	if len(paths) > maxFiles {
 		return fail(connect.CodeResourceExhausted, "BASELINE_ENTRY_LIMIT")
 	}
@@ -156,6 +162,15 @@ func (t *task) reconcile(ctx context.Context) (result error) {
 			continue
 		}
 		if t.data.LegacyUnverified[name] {
+			if err = t.recoverLegacy(ctx, name); err != nil {
+				return err
+			}
+			continue
+		}
+		if t.data.copyNeedsReview(name) {
+			// An intent without a prepared operation still requires fresh
+			// equality or explicit review, including after ignore rules change.
+			// Lineage never grants a write direction for a unilateral file.
 			if err = t.recoverLegacy(ctx, name); err != nil {
 				return err
 			}
@@ -219,13 +234,7 @@ func (t *task) reconcile(ctx context.Context) (result error) {
 	}
 	if len(t.data.Conflicts) > 0 {
 		t.data.State = "conflicted"
-		t.data.Reason = "CONFLICTS_PENDING"
-		for _, c := range t.data.Conflicts {
-			if c.Base == nil {
-				t.data.Reason = "INITIAL_SYNC_CHOICE_REQUIRED"
-				break
-			}
-		}
+		t.data.Reason = t.data.conflictReason()
 	}
 	return nil
 }

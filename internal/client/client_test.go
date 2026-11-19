@@ -174,17 +174,20 @@ func TestLifecycleTimeoutDefaultsDoNotExtendCaller(t *testing.T) {
 	for _, test := range []struct {
 		procedure           string
 		configured, timeout time.Duration
+		explicit            bool
 	}{
-		{arpc.AgentGetStatusProcedure, 5 * time.Second, 5 * time.Second},
-		{arpc.AgentResolveConflictProcedure, 5 * time.Second, 5 * time.Second},
-		{arpc.AgentShutdownProcedure, 5 * time.Second, 15 * time.Second},
-		{rpc.ShikiDaemonCreateSessionProcedure, 5 * time.Second, 15 * time.Second},
+		{arpc.AgentGetStatusProcedure, 5 * time.Second, 5 * time.Second, false},
+		{arpc.AgentResolveConflictProcedure, 5 * time.Second, 15 * time.Minute, false},
+		{arpc.AgentResolveConflictProcedure, 5 * time.Second, 5 * time.Second, true},
+		{arpc.AgentShutdownProcedure, 5 * time.Second, 15 * time.Second, false},
+		{rpc.ShikiDaemonCreateSessionProcedure, 5 * time.Second, 15 * time.Second, false},
+		{rpc.ShikiDaemonCreateSessionProcedure, 5 * time.Second, 5 * time.Second, true},
 		// An explicit timeout persists on the frontend for business calls;
 		// it is not a readiness-only budget.
-		{arpc.AgentResolveConflictProcedure, time.Second, time.Second},
-		{arpc.AgentShutdownProcedure, time.Second, time.Second},
+		{arpc.AgentResolveConflictProcedure, time.Second, time.Second, true},
+		{arpc.AgentShutdownProcedure, time.Second, time.Second, true},
 	} {
-		c := &Client{lifetime: context.Background(), timeout: test.configured}
+		c := &Client{lifetime: context.Background(), timeout: test.configured, timeoutExplicit: test.explicit}
 		next := c.identity("")(func(ctx context.Context, _ connect.Spec) (connect.ClientStream, error) {
 			deadline, ok := ctx.Deadline()
 			remaining := time.Until(deadline)
@@ -200,6 +203,7 @@ func TestLifecycleTimeoutDefaultsDoNotExtendCaller(t *testing.T) {
 		timeout   time.Duration
 	}{
 		{arpc.AgentShutdownProcedure, 5 * time.Second},
+		{arpc.AgentResolveConflictProcedure, 5 * time.Second},
 		{arpc.AgentResolveConflictProcedure, 90 * time.Second},
 	} {
 		c := &Client{lifetime: context.Background(), timeout: test.timeout}

@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"connectrpc.com/connect/v2"
+	"connectrpc.com/connect/v2/connectproto"
 	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
 	ppb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/plugin"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -44,6 +46,11 @@ func (p *handshakeTransport) NewClientStream(ctx context.Context, spec connect.S
 func handshakeResourceError() error {
 	// Deliberately unrelated to PORT_CONNECTION_LIMIT: classification is by code.
 	return connect.NewError(connect.CodeResourceExhausted, "controlled metadata capacity exhausted")
+}
+
+func handshakeTargetRefusedError(metadata map[string]string) error {
+	detail, _ := connectproto.NewErrorDetail(&errdetails.ErrorInfo{Domain: "shiki.port", Reason: "TARGET_CONNECTION_REFUSED", Metadata: metadata})
+	return connect.NewError(connect.CodeUnavailable, "untrusted remote message").WithDetail(detail)
 }
 
 type handshakeReply struct {
@@ -105,9 +112,9 @@ func (s *handshakeStream) Send(msg any) error {
 		switch s.mode {
 		case "send-resource":
 			return s.sendFailure(handshakeResourceError())
-		case "eof-resource", "eof-permission", "eof-connected", "eof-block":
+		case "eof-resource", "eof-permission", "eof-connected", "eof-block", "eof-target-refused", "eof-unavailable", "eof-unauthenticated", "eof-target-metadata":
 			return s.sendFailure(io.EOF)
-		case "receive-resource":
+		case "receive-resource", "receive-target-refused":
 			return nil
 		default:
 			return s.enqueue(&pb.PortData{Type: pb.PortData_CONNECTED, ConnectionId: id})
@@ -161,6 +168,14 @@ func (s *handshakeStream) Receive(msg any) error {
 			terminal = handshakeResourceError()
 		case "eof-permission":
 			terminal = connect.NewError(connect.CodePermissionDenied, "controlled denial")
+		case "eof-unavailable":
+			terminal = connect.NewError(connect.CodeUnavailable, "controlled transport failure")
+		case "eof-unauthenticated":
+			terminal = connect.NewError(connect.CodeUnauthenticated, "controlled authentication failure")
+		case "eof-target-refused", "receive-target-refused":
+			terminal = handshakeTargetRefusedError(nil)
+		case "eof-target-metadata":
+			terminal = handshakeTargetRefusedError(map[string]string{"target": "private-host"})
 		case "eof-connected":
 			proto.Merge(msg.(*pb.PortData), &pb.PortData{Type: pb.PortData_CONNECTED, ConnectionId: id})
 			return nil
@@ -178,6 +193,9 @@ func (s *handshakeStream) Receive(msg any) error {
 	select {
 	case <-s.release:
 		terminal = handshakeResourceError()
+		if s.mode == "established-target-refused" {
+			terminal = handshakeTargetRefusedError(nil)
+		}
 	case r := <-s.replies:
 		if r.err != nil {
 			return r.err

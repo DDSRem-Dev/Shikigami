@@ -1,5 +1,196 @@
 # 实施与验收记录
 
+## alpha.8 授权发行（2026-11-20，准备中）
+
+用户明确要求发布v0.0.1-alpha.8，用于下一轮修复后测试。本次范围为提交当前修补、固定源CI、不可变新tag、四目标签名归档/公开Release及自动Homebrew更新。VPS/Mac当前仍为alpha.7；两端升级与现场复验不由发布成功替代，账号授权及网络专项维持既有暂停安排。
+
+变更包含会话错误码/未知结果提示、ResolveConflict复合预算和显式timeout、未决keep-both副本保护、端口目标ECONNREFUSED隔离、浏览器attachment控制归属和迟到响应提示。沿用上一批七类审查，发布批不改RPC方法、权限能力、持久schema或安装布局；插件生产边界与SDK封装保持。已知实机失败和默认shell体验复验保留，不将alpha预发布写成beta验收通过。
+
+本次发布前本地复验：10个受影响包/架构的race组合通过（browser/client与architecture复用上一批有效缓存，其余8包新执行）；对应go vet通过，查看器18/18、无skip，git diff --check通过。Darwin上既有sudo PTY平台跳过不计Linux通过；完整四平台检查交给固定提交CI，尚未预记成功。
+
+- [x] 取得alpha.8公开发行授权，编写固定版本发布说明。
+- [ ] 冻结提交的完整CI通过并创建新tag。
+- [ ] 同源发行检查、四目标构建/签名、公开23资产和Homebrew更新成功。
+- [ ] 下载公开资产独立验证签名、来源、内容和公式。
+- [ ] 两端升级及修复后实机复验（独立后续批次）。
+
+
+## 用户授权自动化实机验收（2026-11-19～20，本轮完成，失败待候选复验）
+
+用户明确授权助手接手命令和可自动化验收，只有确需人工的步骤再暂停。正式两端仍为alpha.7；未安装开发bin。只在既有beta验收项目/专用临时资源内操作，保留agent-remote、原两会话、work浏览器、凭据/节点身份。网络专项暂跳，Claude授权继续暂停。
+
+同步批：先以原最新generation明确keep-local解决已保存REMOTE_CONFLICT_V5的副本，再验证VPS该副本hash后明确keep-local解决原件；两端原件为LOCAL_CONFLICT_V5、副本为REMOTE_CONFLICT_V5，映射active、0 pending/0 conflict。独立测试子目录覆盖本地/远端首次显式方向、已有基线双向更新、重命名（旧名删除、新名首次选择）、已有基线删除、暂停后的双端修改冲突、keep-both双版本、删除对远端新编辑冲突及显式保留远端。新keep-both2.497秒完成；所有结果用两端字节/哈希独立核验。测试新增文件经正常同步删除，两端临时目录已清理，用户原文件和原副本保留。
+
+本批resolve均显式2分钟预算以进行alpha.7现场恢复/功能核验，其他查询和pause/resume用正式默认预算；不把这次功能成功当成旧默认超时已修复或新源码已部署。相关通过记录与未发布源码分开，B04新版默认交互复验仍未关闭。
+
+会话/端口实机补充：通过真实shiki attach新建临时无Claude shell，detach/reattach后PID1528619及环境标记保持；配置快照恢复为新PID1545654、标记unset，目录/描述/tags一致，源和恢复会话均无Claude。恢复会话与临时快照已删除；源临时shell曾供浏览器测试HTTP服务使用，最终清理见下文。
+
+B05失败：既有allowlist为3000/40000，无配置修改。新转发绑定127.0.0.1随机端口，3次真实HTTP返回正确（2.951/1.586/1.737秒），lsof确认仅loopback。通过shiki终端Ctrl+C停后端后下一请求失败符合预期；再启动后端并独立从VPS localhost核验响应成功，但本地forward仍offline/REMOTE_UNAVAILABLE、bound_port=0，原socket拒绝连接。原失败转发已显式stop并核对移除。期间独立SSH master曾40秒超时后broken pipe，重新认证后恢复，此诊断通道异常单列，不冒充Shiki转发失败根因。源码已定位目标ECONNREFUSED被当作整个转发Unavailable，修补与隔离验证见下文，不部署开发bin。
+
+B05源码修补完成（未发布）：服务端仅在授权及allowlist检查后、实际loopback Dial明确ECONNREFUSED时生成固定Unavailable/shiki.port/TARGET_CONNECTION_REFUSED零metadata标记；公共错误过滤限前8详情/每项2KiB、拒绝protobuf未知字段并重建规范详情。插件业务经SDK helper使用，客户端只在CONNECTED前结束该新TCP而保留原listener和其它连接，不自动重试/重放；一般Unavailable、权限/认证及已建立流失败仍沿原策略。取消/截止优先，cause/wrapped/joined错误不携带目标拒绝标记。
+
+验证与复核：新目标拒绝用例先RED复现listener关闭；实际root架构检查发现port业务直接导入pkg/errors违反SDK白名单（FAIL0.597秒），未放宽测试，已改SDK封装并复核导入。独立review另发现取消组合标记优先级问题，8例RED0.627秒后修复。修后race全包errors1.329秒、SDK2.662秒、port/client6.440秒、port/server4.211秒、architecture1.409秒均通过，新增场景无skip。最终root组合race：真实双worker/TLS port集成18.728秒、agent72.635秒、server36.596秒通过；go vet相关错误/SDK/port包通过。真实集成验证同一本地临时端口、后端拒绝时既有TCP保留、恢复后新连接成功、半关闭尾数据和worker回收。正式alpha.7的B05失败继续保留，隔离修补通过不能代替发布后实机复验。
+
+七类源码复核：port业务留在插件，固定错误诊断归公共错误包并通过SDK使用；RPC方法/权限/能力及持久schema不变，只新增严格限定详情。未知错误仍脱敏，取消和进程回收保持；无TCP重试/字节重放，无安装、配置、网络策略变化。06/10/14与08/15/16同步，先前漏判依赖边界的review结论已撤回，更正后的架构检查才计通过。
+
+浏览器实机子项：保留原work实例及原网站标签，只新建loopback测试页。真实鼠标点击、英文输入/退格、滚动、Fcitx拼音候选及中文测试、Mozc候选及日本語テスト均通过；测试页回报独立核验已提交文本。显式剪贴板Mac查看器→VPS文本框、远端Copy→查看器文本框通过；未读取/覆盖用户OS剪贴板，系统剪贴板权限路径不计通过。CLI上传并取回hash一致；VPS Chrome原生选择暂存文件、页面读取正确；Chrome实际下载到暂存区并经CLI取回字节一致。最初keyboard.type未在canvas发送文字，逐键事件及GTK显式Open后成功，记录为测试操作修正，不抹去过程。
+
+浏览器失败保留：连接中曾出现状态查询超时，后恢复；计划5轮重连/接管测试在15秒观察期限未确认Controller而中止，后来实际界面亦显示operation timed out。15秒观察期限短于产品30秒预算，不能将观察超时本身认定为底层超时，亦不能将5轮计通过。刷新后一次明确接管恢复；没有增加产品超时或自动重放输入。强制只读查看器Connected且Take control禁用已验；持续低延迟、网络恢复及长稳仍未通过。
+
+浏览器源码修补（未发布）：POST control固定attachment/instance/revision，锁内核对当前连接，转发绑定原attachment取消上下文，拒绝旧请求改绑；仅当前generation、匹配scope流事件授予/撤销控制，HTTP/快照不授权。已确认流结果优先于迟到HTTP超时，撤权同步提示；重连取消旧control/status请求，旧finally不释放新刷新槽。新增Go/JS回归先RED再GREEN；代理race、vet通过，最终root race browser/client2.073秒、architecture1.658秒，viewer18/18通过、无skip。独立复核发现撤权后旧提示残留，同批补第18例；未更改操作超时、远端协议、权限能力、持久schema、生产依赖或安装布局。27契约与08/15/16同步；这些竞态修补不等于已证明所有实机卡顿根因或已在alpha.7生效。
+
+最终实机收尾（2026-11-20）：第二个可写查看器显式接管成功，旧查看器变Read-only、新查看器Controller；旧alpha.7的旧提示仍显示You control已现场复现，权限徽标与提示矛盾单列，不能宣称旧版UI正确。最后一次默认5秒sessions list在5.047秒deadline_exceeded；后续显式30秒查询0.714秒成功。此为间歇失败与随后恢复，不视为延长预算解决问题。网络专项仍暂跳，未擅改路由/代理/服务或进行Claude授权。
+
+清理及最终状态：仅删除本轮两个临时会话、一个配置快照、测试转发、HTTP fixture、上传/下载测试文件和查看器；测试Chrome标签关闭，原两标签保留，原work实例未重启。最终原两会话保留、forwards为空，loopback3000已关闭。同步一度offline/REMOTE_RETRY_EXHAUSTED、0 pending/0 conflict；doctor仍ready/7插件ready。核对当前revision后以独立request_id显式resume，恢复active（末次观察1.091秒），原件LOCAL_CONFLICT_V5、副本REMOTE_CONFLICT_V5及terminal-check三文件两端字节一致，冲突为空。此为一次显式恢复，不计自然自恢复或持续稳定通过。SSH私有控制连接、临时脚本/截图/查看URL随后统一关闭清理；项目、映射、用户原文件、副本、凭据和正式安装保留。
+
+- [x] 自动化恢复本次部分keep-both，双版本两端保留。
+- [x] 正式alpha.7同步功能子项及新增测试资源清理（resolve显式预算）。
+- [x] 完成本轮port/browser/配置快照自动化执行、记录失败及专用测试资源清理；不表示全部功能通过。
+- [ ] B05后端恢复、B06控制/状态超时及同步重试耗尽的候选实机闭环；短时恢复不关闭稳定性门槛。
+- [ ] 最终发行候选默认预算实机复验、人工账号/体验及未测环境门槛；beta未发布。
+
+七类复核（实机操作部分；源码修补另见上文）：测试未部署源码、改变RPC/能力/权限或持久格式；使用正式CLI经agent/插件执行同步决策，SSH仅做普通UID测试输入与独立文件核验。最新generation和独立request_id保护每个明确动作，无超时盲重试；不直接编辑ledger。文件变更限验收目录，未启停正式服务或修改网络/安装布局。原失败不被本次成功覆盖，08/15/16同步，外部结果与隔离回归分列。
+
+## keep-both部分完成与恢复修补（2026-11-19，实机未通过）
+
+用户以固定request_id `beta-keep-both-v5-01` 对from-mac.txt选择keep-both后返回deadline_exceeded。只读核对：本机原文件仍为LOCAL_CONFLICT_V5，唯一新副本保存REMOTE_CONFLICT_V5；映射conflicted、pending_files=2、conflict_count=2。原请求持久结果为failed/RESULT_UNKNOWN_RECONCILE_REQUIRED，副本日志为remote原文件→local副本的committed/possible，远端副本尚缺失，原冲突未解决。这是部分完成，不能解释为全部成功仅丢响应；不重复旧请求或换ID碰运气，不删副本、不编辑ledger。
+
+代码审查确认ResolveConflict共用短unary默认5秒，而keep-both需要多次远端观察/读写，外层预算会提前截断已有按大小计算的文件预算。journal在未知结果后保留两端和冲突是必要安全行为：不能凭目标缺失断言从未提交，也不能自动恢复已经被用户删除的副本。修补同时检查操作预算、显式timeout/父取消、未知结果提示以及副本递归冲突保护；不能仅延长期限就宣称实机故障解决。
+
+当前源码修补（未发布）：ResolveConflict采用有界复合文件预算，保留单流大小预算、metadata短预算和较早父截止，显式5秒也不被默认策略提升；CLI在发送前/后分开报错，保留真实request_id和错误码，不承诺已消失冲突能经CLI重放，不自动查询或重试修改。交互等待提供进度，JSON结果仍只在stdout。插件对未决副本或存在未决副本的原路径拒绝再次keep-both，状态区分CONFLICT_COPY_REVIEW_REQUIRED；两端不一致时，只有最新generation的显式方向决定才能解决副本，原始冲突继续保留。已settled历史副本的新冲突仍支持全部正常选择。Copies仅落盘而尚无fileOperation的窗口也纳入两端重观测；两端相等才收敛，绝不由单端缺失自动补写。
+
+- [x] 记录固定请求与部分提交证据，区分保留数据和操作成功。
+- [x] 源码修补与隔离行为/竞态回归、七类架构复核（平台跳过及既有限制另列）。
+- [ ] 正式候选发行/升级及同场景实机复验；B04与beta门槛仍未通过。
+
+验证：新增副本回归先RED复现旧版误分类及重复/嵌套copy，再GREEN。精确race：sync10.707秒、client1.198秒、CLI7.884秒，新增场景无skip。真实UDS/HTTP2调用延迟5.1秒验证越过旧5秒截止仍成功，并覆盖显式5秒/100毫秒、父deadline/cancel、进度回收、原始ID、JSON与不自动重试。全包`go test -race -p 2 ./internal/client ./cmd/shiki -count=1`通过（20.290/53.263秒）；既有TestConsoleSudoPipe在Darwin跳过，单独-v确认，不能计为Linux sudo PTY通过。root组合`go test -race -p 2 ./plugins/sync/... ./internal/server/session ./test/architecture`通过：sync/client17.299秒、架构1.364秒，其他相关包复用有效缓存，不冒充新实机运行；sync根包无测试文件。`go vet -p 2 ./cmd/shiki ./internal/client ./plugins/sync/client ./internal/server/session`通过。正式alpha.7只读复查仍为原冲突和唯一副本冲突，generation/两份内容hash未变；未代执行恢复。
+
+七类复核：生产目录和依赖边界不变；无RPC/能力/授权扩张；ledger schema、原子条件提交及请求去重保持，未知请求不重放。阶段文件/取消/重启证据保留，进度协程结束前回收；原有task互斥锁等待不支持取消的限制仍在，前端预算不表示worker排队回收上界或status即时返回。文件副本恢复须观察相等或用户明确方向，不自动恢复被删副本，旧generation拒绝；超时规则是复合文件操作策略，不修改网络路由或以预算掩盖丢包。CLI所有Open入口统一传递显式timeout标记，进度不污染JSON，安装布局/正式bin未变。独立复核发现显式5秒入口漏传及未prepare副本被ignore隐藏的问题，已同批修正并回归；10/13/14契约说明与08/15/16一致，本地检查和外部/发布门槛分开。
+
+本轮尚未部署开发bin或改变正式服务、映射及测试文件；网络专项继续暂跳、Claude授权保持暂停。
+
+## 用户终端保活回传与同步准备
+
+用户按已有terminal-check的退出查看/重新附着步骤回传：普通用户shiki、测试项目目录正确，前后PID均3280565，SHIKI_RESUME_CHECK均resume-1795098825-3280565，terminal-check.txt仍为SHIKI_TERMINAL_OK。本子项按用户实测回传记为通过；不是助手独立重放，也不扩大为B02全部场景或默认shell修补通过。中文弯引号导致的Bash续行已由Ctrl+C及正确ASCII引号恢复，不记作终端传输故障。
+
+随后助手只读核对本机对应测试目录存在且为空，同步映射已存在、state=paused。下一步由用户在该测试目录创建from-mac.txt并显式resume，查看status/conflicts；新映射无共同基线时的初始冲突须逐项确认，不自动选择覆盖方向。助手本轮未恢复同步、写测试文件或改变远端会话。网络专项仍按用户要求暂跳，Claude授权继续暂停。
+
+后续用户执行resume后立即见reconciling/空冲突列表；助手复查确认已形成from-mac.txt（仅本地存在）和terminal-check.txt（仅远端存在）两项INITIAL_SYNC_CHOICE_REQUIRED。期间一次状态为offline/REMOTE_UNAVAILABLE，随后真实projects list成功、sync状态恢复conflicted；该短暂失败保留，不扩大为持续离线。下一步仅指导用户分别keep-local和keep-remote，助手未代执行冲突决策，双向字节一致性仍未验。
+
+用户随后对terminal-check.txt连续3次确认keep-remote，前台均deadline_exceeded。助手没有重提resolve或改变冲突选择；只读复查当前映射active、冲突列表空，本地from-mac.txt为from-mac-v1\n，terminal-check.txt为SHIKI_TERMINAL_OK\n。插件持久请求记录有该远端保留冲突的2条failed/RESULT_UNKNOWN_RECONCILE_REQUIRED，本地保留冲突有1条succeeded；不能将三次超时都解释为已成功但响应丢失，也不能从记录数量确定每次请求的具体阶段。当前两文件共同基线已建立、operations为空，说明数据随后经核对收敛；VPS当前文件内容的独立用户核验仍待完成。ResolveConflict当前普通IPC默认5秒且包含多轮远端观察/传输；未取得逐阶段计时，不通过提高预算或新ID重放掩盖故障。数据收敛与前台超时分别登记，B04整体不计通过，sync resolve的超时阶段及未知结果恢复提示仍待修复/复验。
+
+后续用户回传VPS两文件内容正确，并依次确认本地v2→远端、远端v3→本地、暂停期间本地v4不传输、resume后v4传输正常；上述为用户执行反馈，不冒充助手独立重跑。双端冲突步骤中用户立即查询仍为reconciling/空列表，本地保留LOCAL_CONFLICT_V5；助手随后只读查询确认conflicted、1 pending/1 conflict/CONFLICTS_PENDING。共同基线与两侧哈希分别匹配paused-local-v4、LOCAL_CONFLICT_V5、REMOTE_CONFLICT_V5，确认已形成有共同基线的双端修改冲突，两侧差异未被自动抹平。下一步由用户显式keep-both，成功响应及两端保留副本仍待验；原resolve前台超时问题保持开放。
+
+- [x] 同会话进程/临时标记及文件保留的用户回传证据。
+- [x] 测试目录和既有paused同步映射的只读核对。
+- [ ] 初始文件同步及冲突决策、双向/暂停/删除后续功能验收。
+
+七类复核：本批仅记录用户证据及只读状态，生产依赖边界、RPC权限能力、持久格式/去重、进程与取消恢复、文件/终端/网络限制、CLI和安装布局无变更；通过项限本子项，后续指令不算已执行，08/15/16同步。仅文档变更，差异格式检查通过，不重复软件测试充当新功能实测。
+
+## 切回原网络的分段诊断（2026-11-19，间歇问题未定责）
+
+用户随后明确暂时跳过网络专项排查，先逐项执行其他功能验收；网络项保持未完成，不要求先修网络才做非账号测试。下一步使用已有terminal-check验证detach/attach的同进程与临时环境标记保留，然后再进行sync、port、browser及快照测试。Claude授权仍暂停；此安排是测试顺序调整，不是这些项目已通过。
+
+用户要求先分析原网络供其自行处理，再在原网络继续验收。此时正式alpha.7自动保持ready/tailscale-direct，agent与daemon身份不变，doctor/core及7插件ready；未再执行connect或修改任何网络配置。原网络默认en0网关10.0.0.1；系统HTTP/HTTPS/SOCKS/PAC开关均未启用，这不等于检查了所有应用或路由器代理。路由前段为10.0.0.1→192.168.1.1→100.70.0.1，经运营商网络到VPS共13跳；只能证明有多级路由，不能单凭地址证明每层NAT、将星号判为转发丢包或将两级路由定为根因。
+
+无线统计（只保留信号/协商字段）：5GHz信道44、160MHz、802.11ax、RSSI -35dBm/噪声-96dBm、协商2401Mbps。支持当前信号很强；协商速率不等于互联网速率，不能排除历史干扰。非交互wdutil无管理员认证不可用，改用只读system_profiler取得统计，无权限策略修改或密码请求。初组网关/VPS各30次全部收到；同一序号出现网关73ms与VPS210ms尖峰，采样与无线信息读取可能重叠，不能排除诊断扫描造成抖动。随后不读无线信息、不启动浏览器、不改配置重复60秒采样：
+
+| 测量 | 结果 |
+|---|---|
+| 网关10.0.0.1 | 60/60，均值2.814ms，最大5.014ms，无超过30ms样本 |
+| VPS公网地址 | 60/60，均值106.437ms，最大122.681ms |
+| 上级网关192.168.1.1（独立20次） | 20/20，均值4.186ms，最大18.122ms |
+| VPS 1200字节payload、DF（10次） | 10/10，均值104.589ms；只排除这一路径/包长/窗口的明显失败，不宣称完整PMTU验收 |
+| Shiki sessions list/browser status（12次） | 全部成功，0.254–0.455秒，无延长期限 |
+| Mac en0该60秒平均流量 | 下行3.031Mbps、上行0.948Mbps；不是全屋WAN流量，不能单独证明无排队 |
+
+结论：当前原网络短请求和空闲连接恢复正常，先前丢包/重传及热点改善证据仍成立，但不能把历史3/8 ICMP未回复当成持续37.5%丢包率。优先排查间歇性的原宽带路径损耗或路由器/WAN排队；当前不支持持续弱信号、服务未启动或已被迫DERP作为主因。网络类别、运营商、Mesh/中继与其他设备流量已向用户询问，尚不能凭网络段自行补全。建议用户在同一宽带做主路由有线对照、查看全网尤其上传占用；仅在故障时依据网关/终点共同采样区分局域网与外网，必要时请供应商核查去程/回程。没有证据就不要求改桥接、MTU、DNS或开放防火墙。用户处理前不继续账号或声称稳定性通过。
+
+- [x] 当前原网络只读分段测量，扫描干扰后的独立静默复查；保留历史失败及当前恢复两组证据。
+- [ ] 用户确认网络拓扑/流量或执行同宽带有线对照；故障时定位具体损耗段。
+- [ ] 处理后在原网络重测真实浏览器、会话及后续B02/B06/B08/B09；短时恢复不能直接关闭beta门槛。
+
+七类复核：本批无生产源码/目录/依赖、SDK-host-plugin边界、RPC能力权限或持久schema改变；使用既有只读RPC与有界网络探测，未创建/删改会话或应用数据。身份与进程所有权、取消/恢复、网络限额及CLI安装保持；未访问新诊断供应商、改代理/DNS/路由/防火墙或启停服务。外部样本及未知点如实分列，08/15/16同步，检查差异格式和三处证据一致性；无代码变更，未重复软件回归冒充网络通过。
+
+## 手机热点对照（2026-11-19，明显改善但稳定性仍未闭环）
+
+用户明确告知Mac已切换手机热点，在同一正式alpha.7、同一work Chrome实例、1440×900默认画质及相同无公网请求data测试页下复测。首轮本机agent ready、内嵌节点online，但服务器停在RECONNECT_EXHAUSTED，8个远端列表/状态调用在12–16毫秒内被拒绝；这属于已耗尽的重连状态，不能计为热点上8次实际网络探测失败。按现有doctor恢复指引显式执行一次`shiki connect <saved-server-id>`，0.637秒恢复ready/tailscale-direct，daemon身份与credential_revision保持；未重启服务、清空状态或重新登录节点。有限自动重连后要求显式恢复符合02的最多5次契约；普通命令仅显示service unavailable的恢复提示仍有改进空间。
+
+| 同类测量 | 原网络（上一批） | 手机热点 |
+|---|---|---|
+| ICMP，8次、间隔0.5秒 | 3次未收到回复；收到部分均值127.1ms | 8/8收到，平均87.879ms、范围84.966–97.542ms |
+| 默认画面点击→变色 | 首组5次2372–6843ms，中位4566ms；其他样本最慢7977ms | 8次1466/904/2122/909/1127/926/1006/1023ms，中位1014.5ms |
+| 远端列表/状态 | 操作期间约0.25–4.16秒，另一次查看器状态超时 | 重连后首组8次0.211–1.024秒；点击期间10次0.221–1.927秒；18次全部成功 |
+| 新建空shell | 用户此前2次deadline，之后助手一次1.033秒成功 | 新建独立临时会话0.485秒成功，ready/Claude stopped，默认预算不变 |
+
+这支持原网络路径对卡顿有显著影响；对照还包含显式重建连接和不同时段，不能归咎具体Wi-Fi设备/运营商或排除软件传输效率问题。ICMP不代表Tailscale丢包率，8次低丢包窗口不等于长稳；热点仍有约2秒迟滞，B06/B09和beta稳定性不因此通过。准备测试页时连续剪贴板粘贴/回车未完成导航，15秒观察超时；检查空地址栏后单独粘贴、核对并回车成功。该准备失败单列，不伪称所有输入/剪贴板路径通过，不混入8个已就绪测试页点击样本。
+
+- [x] 原样热点对照、显式连接恢复、18次远端查询及一次真正创建测试；原始失败与恢复分别保留。
+- [x] 临时会话准确删除，自有测试tab/viewer关闭且查看凭据撤销、任务截图清理；最终仅保留原jp-auth-check/terminal-check，work原实例running、attachments=0，连接ready/tailscale-direct。
+- [ ] 剩余画面迟滞、剪贴板交互与切网恢复提示优化/复验；长期稳定性及beta发行仍待办，Claude授权继续暂停。
+
+七类复核：本批无新增生产源码/依赖/SDK-host-plugin边界变化；仅现有认证的connect和会话/浏览器RPC，无权限能力或协议扩张。连接与会话request_id沿现有原子/去重契约，测试创建/删除各一次，不重试未知修改；保留正式bin、身份、项目文件、密钥环、agent-remote、独立Chrome所有权及进程。未改变超时、DNS/代理/路由或默认显示设置；有限样本与未测门槛明确分开，08/15/16同步。文档差异/三处证据一致性检查通过，不把上一批本地代码修补或本次网络改善宣称为新发布版本。
+
+## alpha.7会话超时与浏览器卡顿实测（2026-11-19，稳定性未通过）
+
+用户连续两次创建`jp-auth-check --no-claude`返回deadline_exceeded，并报告浏览器几乎不可用。先查询确认该会话不存在，再用固定request_id只发起一次创建：正式alpha.7默认预算下1.033秒成功，未启动Claude；读取该新pane进程允许列出的环境，确认为TZ=Asia/Tokyo、LANG=ja_JP.UTF-8、LANGUAGE=ja_JP:ja；保留该会话供后续使用。这不证明原故障已经修复，也不证明改用资源ID是修复。创建RPC默认15秒，前置项目查询及创建内部region检查各有5秒预算，原始两次错误没有阶段证据，不能断言由哪一段产生。
+
+现场证据：本机agent状态12–56毫秒；关闭查看器时远程列表/浏览器状态约0.6秒。远程region inspect三次0.281–1.710秒；VPS root/helper inspect23–24毫秒，普通shiki经受限sudo33–35毫秒。采样时VPS CPU约95–99% idle，无明显内存/IO压力；这些是有限窗口，不排除其他时段负载。随后真实查看器一次状态查询超时，画面仍连接；并行远端列表/状态最高约4.16秒。路径采样为tailscale-direct，不能据此宣称持续直连或归因relay。
+
+在work原实例中仅新建自有data测试页，不访问账号或新的外部供应商。默认1440×900、quality6/compression2，首组5次点击至canvas变色为3620/4566/2372/4980/6843毫秒；后续对照最慢7977毫秒。直接观察私有X11及共享只读VNC连接上的同一测试像素，VPS画面变色已发生而本机仍可延迟数秒，说明至少存在画面返回链路延迟。3次本地WebSocket/画布采样没有长任务，末批画面消息抵达后很快可见；诊断记录仅保留测试页时序/字节计数，临时截图已清理，不将实际账号页面或原始输入纳入文档/测试fixture。降低quality1/compression9仍有5440毫秒，缩小960×600仍有4766毫秒；两组样本不足以宣称优化有效，均恢复原设置。
+
+到同一VPS的8次ICMP有3次未收到回复（37.5%，有限样本且ICMP可能受限）；独立SSH TCP短测8次均成功、0.232–0.691秒，其内核累计重传段数30→34、重传字节20016→20932。支持链路存在损耗，不能据此把ICMP比例当作Tailscale丢包率，不能定位运营商/主机方向。内核ss不能代表gVisor内层TCP；目前产品未导出其重传计数，端到端根因仍待进一步取证。当前依赖隔离gonet/HTTP2实验未复现秒级Flush/Nagle等待：默认Nagle关闭；6字节和64KiB各100次echo最大分别108.5/936.2微秒；同连接未读16MiB响应下10次短请求208–755微秒。该实验不包含公网/WireGuard，不作为现场网络通过。
+
+已修源码：会话环境检查经插件RPC返回Canceled/DeadlineExceeded时，Manager.Create原先只识别本地context sentinel，会误存为FailedPrecondition；现保留跨RPC码及request_id重放结果。回归先RED确认误分类，再GREEN验证失败清理、名称/单会话配额释放、无tmux残留及不重复调用环境检查。`go test -race ./internal/server/session ./test/architecture`通过（23.683/1.659秒）；不扩大超时、不跳过实际region检查。此修复尚未发布/部署，且不解释用户原始deadline来源或修复公网丢包。
+
+CLI同批修补：`sessions create`前置server/project选择失败明确标注CreateSession尚未发送；创建调用的Canceled/DeadlineExceeded/Unavailable提示结果可能未知、先查询同server/project的sessions list，并显示此次实际request_id。结果未知时仅以原参数/原ID核对原结果；列表缺失不能证明失败，同ID不会重跑已记录失败，确认原请求失败后才能显式使用新ID创建。明确业务拒绝不冒充未知结果；不自动重试、不自动补偿查询、不打印描述/tags/凭据。错误wrap保留原code/detail，控制字符转义，成功JSON和失败stdout契约不变。真实UDS/HTTP2 fixture覆盖显式/自动ID、两阶段失败及相同payload重放；相关CLI race回归通过（5.246秒、无skip），`go vet ./cmd/shiki`及差异检查通过，独立复核指出持久失败会被同ID重放，已修正不能永久禁止新ID的恢复措辞，精确CLI race回归再通过（2.026秒）；正式安装尚不包含此提示。
+
+- [x] 保留失败证据、确认不存在后仅一次创建成功；复现真实画面延迟及有限网络损耗证据。
+- [x] 会话跨RPC错误分类修复及失败/去重/清理race回归。
+- [x] CLI创建失败阶段与原request_id恢复提示，真实IPC/HTTP2回归。
+- [ ] 超时与卡顿的端到端根因闭环、最终候选实机稳定性复验；B02/B06/B09不得整体计通过，beta仍不发布。
+
+七类复核：改动限宿主session错误分类与CLI创建错误提示，无host/plugin业务依赖跨界；RPC能力/权限不变，保留既有安全公开错误及原始取消/截止语义；持久schema不变、去重失败码一致；进程所有权和失败清理保持，不自动重试修改或重启Chrome/tmux；文件/终端/网络限额和默认期限不变；正式两端bin/安装配置不变。测试与外部失败分列，08/15/16同步；未用当前修补覆盖历史发行证据。自有测试页/viewer已关闭、查看凭据撤销，画质/分辨率恢复，任务截图/临时netstack脚本已清理；work原实例、项目、正式版本、agent-remote和账号状态保留，Claude授权继续暂停。
+
+## VPS日本地区检查与显式应用（2026-11-19）
+
+用户要求账号授权只在VPS Chrome内完成，先核对日本环境与出口；明确批准IPinfo和ipapi.co查询，随后明确选择先应用日本时区/语言、账号登录继续暂停。通过正式alpha.7 region/browser诊断分别在主机与work Chrome执行：两方在两家服务均观察到同一出口IPv4；IPinfo声明JP/Tokyo，ipapi.co声明US/Los Angeles。结果是地理库分歧，不是两个实际出口或流量经过美国的证据，也不能推断Claude使用的数据、账号资格或登录保证。实际IPv6出口、权威DNS递归来源和Claude登录页面可用性未验证。
+
+应用前系统为Asia/Shanghai、en_US.UTF-8；work Chrome原生Intl为Asia/Tokyo，navigator为ja-JP/ja，目标平台Linux。按用户审阅的精确region plan/revision执行后，operation为applied；再inspect实际系统为Asia/Tokyo、ja_JP.UTF-8、LANGUAGE ja_JP:ja，状态ready且无待确认DNS操作。既有DNS服务器及chrome_mode=unchanged保持；未修改路由、代理、NTP、账号或重启应用。work原Chrome实例继续运行，复查原生东京时区和日语一致，browser restart_required=false。region操作的restart_required=true提示既有进程环境不会自动更新，不能据系统值宣称所有旧shell/Claude已采用新默认；后续授权前应使用新会话核对。
+
+- [x] 用户授权的两供应商、主机与实际远程Chrome出口对照及地区配置检查。
+- [x] 明确批准后应用日本系统时区/语言，实际值和Chrome再次核对；任务临时JSON及目录已清理。
+- [ ] IP地理库分歧与服务实际地区识别仍未确定；Claude授权按用户要求暂停。
+
+七类复核：使用现有公开region/browser契约，SDK-host-plugin目录边界、RPC/权限能力和数据schema无代码变更；计划/revision检查及既有事务记录保持。系统配置变更与已启动进程环境分开，普通UID/独立Chrome所有权、文件/终端/网络限额和安装布局不变。外部查询仅显式批准的两供应商，未发账号/Token/Cookie或综合指纹；本机查看器不冒充VPS Chrome证据。08/15/16同步，查询分歧、未测项及账号暂停如实保留。
+
+## 用户终端方向键反馈（2026-11-19，诊断中）
+
+用户提供alpha.7基线输出：版本一致、项目查询成功、本地3个及远端4个插件ready，work浏览器running；这是用户回传的B01证据，不是新独立实测。B02普通用户与项目路径、测试文件读写正常，但空shell中方向键显示`^[[A/B/C/D`，回车后/bin/sh报not found。B02交互编辑尚未通过。
+
+源码核对发现`internal/server/session/environment.go`的非空地区环境包装在argv为空时显式使用`/bin/sh`，与现场shell一致；Debian的sh可能没有交互行编辑。该证据不能单独证明所有按键转发正确。建议当前测试shell临时exec干净交互bash做对照，保留会话和文件；是否恢复待用户实测，未修改生产源码、用户登录shell或服务。
+
+- [x] 记录用户B01基线和B02失败，定位候选shell选择路径。
+- [x] 用户确认切换干净交互Bash后方向键正常。
+- [ ] 默认交互shell行为修复及相应回归。
+
+七类复核：本批仅记录诊断和有界临时操作建议，目录/SDK-host-plugin边界、RPC/权限能力、持久schema/revision/去重、进程管理与恢复、文件/终端/网络协议、CLI/安装布局均无生产变更；临时shell替换不作为修复已部署证据。08/15/16一致，B02不因文件读写通过而整体勾选。
+
+## beta 用户实机验收计划（2026-11-18，计划完成、执行待办）
+
+用户要求详细可执行测试流程、助手/用户分工，并以完成测试后进入beta为目标。[30 实机测试手册](30-beta-user-acceptance.md)按正式alpha.7帮助及源码核对项目/会话、sync冲突、port转发、browser控制/文件/持久化、region只读计划、网络恢复、采样、首装及可选重启。真实账号授权由用户完成；主机重启、整机DNS/代理变更不因编写计划获得执行授权。本批未运行新实机用例、未新建测试项目、未改变两端服务或创建beta标签。
+
+已交付的alpha.7文档固定源9f55e5a的CI44120621767最终57/57成功；首轮3项ARM Mac因托管runner未领取而取消，同源原条件补跑通过。该证据不覆盖本次尚未执行的用户实测，历史beta发布前门槛与新增实机建议分别记录。
+
+- [x] 对照设计基线、当前支持声明和正式CLI帮助完成可执行手册及分工。
+- [ ] B01–B09新一轮用户实测、偶发超时定位及发现的问题修复/复验。
+- [ ] B10真实新向导首装补验；B11物理重启另约窗口，不执行则保留未实测。
+- [ ] B12最终候选回归、beta签名发布与公开包验收。
+
+七类复核：本批仅文档新增，无生产目录/SDK-host-plugin依赖、RPC准入/授权/能力、持久状态/原子性/revision/去重、进程所有权/取消恢复、文件/终端/网络限额、CLI或安装布局变更。采样不记录项目正文/原始秘密，不重试修改；新映射暂停、逐项冲突决策、显式浏览器控制与持久boot选择保持。旧通过、此次计划和实际外部验证分别标注；08/15/16进度一致。命令帮助与文档校验不冒充真实测试通过。
+
+本批校验：正式alpha.7命令帮助与对应源码核对；手册25个shell代码块语法及嵌入Python语法通过，相对链接和新增内容秘密模式检查通过。独立只读复核未见阻塞项，已将当前窗口PATH设置移到首次短命令之前，并区分强制只读查看器与允许申请控制的查看器。未执行这些实机测试命令。
+
 ## alpha.7 发布、两端升级与实测（2026-11-17，公开发行、两端升级、交互实测与清理完成）
 
 用户已明确批准发布v0.0.1-alpha.7并升级VPS/Mac，允许新建ego-browser工作区继续画面、鼠标控制及显式重连实测，测试后清理本批Shikigami开发/临时产物。agent-remote、正式版本与安装备份、节点身份、凭据、配置、项目、profile和密钥环保留。账号登录、主机重启及网络/代理/路由变更不属于本次操作。
