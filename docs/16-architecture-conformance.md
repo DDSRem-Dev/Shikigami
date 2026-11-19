@@ -8,6 +8,8 @@
 
 本次发布前本地复验：10个受影响包/架构的race组合通过（browser/client与architecture复用上一批有效缓存，其余8包新执行）；对应go vet通过，查看器18/18、无skip，git diff --check通过。Darwin上既有sudo PTY平台跳过不计Linux通过；完整四平台检查交给固定提交CI，尚未预记成功。
 
+首轮完整CI44572726453（源86f4bcc）暴露两类遗漏，失败保留：协议诊断回归误按protobuf map编码字节顺序比较，定向race100次22次失败；改为解码后核对完整ErrorInfo schema及错误码，1000次通过，errors/SDK/version整包race各5轮通过。多主机诊断夹具仍断言ResolveConflict旧5秒默认，并漏传显式timeout标记；本地先复现默认断言，再新增显式5秒用例RED复现遗漏，修后按新15分钟默认、2分钟父截止、显式5/1/90秒和较早取消验证，multihost整包race2.895秒、vet通过，client/architecture有效缓存通过。该批只改测试/诊断helper与文档，生产行为、权限、状态和安装布局未改；不放宽既有字段断言或未知结果保护。docs25注明旧证据时点；完整新源CI仍待通过才创建tag。
+
 - [x] 取得alpha.8公开发行授权，编写固定版本发布说明。
 - [ ] 冻结提交的完整CI通过并创建新tag。
 - [ ] 同源发行检查、四目标构建/签名、公开23资产和Homebrew更新成功。

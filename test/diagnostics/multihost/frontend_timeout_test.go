@@ -120,9 +120,10 @@ func TestFrontendExplicitTimeoutIsScopedAndPreservesEarlierCallerDeadline(t *tes
 		parent    time.Duration
 		openAgain bool
 	}{
-		{"default", 0, 5 * time.Second, 120 * time.Second, true},
+		{"default", 0, 15 * time.Minute, 20 * time.Minute, true},
 		{"collision", 90, 90 * time.Second, 120 * time.Second, true},
-		{"default", 0, 5 * time.Second, 120 * time.Second, false},
+		{"default", 0, 120 * time.Second, 120 * time.Second, false},
+		{"explicit-five", 5, 5 * time.Second, 120 * time.Second, true},
 		{"short", 1, time.Second, 120 * time.Second, true},
 		{"collision", 90, 2 * time.Second, 2 * time.Second, false},
 	} {

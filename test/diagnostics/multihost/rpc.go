@@ -64,7 +64,7 @@ func (h *helper) frontendOp(ctx context.Context, r request) (any, error) {
 	defer cancel()
 	var f *frontend.Client
 	for {
-		f, err = frontend.Open(probe, h.config, frontend.Options{Timeout: time.Duration(a.TimeoutSeconds) * time.Second})
+		f, err = frontend.Open(probe, h.config, frontend.Options{Timeout: time.Duration(a.TimeoutSeconds) * time.Second, TimeoutExplicit: a.TimeoutSeconds != 0})
 		if err == nil {
 			status, statusErr := f.Agent().GetStatus(probe, &pb.Empty{})
 			if statusErr != nil || status.GetState() != "ready" {

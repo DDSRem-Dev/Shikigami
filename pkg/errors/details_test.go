@@ -112,9 +112,22 @@ func TestTargetRefusedDiagnosticIsStrictAndBounded(t *testing.T) {
 func TestExistingProtocolDiagnosticSurvives(t *testing.T) {
 	err := version.MissingRemoteCapability("port.forward.v1")
 	before := version.SafeDetail(err)
-	after := rpcerrors.SafeDetail(rpcerrors.RebuildError(err))
-	if before == nil || after == nil || string(before.Value) != string(after.Value) {
-		t.Fatal("lost protocol diagnostic")
+	rebuilt := rpcerrors.RebuildError(err)
+	after := rpcerrors.SafeDetail(rebuilt)
+	want := &errdetails.ErrorInfo{
+		Domain: "shiki.protocol", Reason: "REMOTE_CAPABILITY_UNAVAILABLE",
+		Metadata: map[string]string{"component": "daemon", "capability": "port.forward.v1"},
+	}
+	// Protobuf map entries have no wire-order guarantee. Check the complete
+	// decoded schema instead of mistaking a different encoding for data loss.
+	for name, detail := range map[string]*connect.ErrorDetail{"before": before, "after": after} {
+		var info errdetails.ErrorInfo
+		if detail == nil || detail.Type != "google.rpc.ErrorInfo" || proto.Unmarshal(detail.Value, &info) != nil || !proto.Equal(want, &info) {
+			t.Fatalf("%s: lost or changed protocol diagnostic: %v", name, detail)
+		}
+	}
+	if connect.CodeOf(rebuilt) != connect.CodeFailedPrecondition {
+		t.Fatal("protocol diagnostic lost its error code", rebuilt)
 	}
 	if rpcerrors.IsPortTargetRefused(err) {
 		t.Fatal("protocol diagnostic treated as target refusal")
