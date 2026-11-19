@@ -1,14 +1,16 @@
-# alpha.7 到 beta.1：实机测试执行手册
+# alpha.8 修复复验与 beta.1：实机测试执行手册
+
+**下一轮目标：已公开并独立验签的alpha.8。** 固定源`3c0d945`的CI最终57/57通过，发行/23资产/四目标归档及Homebrew公式验证见[发行证据](15-implementation-status.md#evidence-public-alpha8-release-20261120)。[28](28-quickstart.md)安装入口已切换alpha.8，但当前用户Mac/VPS仍为alpha.7，尚未升级。下列已执行记录均保留原版本和实际结果，不把发布或旧版通过项视作alpha.8通过。
 
 当前执行方式：用户已授权助手自动执行命令与可自动化项目；账号登录、主观体验和影响现有环境的操作单独交接。本轮已完成冲突恢复、同步功能、终端保活/配置快照、端口与浏览器自动化实测；端口恢复及间歇超时仍失败，源码修补尚未部署。resolve使用显式2分钟预算，原默认超时门槛不因此关闭。
 
-当前执行顺序（按用户最新要求）：暂时跳过网络专项，保留未完成；先从已有terminal-check的终端保活开始，随后同步、端口、浏览器及快照，逐项反馈后再进入下一项。Claude账号授权继续暂停，不重新创建已有项目或会话。
+下一轮执行顺序：先安排两端从alpha.7升级到已验签alpha.8，升级后，先核对版本/连接/插件，再验证同步默认预算与未决副本保护、端口后端恢复、浏览器控制和重连提示；随后补终端与配置快照回归。使用现有验收项目、映射、terminal-check和jp-auth-check，不默认重建。网络专项暂跳，Claude账号授权继续暂停；可自动化命令由助手执行，确需用户参与时再交接。
 
 热点复测补充（2026-11-19）：一次显式connect恢复后18次远端查询全部成功，新空shell创建0.485秒；相同画面8次点击更新0.904–2.122秒，较原网络改善但仍有迟滞。有限测试不替代B06/B09长稳，Claude登录继续暂停；切网耗尽重连后可使用`shiki connect "$SHIKI_SERVER"`显式恢复，无须重新配对。
 
 当前阻塞（2026-11-19）：用户两次创建会话超时，真实浏览器点击至画面更新复现约1.3–8秒；现场还观察到有限网络损耗证据，尚未完成端到端归因。`jp-auth-check`已由一次有固定request_id的后续请求创建成功，勿重复创建；Claude授权继续暂停。B02/B06/B09当前不能计为整体通过，先处理稳定性再推进账号测试或beta发行。详见[本轮诊断与源码修补](15-implementation-status.md#alpha7会话超时与浏览器卡顿实测2026-11-19稳定性未通过)。
 
-编制日期：2026-11-18。命令已对照正式 alpha.7 的帮助与源码；本文是待执行计划，不是测试通过报告。测试对象先固定为 `v0.0.1-alpha.7`；如果修复后版本变化，记录新版本并补跑受影响项。现有安装、配置、凭据、正式备份、浏览器 work profile 和 agent-remote 保留。
+编制日期：2026-11-18；下一轮计划更新：2026-11-20。原命令依据正式alpha.7，后续修补命令契约与alpha.8源码对照；alpha.8包内版本/帮助和实际行为仍须升级后验证。本文同时保存历史记录与待执行步骤，并非整套测试通过报告。现有安装、配置、凭据、正式备份、浏览器work profile和agent-remote保留。
 
 ## 1. 当前结论、分工与完成条件
 
@@ -16,7 +18,7 @@ alpha.7 已完成公开签名验证和 VPS Debian12/amd64、Mac arm64 升级，7
 
 [18 的原 beta 发布前清单](18-release-readiness.md#beta-readiness)已有通过证据，但部分是较早候选；beta 发布时必须绑定最终源码。真实 Claude 登录和物理重启在既有验收中明确保留为未实测，并非早已存在但被漏掉的硬阻塞。为本次“实际可用后再发 beta”的目标，建议补齐以下用户路径；新增建议不追改历史门槛或宣称旧记录已覆盖新插件。
 
-| 编号 | 项目与建议时长 | 谁执行 | 本轮状态/通过依据 |
+| 编号 | 项目与建议时长 | 谁执行 | alpha.7已记录状态及下一轮待办 |
 |---|---|---|---|
 | B01 | 安装/连接基线，5分钟 | 我可检查，你可复制命令复查 | 用户已回传版本/实际请求/7插件ready；后续偶发超时另列，非持续健康保证 |
 | B02 | 测试项目、终端、detach/attach，10分钟 | 我自动执行，你只体验 | 终端detach/attach同PID/标记、配置快照新PID且不恢复环境标记已验；默认shell及偶发超时待候选复验 |
@@ -51,16 +53,17 @@ alpha.7 已完成公开签名验证和 VPS Debian12/amd64、Mac arm64 升级，7
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-把下一行 `my-vps` 换成上一步已有标签或ID；不填端口，不新建服务器。在同一个Mac终端保留这些变量：
+当前用户继续使用既有验收项目，以下变量固定到此前创建的服务器和目录，不再生成新的时间戳项目。其他环境须改为自己已核对的ID/名称/路径；如果目录不存在，先查已有映射，不能默认mkdir并重新创建项目：
 
 ```sh
-export SHIKI_SERVER='my-vps'
-export SHIKI_TEST_NAME="beta-accept-$(date +%Y%m%d-%H%M%S)"
+export SHIKI_SERVER='srv_5953306eb779a11a396fea38e2893685'
+export SHIKI_TEST_NAME='beta-accept-20261118-235852'
 export SHIKI_TEST_DIR="$HOME/Shikigami-Acceptance/$SHIKI_TEST_NAME"
 export SHIKI_TEST_REMOTE="/home/shiki/projects/$SHIKI_TEST_NAME"
-export SHIKI_EVIDENCE="$HOME/Shikigami-Acceptance/${SHIKI_TEST_NAME}-evidence"
-mkdir -p "$SHIKI_TEST_DIR" "$SHIKI_EVIDENCE"
-chmod 700 "$SHIKI_TEST_DIR" "$SHIKI_EVIDENCE"
+export SHIKI_EVIDENCE="$HOME/Shikigami-Acceptance/${SHIKI_TEST_NAME}-alpha8-evidence"
+test -d "$SHIKI_TEST_DIR"
+mkdir -p "$SHIKI_EVIDENCE"
+chmod 700 "$SHIKI_EVIDENCE"
 shiki --server "$SHIKI_SERVER" doctor
 shiki --server "$SHIKI_SERVER" projects list
 shiki plugins --side local list
@@ -70,7 +73,7 @@ shiki --server "$SHIKI_SERVER" browser status work
 
 上面的PATH只对本窗口生效，不修改受保护的 `.zshrc`。
 
-预期：正式alpha.7；实际项目请求成功；本机sync/port/browser和远端sync/port/region/browser ready。`doctor` 即使退出码为0也可能包含degraded/errors，必须阅读字段。Claude尚未登录此时允许记录pending，B03后再核对。`tailscale-relay`本身不是失败，不要求为了测试强制direct或改路由。
+下一轮升级后的预期：客户端、daemon及内置插件均为正式alpha.8；当前未升级时仍应如实记alpha.7，不能开始记录alpha.8通过。实际项目请求成功；本机sync/port/browser和远端sync/port/region/browser ready。`doctor` 即使退出码为0也可能包含degraded/errors，必须阅读字段。Claude尚未登录允许记录pending，授权步骤仍暂停。`tailscale-relay`本身不是失败，不要求为了测试强制direct或改路由。
 
 `SHIKI_TEST_REMOTE`使用默认专用账号的项目根目录；若安装配置使用不同 `projects_dir`，由我确认后替换，不去放宽服务权限。每个新Mac终端需重新设定变量；优先保持此窗口用于管理命令，另开终端用于交互会话。
 
@@ -78,34 +81,39 @@ shiki --server "$SHIKI_SERVER" browser status work
 
 ## 3. B02：建立独立项目并验证终端保活
 
-最新用户回传：按detach/attach流程前后PID及临时环境标记相同，原文件内容保留，本终端保活子项通过；使用现有项目/terminal-check，无须重跑下方创建命令。下一项为已存在paused映射的初始同步。
+alpha.7历史回传与助手自动化已验证detach/attach前后PID及临时环境标记保留；使用现有项目/terminal-check，无须重跑下方创建命令。同步映射已完成恢复，最后记录为active且无冲突；下一轮先读取实际状态，不按旧paused状态执行初始同步。
 
 2026-11-19用户反馈：B01基线正常；B02的用户/路径/文件读写通过，但方向键在`/bin/sh`显示转义序列，交互编辑未通过。源码的地区环境包装存在空argv显式选择`/bin/sh`路径。临时对照：在当前远端shell先Ctrl+C清除输入，再执行`exec /bin/bash --noprofile --norc -i`，检查上下历史及左右编辑。用户随后确认切换后方向键均正常；此操作只替换当前测试shell，不能把绕过后的通过记作默认shell缺陷已修复。
 
-在Mac管理窗口执行：
+仅首次、尚无验收项目/会话的独立环境执行以下创建命令；当前用户跳过这两条，直接进入下面的attach：
 
 ```sh
 shiki --server "$SHIKI_SERVER" projects create "$SHIKI_TEST_NAME" \
   --path "$SHIKI_TEST_REMOTE" --map "$SHIKI_TEST_DIR"
 shiki --server "$SHIKI_SERVER" --project "$SHIKI_TEST_NAME" sessions create terminal-check --no-claude
+```
+
+在Mac管理窗口附着既有会话：
+
+```sh
 shiki --server "$SHIKI_SERVER" --project "$SHIKI_TEST_NAME" attach terminal-check
 ```
 
-最后一条进入 **VPS普通用户shell**，后续这三条在该远程shell中输入：
+最后一条进入 **VPS普通用户shell**。当前用户只读取已保留的验收文件；首次独立环境应先创建自己的测试文件：
 
 ```sh
 id -un
 pwd
-printf 'terminal-pass\n' > terminal-check.txt
+cat terminal-check.txt
 ```
 
-预期用户`shiki`，目录是刚创建的测试项目。输入中文/英文、移动光标、扩大/缩小Mac终端窗口，确认不乱码或重复按键。按 **Ctrl+Q** 回到Mac；再次运行上面的attach命令，远程执行：
+当前用户预期为`shiki`、既有测试项目路径，文件内容`SHIKI_TERMINAL_OK`；不覆盖该历史验收文件。输入中文/英文、移动光标、扩大/缩小Mac终端窗口，确认不乱码或重复按键。按 **Ctrl+Q** 回到Mac；再次运行上面的attach命令，远程执行：
 
 ```sh
 cat terminal-check.txt
 ```
 
-预期显示`terminal-pass`，仍是同一个session。不要用`exit`代替detach测试。再Ctrl+Q回Mac：
+预期文件内容保持相同，仍是同一个session。不要用`exit`代替detach测试。再Ctrl+Q回Mac：
 
 ```sh
 shiki --server "$SHIKI_SERVER" --project "$SHIKI_TEST_NAME" sessions list
@@ -113,7 +121,7 @@ cd "$SHIKI_TEST_DIR"
 shiki
 ```
 
-智能入口应识别映射/已有项目并允许选择会话，不创建第二个项目。首次同步提示先保持暂停；同步在B04单独处理。若命令超时，先`projects list`或`sessions list`查是否已经创建，禁止连续重复创建来“碰运气”。
+智能入口应识别映射/已有项目并允许选择会话，不创建第二个项目。仅首次独立环境的同步提示先保持暂停；当前用户保持已有映射状态，B04另行安排隔离测试文件。若命令超时，先`projects list`或`sessions list`查是否已经创建，禁止连续重复创建来“碰运气”。
 
 可选双窗口控制：另一Mac终端复制实际服务器/项目名，运行`shiki --server 标签 --project 项目名 attach terminal-check --read-only`；只能看不能输入。使用显式`--take-control`的新attachment验证接管，旧窗口应失去写权限。只测试这个临时会话。
 
@@ -172,7 +180,7 @@ shiki --server "$SHIKI_SERVER" --project "$SHIKI_TEST_NAME" attach claude-check
 
 ## 5. B04：sync双向、冲突与删除
 
-当前暂停点：固定请求beta-keep-both-v5-01超时后仅本地副本已落盘，原冲突和副本差异均保留，B04不通过。先保留现场，不再对原冲突换ID反复keep-both；源码修补与隔离安全恢复验证已完成，尚未发行/部署；现场下一步由用户对已确认保存REMOTE_CONFLICT_V5的本地副本显式keep-local，将其同步回远端；成功并核对两端后，再以最新generation处理原文件。此两步是保留两份内容的现场恢复，不把alpha.7临时显式延长timeout计作新版实机通过。网络专项仍暂跳，Claude授权继续暂停。
+2026-11-19恢复前现场（历史）：固定请求beta-keep-both-v5-01超时后仅本地副本已落盘，原冲突和副本差异均保留，B04当时不通过。助手随后已对确认保存REMOTE_CONFLICT_V5的本地副本显式keep-local，核对两端后再以最新generation处理原文件；两端双版本均保留，冲突已清空，见本页自动化结果与15的记录。无需用户重复恢复步骤。alpha.7现场恢复使用显式预算，不能代替alpha.8部署后的默认预算复验；B04整体门槛仍开放。网络专项仍暂跳，Claude授权继续暂停。
 
 本轮反馈：首次keep-remote连续三次前台超时；助手随后只读确认active、无冲突且本地两文件正确，后台共同基线已建立，持久记录保留结果未知失败。不要重复旧resolve；先核验VPS两文件，再继续已有基线更新。数据收敛不等于resolve交互通过，详见15的用户终端保活/同步记录。
 
@@ -393,7 +401,7 @@ PY
 
 我在隔离Linux系统和独立Mac测试环境执行，不卸载当前两端。Mac另一个用户可覆盖新用户安装，但不能称为整机全新环境；整机首装需要独立VM/设备。测试范围：
 
-1. 使用[28](28-quickstart.md)的官方alpha.7两条命令，从无Shikigami状态安装；正确签名通过、错误签名拒绝在隔离测试完成。
+1. 使用已公开验签的[28](28-quickstart.md)官方alpha.8两条命令，在独立无Shikigami状态环境安装；正确签名通过、错误签名拒绝在隔离测试完成。现有用户两端不为此清空重装。
 2. 记录y/yes/n/no、隐藏输入与Enter/Ctrl+C、每10秒等待提示、纯端口误填原地纠正。
 3. 无Claude授权也能交付连接并打开浏览器，最终应用状态仍pending。
 4. 授权阶段正常取消后重跑；已完成步骤复用，既有keyring、地址与Token不重建。
@@ -438,18 +446,18 @@ Mac由你通过苹果菜单重启并登录，再运行`shiki agent status`、doc
 | 高风险故障注入 | 隔离夹具覆盖认证拒绝/撤销、插件崩溃、磁盘满/中断、同步恢复、region DNS guard；不污染用户身份和项目 |
 | 签名marketplace | 受信/不受信包、更新/失败回滚、重启恢复、卸载；公开第三方目录/发行者互操作没有环境则单独列未验 |
 | 原生平台矩阵 | 最终源码CI57项、Linux/macOS/WSL2已有必需验收；新增浏览器ARM/Linux/WSL2完整交互需真实环境，交叉编译不代替 |
-| 公开包迁移 | 可恢复隔离环境验证alpha.7→beta候选，兼容范围内回滚，再升回；核对配置/凭据/profile保留和运行路径 |
+| 公开包迁移 | 下一轮先验证alpha.7→alpha.8及兼容范围内回滚；以后进入beta再固定实际来源版本，核对配置/凭据/profile保留和运行路径 |
 | 支持声明与文档 | 08/15/16同步，首装/升级/账号/物理重启/实际平台分别登记，历史42/42不冒充新插件全验 |
 | 发布 | 冻结最终提交，CI通过后不可变beta.1 tag；同源构建/签名/23资产/公开Release/Homebrew均成功；四目标独立验签与公开包验收 |
 
-本轮只交付测试计划，不因“争取发布beta”立即创建tag。真实账号、重启及新增平台边界可保留为明确未实测，但不能把选择暂不验证写成通过。是否进入发布，应依据本轮发现、明确支持范围与最终验收记录，不是简单凑够测试数量。数据损坏、越权、错误身份接受、明文凭据泄露和正常流程不可恢复是停止发布的缺陷。
+本手册记录已执行测试和后续计划；alpha.8已公开发行，不因“争取发布beta”直接创建beta tag。真实账号、重启及新增平台边界可保留为明确未实测，但不能把选择暂不验证写成通过。是否进入发布，应依据本轮发现、明确支持范围与最终验收记录，不是简单凑够测试数量。数据损坏、越权、错误身份接受、明文凭据泄露和正常流程不可恢复是停止发布的缺陷。
 
 ## 13. 给我的反馈与测试后的清理
 
 复制这个模板即可，不必写长报告：
 
 ```text
-版本：alpha.7
+版本：填写本轮实际客户端/daemon/插件版本（当前alpha.7；升级后目标alpha.8）
 时间与时区：
 B01 基线：通过/失败/未测
 B02 终端与detach：

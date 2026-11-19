@@ -1,21 +1,29 @@
 # 开发路线图
 
-## alpha.8 授权发行（2026-11-20，准备中）
+## alpha.8 授权发行（2026-11-20，公开发行与独立验签完成）
 
 用户明确要求发布v0.0.1-alpha.8，用于下一轮修复后测试。本次范围为提交当前修补、固定源CI、不可变新tag、四目标签名归档/公开Release及自动Homebrew更新。VPS/Mac当前仍为alpha.7；两端升级与现场复验不由发布成功替代，账号授权及网络专项维持既有暂停安排。
 
 变更包含会话错误码/未知结果提示、ResolveConflict复合预算和显式timeout、未决keep-both副本保护、端口目标ECONNREFUSED隔离、浏览器attachment控制归属和迟到响应提示。沿用上一批七类审查，发布批不改RPC方法、权限能力、持久schema或安装布局；插件生产边界与SDK封装保持。已知实机失败和默认shell体验复验保留，不将alpha预发布写成beta验收通过。
 
-本次发布前本地复验：10个受影响包/架构的race组合通过（browser/client与architecture复用上一批有效缓存，其余8包新执行）；对应go vet通过，查看器18/18、无skip，git diff --check通过。Darwin上既有sudo PTY平台跳过不计Linux通过；完整四平台检查交给固定提交CI，尚未预记成功。
+本次发布前本地复验：10个受影响包/架构的race组合通过（browser/client与architecture复用上一批有效缓存，其余8包新执行）；对应go vet通过，查看器18/18、无skip，git diff --check通过。Darwin上既有sudo PTY平台跳过不计Linux通过；完整四平台检查最终结果见下方固定源CI及发行记录。
 
-首轮完整CI44572726453（源86f4bcc）暴露两类遗漏，失败保留：协议诊断回归误按protobuf map编码字节顺序比较，定向race100次22次失败；改为解码后核对完整ErrorInfo schema及错误码，1000次通过，errors/SDK/version整包race各5轮通过。多主机诊断夹具仍断言ResolveConflict旧5秒默认，并漏传显式timeout标记；本地先复现默认断言，再新增显式5秒用例RED复现遗漏，修后按新15分钟默认、2分钟父截止、显式5/1/90秒和较早取消验证，multihost整包race2.895秒、vet通过，client/architecture有效缓存通过。该批只改测试/诊断helper与文档，生产行为、权限、状态和安装布局未改；不放宽既有字段断言或未知结果保护。docs25注明旧证据时点；完整新源CI仍待通过才创建tag。
+首轮完整CI44572726453（源86f4bcc）暴露两类遗漏，失败保留：协议诊断回归误按protobuf map编码字节顺序比较，定向race100次22次失败；改为解码后核对完整ErrorInfo schema及错误码，1000次通过，errors/SDK/version整包race各5轮通过。多主机诊断夹具仍断言ResolveConflict旧5秒默认，并漏传显式timeout标记；本地先复现默认断言，再新增显式5秒用例RED复现遗漏，修后按新15分钟默认、2分钟父截止、显式5/1/90秒和较早取消验证，multihost整包race2.895秒、vet通过，client/architecture有效缓存通过。该批只改测试/诊断helper与文档，生产行为、权限、状态和安装布局未改；不放宽既有字段断言或未知结果保护。docs25注明旧证据时点；随后新固定源CI通过后才创建tag，结果见下文。
+
+固定源CI终态：3c0d945的CI44579854243共57项最终成功；attempt1为56成功/1 macOS终端runner未领取取消，等待其它长项结束后仅补跑该任务，attempt2成功。按同源各job最新成功结果合并，不把取消计通过。首轮86f4bcc的CI44572726453最终45成功/7失败/1 runner未领取取消/2前置跳过；WSL唯一失败为旧multihost超时断言，其后未执行阶段不计通过。新固定源完整WSL已成功。新tag已推送，同源发行结果与独立公开验证如下。
 
 - [x] 取得alpha.8公开发行授权，编写固定版本发布说明。
-- [ ] 冻结提交的完整CI通过并创建新tag。
-- [ ] 同源发行检查、四目标构建/签名、公开23资产和Homebrew更新成功。
-- [ ] 下载公开资产独立验证签名、来源、内容和公式。
+- [x] 冻结提交3c0d9454cf139eb854e046ae74a1579c9045f7b4的完整CI44579854243通过，创建并推送不可变v0.0.1-alpha.8 tag。
+- [x] 同源发行检查、四目标构建/签名、公开23资产和Homebrew更新成功。
+- [x] 下载公开资产独立验证签名、来源、内容和公式。
 - [ ] 两端升级及修复后实机复验（独立后续批次）。
 
+
+公开发行终态：[Release44593959710](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44593959710)成功，60项成功、1项条件跳过（不计通过）。于`2026-11-19T20:20:26Z`公开[v0.0.1-alpha.8](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.8)，`draft=false`、`prerelease=true`，精确23资产；自动Homebrew更新提交`5cb2a5c3c341127b407cd45feaf7986a765543ee`。标签固定源3c0d9454cf139eb854e046ae74a1579c9045f7b4，旧标签与资产未改。 首轮发行复核50项成功、4项取消、4项跳过（含未执行的构建/签名/发布）；3个ARM取消任务未取得runner，Intel内部包任务运行中取消、日志无测试fail事件，取消具体原因未明。第二轮仅补跑未完成项，3项成功、ARM发行工具再次未获runner取消；第三轮该项成功并完成后续发行。最终按同源最新job结果为60成功/1条件跳过；取消、未执行阶段不计通过，未改源码或放宽检查。
+
+从公开Release重新下载23资产，以仓库独立公钥核验四目标Ed25519签名、归档/逐文件SHA256、checksums pin、精确资产清单与GitHub资产摘要；PROVENANCE绑定固定tag/source/run，bootstrap与冻结源码逐字节一致。四目标shiki内嵌版本、提交和构建时间从ELF/Mach-O的buildinfo字符串符号读取，OS/架构由Go build info核对；初版临时核验脚本误假定go version -m暴露ldflags，断言失败后改为直接读取实际符号，再完整重验通过，公开包未修改；Mac arm64仅在私有临时目录执行version，返回alpha.8及3c0d945完整SHA，未安装或启动服务。由认证资产重新生成Formula，与自动更新的远端公式逐字节一致，Ruby语法通过。公钥SPKI SHA256：`e21f6dd671ea5042c43c492b759b933dda73985f89a823b43c651ff7c787c17d`。
+
+发行收尾七类复核：插件/宿主/SDK依赖边界保持；RPC传输、准入和权限能力未改；持久schema、revision和去重不变；取消、进程归属与服务启动策略未改；文件/终端/网络语义按本批回归记录，未把间歇实机失败改为通过；CLI/安装布局不变，下载入口统一alpha.8，Homebrew公式仅由流水线认证资产生成；实现回归、公开发行、两端部署和外部门槛分列，跳过不计通过。README、08/15/16、18/22/28/30同步。
 
 ## 用户授权自动化实机验收（2026-11-19～20，本轮完成，失败待候选复验）
 

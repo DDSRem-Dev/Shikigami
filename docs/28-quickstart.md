@@ -2,9 +2,11 @@
 
 用户要求（2026-11-16）：普通用户在 VPS 和 Mac 各执行一条命令，由工具完成依赖、服务、登录引导和插件配置，不再手工下载公钥、拼接 bundle/pin、编辑 YAML 或串联管理命令。
 
-**版本边界：本页使用 v0.0.1-alpha.7 修复入口，延续 alpha.4–alpha.6 的安装体验修复，并补修浏览器快速重连清理竞态和已有连接身份复核预算问题。发行状态与验证见[15](15-implementation-status.md)。alpha.3 不含 `shiki-install quickstart` 或 `shiki setup`，历史归档不改写；真实完整双机首装、账号授权和物理重启仍按外部门槛登记。**
+**alpha.8已发布并完成公开资产独立验签：** 本页下载命令现指向alpha.8，作为下一轮修复测试目标。发行与验证结果见[15](15-implementation-status.md#evidence-public-alpha8-release-20261120)，修复内容见[alpha.8说明](releases/v0.0.1-alpha.8.md)。当前用户两端仍为alpha.7，升级后必须另行验证同步默认预算、端口后端恢复及浏览器控制；已有alpha.7功能实测不记为alpha.8通过。
 
-alpha.6 发布后发现的旧 attachment 本地清理竞态与已有连接身份复核预算问题已进入下方 alpha.7 安装包；公开发行和两端部署后验收分别记录，见[29](29-alpha6-installation-followup.md)。连接失败时不要把更换 Token 当作通用恢复步骤。
+**版本边界：本页使用 v0.0.1-alpha.8 修复入口，延续 alpha.4–alpha.7 的安装与连接修补，新增同步复合预算/副本保护、端口目标拒绝隔离及浏览器控制竞态修补。发行状态与验证见[15](15-implementation-status.md)。alpha.3 不含 `shiki-install quickstart` 或 `shiki setup`，历史归档不改写；真实完整双机首装、账号授权和物理重启仍按外部门槛登记。**
+
+历史alpha.7已纳入alpha.6发布后发现的旧attachment本地清理竞态与已有连接身份复核预算修补；alpha.8继续保留这些修补。历史公开发行和两端部署后验收分别记录，见[29](29-alpha6-installation-followup.md)。连接失败时不要把更换 Token 当作通用恢复步骤。
 
 ## 用户入口
 
@@ -20,17 +22,17 @@ Mac 当前登录用户，不加 sudo：
 bash scripts/bootstrap.sh --quickstart --role=client
 ```
 
-直接使用以下 v0.0.1-alpha.7 完整命令。用户无需克隆仓库或另行下载文件：
+直接使用以下 v0.0.1-alpha.8 完整命令。用户无需克隆仓库或另行下载文件：
 
 ```bash
 # VPS
-curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.7/bootstrap.sh | sudo bash -s -- --quickstart --version=v0.0.1-alpha.7
+curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.8/bootstrap.sh | sudo bash -s -- --quickstart --version=v0.0.1-alpha.8
 
 # Mac
-curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.7/bootstrap.sh | bash -s -- --quickstart --role=client --version=v0.0.1-alpha.7
+curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.8/bootstrap.sh | bash -s -- --quickstart --role=client --version=v0.0.1-alpha.8
 ```
 
-同一版本 Release 的 `bootstrap.sh` 也支持管道执行，交互通过 `/dev/tty`，不从脚本输入流读取回答。预发布必须使用明确的 Release/tag 下载 URL，不以 stable-only `latest/download` 推断预发布。加 `--version=v0.0.1-alpha.7` 可固定归档；省略时选择最近公开 Release，旧版本没有向导时明确失败，不退回半套安装冒充完成。脚本应从可信发布/源码取得，归档仍先验证固定发行身份和 Ed25519 签名，再执行包内代码。
+同一版本 Release 的 `bootstrap.sh` 也支持管道执行，交互通过 `/dev/tty`，不从脚本输入流读取回答。预发布必须使用明确的 Release/tag 下载 URL，不以 stable-only `latest/download` 推断预发布。加 `--version=v0.0.1-alpha.8` 可固定归档；省略时选择最近公开 Release，旧版本没有向导时明确失败，不退回半套安装冒充完成。脚本应从可信发布/源码取得，归档仍先验证固定发行身份和 Ed25519 签名，再执行包内代码。
 
 默认安装全部四种插件的支持；只需终端、同步和转发时加 `--components=core`。`--user=<普通用户>` 可覆盖 VPS 默认专用账号 `shiki`。向导不接受自定义布局或 `--non-interactive`，高级/无人值守部署继续使用原安装参数契约。
 
@@ -85,7 +87,7 @@ shiki --server my-vps browser status work
 
 systemd/LaunchAgent 存活、节点 online 或 doctor 输出均不单独代表应用 ready。Claude 未授权时先交付连接凭据解除“需要浏览器登录，却必须先登录才能连接”的引导循环，状态仍为 pending。
 
-本地隔离测试不访问真实账号，不安装宿主包，不修改用户系统服务。公开发行和资产验证见[15](15-implementation-status.md)；历史 alpha.6 已使用公开签名包完成现有 VPS/Mac 升级；alpha.7 部署与交互验证以[29](29-alpha6-installation-followup.md)的实际记录为准。首次完整向导、官方 Claude 登录、物理重启及本批实机回滚仍单列外部门槛。11/27 的签名、普通 UID、权限、revision、取消和就绪要求保持，细分命令继续用于高级配置和故障处理。
+本地隔离测试不访问真实账号，不安装宿主包，不修改用户系统服务。公开发行和资产验证见[15](15-implementation-status.md)；历史 alpha.6 已使用公开签名包完成现有 VPS/Mac 升级；alpha.7部署与交互验证以[29](29-alpha6-installation-followup.md)的实际记录为准。alpha.8本次只完成公开发行和资产验证，用户两端升级与现场复验尚未执行。首次完整向导、官方 Claude 登录、物理重启及本批实机回滚仍单列外部门槛。11/27 的签名、普通 UID、权限、revision、取消和就绪要求保持，细分命令继续用于高级配置和故障处理。
 
 ## alpha.6 已发布的体验改进
 

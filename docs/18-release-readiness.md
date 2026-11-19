@@ -1,6 +1,8 @@
 # 首版预发布、自动发布流程与交付门槛
 
-更新：2026-11-17。当前公开预发布为[v0.0.1-alpha.7](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.7)，固定源`cbf3cdfcec1c598e7d9ee4279c4054cdc2eb96bb`的发布前CI为57/57。公开资产、独立签名与来源验证见[发行证据](15-implementation-status.md#evidence-public-alpha7-release-20261117)；发行运行`44091646249`的重跑与终态按实际证据记录，不将基础设施失败或跳过记为通过。两端部署与浏览器交互复验独立登记，真实账号和物理重启边界保持。
+alpha.8已公开（记录日期2026-11-20）：固定源码`3c0d9454cf139eb854e046ae74a1579c9045f7b4`的[CI44579854243](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44579854243)经同源补跑共57项通过；[Release44593959710](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44593959710)在attempt3最终完成60项成功、1项条件跳过（不计通过）。Release于`2026-11-19T20:20:26Z`公开，23资产、`draft=false`、`prerelease=true`。四目标归档独立验签及hash/pin/provenance/bootstrap、二进制版本/提交/构建时间和目标平台核对通过，Mac arm64版本命令可运行；重新生成Homebrew公式逐字节一致且Ruby语法通过，详见[公开发行证据](15-implementation-status.md#evidence-public-alpha8-release-20261120)。现行下载入口为alpha.8，用户两端仍为alpha.7，升级及实机复验另行记录。
+
+历史alpha.7发行记录（2026-11-17）：[v0.0.1-alpha.7](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.7)，固定源`cbf3cdfcec1c598e7d9ee4279c4054cdc2eb96bb`的发布前CI为57/57。公开资产、独立签名与来源验证见[发行证据](15-implementation-status.md#evidence-public-alpha7-release-20261117)；发行运行`44091646249`的重跑与终态按实际证据记录，不将基础设施失败或跳过记为通过。两端部署与浏览器交互复验独立登记，真实账号和物理重启边界保持。
 
 历史公开预发布[v0.0.1-alpha.6](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.6)，固定源`377551af19b2f4a51e1057b782148c14a915797a`的[CI43906750506](https://github.com/DDSRem-Dev/Shikigami/actions/runs/43906750506)57/57通过；[Release44017118492](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44017118492)完成60项成功、1项条件跳过（不计通过），于`2026-11-17T05:29:09Z`公开，23资产、`draft=false`、`prerelease=true`。Homebrew自动更新提交`25740ba5cb9baeb258bf988f9e32d429bf22d37a`；四目标独立签名、payload、平台/源码和重新生成公式的一致性验证见[发行证据](15-implementation-status.md#evidence-public-alpha6-release-20261117)。本版汇总安装、配对、插件和浏览器连接修复；两端签名升级完成，短时CLI采样与浏览器交互复验分别记录，真实账号与物理重启仍未验。旧版标签与资产保持不变。
 
@@ -9,18 +11,18 @@ alpha.6 发布后的 CI 及实机跟进另发现浏览器本地 attachment 清�
 历史首个公开预发布 [v0.0.1-alpha.1](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.1) 已通过 tag 全自动工作流发布；固定提交为 `f0b5f83dce599c8e0d715bda5e7806a0ef6aaa72`，[Actions 40895007350](https://github.com/DDSRem-Dev/Shikigami/actions/runs/40895007350) 已完成且成功，包含同源 CI、四目标构建、签名验签和公开发布。Release 于 `2026-10-29T15:13:47Z` 公开，`draft=false`、`prerelease=true`，共22个资产；独立下载与实际产物验证结果见[公开发行证据](15-implementation-status.md#evidence-public-alpha-release-20261029)。本文件保存发布流程、验收边界与剩余门槛；[该版本说明](./releases/v0.0.1-alpha.1.md) 随 tag 冻结。完整范围仍由 [08 路线图](./08-roadmap.md) 决定，预发布不缩小交付要求。
 
 <a id="current-support"></a>
-## 当前支持声明（2026-11-17）
+## 当前支持声明（2026-11-20）
 
-本节是当前支持范围的统一入口。路线图Phase0–5的原42项已完成验收登记与声明核对；alpha.7已另行完成公开发行，不是beta或稳定版。下文按日期保留的候选、失败、平台待办仅代表当时范围，不能覆盖本节。
+本节是当前支持范围的统一入口。路线图Phase0–5的原42项已完成验收登记与声明核对；alpha.8已另行完成公开发行，不是beta或稳定版；用户两端仍为alpha.7，旧实机证据不扩大为alpha.8通过。下文按日期保留的候选、失败、平台待办仅代表当时范围，不能覆盖本节。
 
 ### 版本与证据来源
 
 | 对象 | 当前结论 | 来源与限制 |
 |---|---|---|
-| 当前源码 | alpha.7补修浏览器快速重连清理竞态及已有连接身份复核预算，保留既有安装引导、签名marketplace及四种内置插件 | `cbf3cdf`的发布前CI为57/57；精确本地/容器及公开发行证据见15，不以CI替代两端部署后验证 |
+| 当前源码 | alpha.8修补同步复合预算和未决副本保护、端口目标拒绝隔离、浏览器控制归属/迟到响应，以及会话错误码和未知结果提示；沿用既有安装与插件边界 | 固定源`3c0d945`的发布前CI经同源补跑57/57通过，发行及公开资产独立验证完成；alpha.7现场失败仍保留，alpha.8默认体验待升级后复验 |
 | 认证生命周期、长稳/资源/性能 | 2026-11-01按用户确认测试通过关闭 | 既有实测证据分别见23、20；用户确认与独立实测分别记录，不补造官方URL到期现场或生产heap/object归因结果 |
-| 公开安装包 | 安装入口为`v0.0.1-alpha.7`，固定源`cbf3cdfcec1c598e7d9ee4279c4054cdc2eb96bb` | 公开资产与四目标签名/payload/平台/source验证见[15](15-implementation-status.md#evidence-public-alpha7-release-20261117)；Homebrew更新和两端升级状态按实际证据登记，部署后复验见29 |
-| 版本性质 | alpha.7按用户要求供测试，未发布beta | [发行说明](releases/v0.0.1-alpha.7.md)与08/15/16保留真实账号、公网、物理重启和新增原生体验边界；下方beta记录保持历史含义 |
+| 公开安装包 | 安装入口为`v0.0.1-alpha.8`，固定源`3c0d9454cf139eb854e046ae74a1579c9045f7b4` | 23公开资产、四目标签名/payload/平台/source及Homebrew公式独立验证见[15](15-implementation-status.md#evidence-public-alpha8-release-20261120)；用户两端尚未升级，实机复验待执行 |
+| 版本性质 | alpha.8按用户要求供下一轮修复测试，未发布beta | [发行说明](releases/v0.0.1-alpha.8.md)与08/15/16保留真实账号、公网、物理重启和新增原生体验边界；下方beta记录保持历史含义 |
 
 ### 功能支持矩阵
 

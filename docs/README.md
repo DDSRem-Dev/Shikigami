@@ -1,8 +1,8 @@
 # Shikigami 设计文档导航
 
-**alpha.8发行准备（2026-11-20）：** 已授权固定版本发行，修复范围见[说明](releases/v0.0.1-alpha.8.md)，CI/签名/公开资产以08/15/16实际结果登记；当前两端仍为alpha.7，beta与实机门槛保持开放。
+**alpha.8已发布（2026-11-20）：** 固定源`3c0d945`的发布前CI最终57/57通过，[发行流水线](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44593959710)完成60项成功、1项条件跳过。23个公开资产、四目标签名/来源及自动Homebrew公式已独立验证，见[发行证据](15-implementation-status.md#evidence-public-alpha8-release-20261120)与[说明](releases/v0.0.1-alpha.8.md)。现行下载入口为alpha.8；用户两端仍为alpha.7，升级复验及beta门槛保持开放。
 
-**当前实机阻塞（2026-11-19）：** alpha.7会话偶发超时、浏览器秒级卡顿及keep-both部分完成后超时已复现；源码修补不等于正式版本/链路修复，beta功能和稳定性验收仍待闭环，见[15实施记录](15-implementation-status.md)。
+**当前实机阻塞（2026-11-19）：** alpha.7会话偶发超时、浏览器秒级卡顿及keep-both部分完成后超时已复现；alpha.8已发布修补不等于现场问题全部解决，beta功能和稳定性验收仍待闭环，见[15实施记录](15-implementation-status.md)。
 
 **beta 实测计划（2026-11-18）：** [30 用户实机测试手册](30-beta-user-acceptance.md)提供当前安装的详细命令、四插件检查、账号/网络恢复体验、助手分工和反馈模板；计划不等于测试通过或已经发布beta。
 
@@ -10,9 +10,9 @@
 
 **一键体验（2026-11-17）：** alpha.6 汇总安装输入、worker、配对和浏览器连接修复，延续 alpha.5 的控制终端、阶段进度和公共目录权限修复；VPS/Mac 命令、配置和插件说明见 [28 一键安装与首次使用](28-quickstart.md)，当前发行验证状态见[15](15-implementation-status.md)。公开发行与两端部署、账号和物理重启验收分别记录。
 
-**状态：当前源码 Phase 0–5 验收清单已闭环（42/42）。** [当前支持声明](18-release-readiness.md#current-support)统一功能、平台、证据和未支持范围；[08 路线图](08-roadmap.md)、[15 实施记录](15-implementation-status.md)与[16 架构复核](16-architecture-conformance.md)记录关闭依据。认证生命周期和长稳、资源与性能按用户确认通过；真实 Claude 登录/推理、物理主机重启及生产 heap/object 归因仍保留未实测边界。当前公开安装入口为 v0.0.1-alpha.7，不是beta或稳定版。00–14保留设计契约，不能仅凭示例认定功能已通过所有平台验收。
+**状态：当前源码 Phase 0–5 验收清单已闭环（42/42）。** [当前支持声明](18-release-readiness.md#current-support)统一功能、平台、证据和未支持范围；[08 路线图](08-roadmap.md)、[15 实施记录](15-implementation-status.md)与[16 架构复核](16-architecture-conformance.md)记录关闭依据。认证生命周期和长稳、资源与性能按用户确认通过；真实 Claude 登录/推理、物理主机重启及生产 heap/object 归因仍保留未实测边界。当前公开安装入口为 v0.0.1-alpha.8，不是beta或稳定版。00–14保留设计契约，不能仅凭示例认定功能已通过所有平台验收。
 
-alpha.7固定源`cbf3cdf`的发布前CI57/57通过；公开资产与签名验证见[当前公开证据](15-implementation-status.md#evidence-public-alpha7-release-20261117)，两端部署另行记录。历史alpha.6固定源CI57/57通过，发行工作流60项成功、1项条件跳过（不计通过），自动发行及Homebrew更新完成；23公开资产、四目标验签/来源和公式的独立验证见[公开证据](15-implementation-status.md#evidence-public-alpha6-release-20261117)。[alpha.3历史证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)、[beta候选证据](15-implementation-status.md#evidence-first-beta-candidate)及[beta发布门槛](18-release-readiness.md#beta-readiness)保留，不表示发布了beta。
+历史alpha.7固定源`cbf3cdf`的发布前CI57/57通过；公开资产与签名验证见[alpha.7公开证据](15-implementation-status.md#evidence-public-alpha7-release-20261117)，两端部署另行记录。历史alpha.6固定源CI57/57通过，发行工作流60项成功、1项条件跳过（不计通过），自动发行及Homebrew更新完成；23公开资产、四目标验签/来源和公式的独立验证见[公开证据](15-implementation-status.md#evidence-public-alpha6-release-20261117)。[alpha.3历史证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)、[beta候选证据](15-implementation-status.md#evidence-first-beta-candidate)及[beta发布门槛](18-release-readiness.md#beta-readiness)保留，不表示发布了beta。
 
 **新增地区/浏览器扩展（2026-11-15）：** [27 地区环境与远程浏览器](27-region-browser-plugins.md)实现与授权范围内本地/隔离amd64容器验收已完成，并纳入公开alpha.3。新增功能不包含在历史42项或beta57项证据中；08/15/16单列精确源码、产物与发现/修复。新增原生体验、真实账号、物理重启及公网仍未验。
 
@@ -81,4 +81,4 @@ alpha.7固定源`cbf3cdf`的发布前CI57/57通过；公开资产与签名验证
 
 09 是远端与插件消息形状的唯一来源，13 是本地 agent IPC 的来源；02/03/04/10 规定行为。修改接口时必须同步相关行为、UX 和验收。09 的代码块可用于协议语法验证，但未表示服务已经实现。待实现能力必须列在路线图，不能通过界面示例宣称完成。
 
-实际 module 为 `github.com/DDSRem-Dev/Shikigami`，当前根目录采用[GPL-3.0-only](../LICENSE)，从v0.0.1-alpha.2起随发行包分发；已公开alpha.1及其冻结源码保留原MIT许可证。当前发行源为 [v0.0.1-alpha.7 GitHub Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.7)，公开问题反馈入口为 [GitHub Issues](https://github.com/DDSRem-Dev/Shikigami/issues)，不承诺响应时限；来源及下载验证结果见[公开发行证据](./15-implementation-status.md#evidence-public-alpha7-release-20261117)。文档中的 `yourusername`、`shiki.dev`、其余示例版本/下载地址、未关联22的Homebrew示例包名和邮箱仍是占位示例；真实Homebrew安装命令和平台边界见[22分发与安装](22-homebrew-distribution.md)，其余占位地址不得当作实际安装源。
+实际 module 为 `github.com/DDSRem-Dev/Shikigami`，当前根目录采用[GPL-3.0-only](../LICENSE)，从v0.0.1-alpha.2起随发行包分发；已公开alpha.1及其冻结源码保留原MIT许可证。当前发行源为 [v0.0.1-alpha.8 GitHub Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.8)，公开问题反馈入口为 [GitHub Issues](https://github.com/DDSRem-Dev/Shikigami/issues)，不承诺响应时限；来源及下载验证结果见[公开发行证据](./15-implementation-status.md#evidence-public-alpha8-release-20261120)。文档中的 `yourusername`、`shiki.dev`、其余示例版本/下载地址、未关联22的Homebrew示例包名和邮箱仍是占位示例；真实Homebrew安装命令和平台边界见[22分发与安装](22-homebrew-distribution.md)，其余占位地址不得当作实际安装源。
