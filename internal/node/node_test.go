@@ -20,6 +20,7 @@ import (
 	agentpb "github.com/DDSRem-Dev/Shikigami/pkg/protocol/agent"
 	agentrpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/agent/agentconnect"
 	rpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/protocolconnect"
+	"tailscale.com/client/local"
 	"tailscale.com/ipn/ipnstate"
 	"tailscale.com/net/netns"
 	"tailscale.com/tailcfg"
@@ -649,12 +650,16 @@ func assertRemovedPeerUsesOnlyNetstack(t *testing.T, ctx context.Context, left, 
 	timeout := time.NewTimer(5 * time.Second)
 	defer timeout.Stop()
 	for {
-		if _, ok := server.Sys().Engine.Get().PeerForIP(target.Addr()); !ok {
+		// Observe live peer-map publication, not an atomic WireGuard route
+		// transaction. Only the precise not-found result proves removal.
+		if _, err := client.WhoIs(ctx, target.Addr().String()); errors.Is(err, local.ErrPeerNotFound) {
 			break
+		} else if err != nil {
+			t.Fatal("observe removed peer", err)
 		}
 		select {
 		case <-timeout.C:
-			t.Fatal("peer route removal did not reach the SDK engine")
+			t.Fatal("peer removal did not reach the SDK live address index")
 		case <-time.After(20 * time.Millisecond):
 		}
 	}

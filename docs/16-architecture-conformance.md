@@ -1,5 +1,24 @@
 # 架构与文档一致性检查
 
+<a id="evidence-tsnet104-candidate-20261122"></a>
+## 后续网络栈候选迁移（2026-11-22，尚未发布部署）
+
+- [ ] 原网络严重卡顿/冻结与真实公网吞吐门槛继续开放。此批从ce85e60创建隔离worktree，不调用用户已安装Shiki、不连接外部Tailscale账号，不把本地回归当作实机改善。正式两端及冻结alpha.9资产保持原版本。
+- [x] 官方Tailscale1.104.2与gVisor `v0.0.0-20260915211658-a6f909f08a72`候选接入，最低Go1.27.3、工具链固定官方稳定1.27.4。上游启用CUBIC及新版默认SACK/RACK，注入路径改为三个有界队列；不是一行参数回补。依赖134→145项、62版本变化/13新增/2移除，必须覆盖文件监视、WebSocket、CLI/TUI及跨平台，不能继承旧SDK验收。来源：[发行](https://github.com/tailscale/tailscale/releases/tag/v1.104.2)、[netstack](https://github.com/tailscale/tailscale/blob/v1.104.2/wgengine/netstack/netstack.go)。
+- [x] 初轮真实编译发现Engine.PeerForIP删除及cellbuf/ansi不兼容，完整失败保留为迁移原因。SDK适配改用裸IP WhoIs(port0)，只认live节点精确/32或/128地址、预期公钥、非自身、未Expired；握手前后分别查询、≤5秒且更早context优先，失败关闭已握手连接，继续走userspace netstack并绑定原generation/authorization/peer撤销机制。没有Server.Dial/SystemDial回退。旧新检查均是live peer-map观察，不冒充原子WireGuard路由租约；真实移除测试只替换已删除API的观测点为ErrPeerNotFound，不把任意LocalAPI错误当删除成功。
+- [x] 修补新版useproxy feature可由环境禁用导致hook缺失的兼容风险：五个实际proxy hooks缺失时节点初始化失败，不能SetProxyFunc表面成功却绕过系统代理。子进程在真实init阶段测试禁用环境；不修改用户环境或打印原环境内容。TUI使用官方cellbuf0.0.15兼容MVS选择的ansi0.11.8，不降低SDK依赖或删除功能。
+- [x] Go1.27.4下shiki/agent/daemon构建20.172秒成功；首组安全race26顶层/105含子例、0skip/0fail，包18.600秒（含编译wall78.245秒）。仅非deadline取消测试由30ms父截止改为5秒，真正deadline子例保持30ms，随后专项race重复10次通过1.858秒；没有改已在执行检查的冻结源或放宽结果断言。
+- [x] 完整node race63顶层/217含子例通过、0skip/0fail（76.491秒）；Go1.27.4下全部cmd交叉构建CGO0通过：darwin/arm64 7.976秒、darwin/amd64 22.370秒、linux/amd64 23.903秒、linux/arm64 25.615秒。交叉构建不算对应平台原生运行。
+- [x] 工具脚本112项复验通过（21.011秒）；首轮16项cache测试因固定假Go版本仍为1.26.11而拒绝，改测试输入为1.27.4后通过，没有放松生产平台版本检查。
+- [x] Mac arm64主机相关race通过：internal/client20.605秒、internal/agent70.767秒、internal/connection2.732秒、cmd/shiki53.990秒、test/architecture1.450秒；browser/sync/port各可用平台包race均通过，无测试文件的入口不计测试通过，Linux专属行为仍由后续原生CI验证。独立terminal analyzer仅升级Go基线并保留自身依赖版本，`go test -race ./...`成功编译、没有测试文件，不计行为验收。
+- [ ] 新源完整CI、公开包升级/回滚、账号状态兼容、自然切网、长稳和公网性能仍未验证。
+
+**工具链来源与检查范围：** CI/release各setup-go固定1.27.4，platform_support严格匹配，WSL固定官方下载`go1.27.4.linux-amd64.tar.gz` SHA256 `7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840`；Linux runner固定官方多架构bookworm索引`sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea`，来自只读官方Go JSON与Docker manifest核对，不以元数据核对冒充完整镜像运行。上述脚本变更不包含在先前105项Go回归范围内，单独验证。历史原工具链与公开alpha.9证据保留。
+
+**本轮用户反馈：** 正式alpha.9在暂停Claude登录背景视频并选Smooth后，用户明确反馈点击/输入等整体操作已经可用，但滚动仍卡、帧率不足。此改善发生在旧正式版本，不是网络库候选部署结果；滚动与冻结长期验收仍开放。先前给用户的open命令漏写`--read-only=false`，造成只读链接，已纠正并由用户继续操作；只读默认是原安全契约，不因此改为默认取得控制。建议的窗口resize对照仍待用户实测，不默改远端分辨率。
+
+**七类架构复核：** ①变更位于node SDK边界、工具链与tests，不把插件业务搬入host；②仅适配现有身份查询，RPC消息/权限/能力/transport选择不扩张，应用协议没有以SDK版本冒充升级；③原状态持久化、revision及request去重保持，未读取用户凭据；④握手前后预算/失败关conn/lease撤销与SDK有界队列关闭须回归；⑤保留tailnet-only、固定peer及代理策略，不通过猜测窗口或公开VNC端口规避问题；⑥新Go基线同步构建、CI、平台检查和安装说明，预构建用户不需自行安装Go；⑦局部安全测试、交叉构建、全平台CI、正式部署性能严格分列。当前仅候选，不宣称卡顿解决。
+
 <a id="evidence-viewer-memory-latency-batch-20261122"></a>
 ## 后续查看器改进与延迟归因（2026-11-22，源码未发布、严重卡顿未关闭）
 

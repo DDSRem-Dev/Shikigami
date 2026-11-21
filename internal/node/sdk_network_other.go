@@ -2,4 +2,4 @@
 
 package node
 
-func configureSDKNetworking() error { return nil }
+func configureSDKNetworking() error { return requireSDKProxyHooks() }

@@ -2,7 +2,7 @@
 
 ## 传输和节点归属
 
-应用数据统一使用 **Connect 协议 + protobuf 二进制编码 + HTTP/2**，Go 实现基线为 Connect-Go v2.0.2（库要求 Go ≥ 1.26.0；项目固定 tsnet v1.98.10 后要求 Go ≥ 1.26.5，工具链为 1.26.11）。保留 protobuf 的 service/message 定义，替换 RPC 运行库、生成器与 HTTP 传输。所有业务链路的具体约束见 [14 ConnectRPC 传输契约](./14-connectrpc-transport.md)，不通过 SSH。性能是否优于 SSH 需要测量，不作为选型事实。
+应用数据统一使用 **Connect 协议 + protobuf 二进制编码 + HTTP/2**，Go 实现基线为 Connect-Go v2.0.2（库要求 Go ≥ 1.26.0；项目固定 tsnet v1.104.2 后要求 Go ≥ 1.27.3，工具链为 1.27.4）。保留 protobuf 的 service/message 定义，替换 RPC 运行库、生成器与 HTTP 传输。所有业务链路的具体约束见 [14 ConnectRPC 传输契约](./14-connectrpc-transport.md)，不通过 SSH。性能是否优于 SSH 需要测量，不作为选型事实。
 
 采用内嵌 **tsnet**：本地 agent 和远端 daemon 各持有一个长生命周期 `tsnet.Server`，使用私有持久化目录保存节点身份。同一目录只能由一个进程打开；CLI 不自行创建节点。多台设备需不同节点名/身份。
 
@@ -124,3 +124,9 @@ macOS 的内嵌 tsnet 使用纯 userspace netstack，不创建内核 TUN 或系�
 本适配不是“所有流量必须经代理”的安全策略：SDK某些DERP路径会忽略代理解析失败后尝试其原有直连，UDP也保留原行为，不得宣称代理失败能阻止所有出口。业务数据面的授权边界独立保持：Node.Dial须校验peer身份并直接进入userspace TCP，禁止系统TCP回退，业务HTTP transport禁用环境代理。当前修复与现场验收状态见[24终态](24-public-package-compatibility.md#installer-final-20261031)。
 
 Connect 协议不自动提供 WebSocket 传输；Connect-Web/gRPC-Web 也不让浏览器获得终端所需的全双工能力。底层 WebSocket socket 不是自动解帧后的字节流。后续若做 WSS 隧道，需要两端明确的 HTTP/2 字节封装适配、鉴权、帧大小限制、关闭语义和代理测试。没有适配实现前不声明与 9527 同端口复用，也不把此功能纳入首版验收。
+
+### 后续SDK适配（2026-11-22，未发布候选）
+
+Tailscale1.104.2删除Engine.PeerForIP，固定适配使用LocalClient.WhoIs裸IP（port0，禁止代理映射回退），只接受匹配expected公钥的精确/32或/128 Addresses、非自身且未Expired；握手前后分别fresh查询，最多5秒且更早调用取消/截止优先，失败关闭已握手连接。保留generation/authorization lease/peerConn撤销绑定，拨号仍只调用userspace netstack。新旧SDK检查都是live peer-map观察，不声称原子WireGuard路由租约；不得替换为应用缓存或SystemDial。
+
+新版feature初始化允许环境禁用useproxy；节点初始化须核对实际五个proxy hooks，缺失即失败，不能因SetProxyFunc表面成功而静默绕过系统代理。性能候选采用上游CUBIC/RACK与其有界注入队列，未自行调窗口/拥塞算法；外部直连/中继、旧state升级回滚及长期体验待实际验证。

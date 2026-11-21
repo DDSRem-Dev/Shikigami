@@ -1,5 +1,7 @@
 # Shikigami 设计文档导航
 
+**网络栈候选：** 后续源码在隔离环境迁移Tailscale1.104.2/Go1.27.4并保留原节点身份与代理边界，局部安全回归已通过，其余验证与实机性能仍开放；正式alpha.9未替换。见[候选范围](15-implementation-status.md#evidence-tsnet104-candidate-20261122)。
+
 **最新反馈：alpha.9仍严重卡顿，体验验收未通过。** 用户确认5Mbps套餐；已完成分段与同页画质对照，源码正在纳入noVNC1.7和Smooth默认，但尚未发布部署，不能以此前短时功能通过代替性能通过。见[延迟归因与改进](15-implementation-status.md#evidence-viewer-memory-latency-batch-20261122)。
 
 **alpha.9已发布（记录日期2026-11-22）：** 固定源`0b4847d`的[发布前CI](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44924752906)57/57通过，[发行流水线](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44929424103)已成功，23资产于`2026-11-21T18:13:58Z`公开。现行下载入口为alpha.9，见[说明](releases/v0.0.1-alpha.9.md)与[实施记录](15-implementation-status.md)。用户两端已升级正式签名alpha.9，7插件ready、work为running/browse；原配置、Token/auth、密钥环、profile及daemon身份保持，见[两端升级证据](15-implementation-status.md#evidence-alpha9-upgrade-20261122)。12次CLI成功（0.180–0.211秒）仅为短时健康；新版真实viewer已完成自有页面点击/输入/滚动及5次显式重连回只读后接管；Balanced/Smooth各5次观测包含工具开销，不能严格对比旧夹具或证明卡顿已解决。用户人工验证后已进入claude.ai/login，助手截图复核正常登录表单；没有登录账号。本轮本机viewer、TaskSpace及10个临时文件已清理，远端Chrome登录页有意保留；这不承诺长期免挑战，见[alpha.9交互证据](15-implementation-status.md#evidence-alpha9-viewer-20261122)。历史alpha.8失败保留，beta门槛保持开放。
@@ -57,7 +59,7 @@
 ## 已确认的设计基线
 
 - 单用户 VPS；多个设备属于同一使用者。多租户、访客权限隔离后续另行设计。
-- Go ≥ 1.26.5 + Connect-Go v2.0.2，Connect 协议/protobuf over HTTP/2；内嵌 tsnet 管理 Tailscale 节点，不安装系统 tailscaled。
+- Go ≥ 1.27.3 + Connect-Go v2.0.2，Connect 协议/protobuf over HTTP/2；内嵌 tsnet 管理 Tailscale 节点，不安装系统 tailscaled。
 - 本地 `shiki-agent` 常驻，CLI/TUI 和未来 GUI 通过受限本地 IPC 共用连接、同步和端口转发。
 - 远端 `shiki-daemon` 以指定普通用户运行；tmux 中的 Claude Code 与网络连接生命周期分离。
 - 首版 CLI/TUI，GUI 后续交付；快照只恢复会话配置，不恢复文件、进程或对话历史。

@@ -49,10 +49,10 @@ try {
     $result.stage = 'fixed-downloads'
     $image = Join-Path $private 'ubuntu-24.04.5-wsl-amd64.wsl'
     Fetch-Verified 'https://releases.ubuntu.com/24.04.5/ubuntu-24.04.5-wsl-amd64.wsl' $image 'bb415d824822c4b878125729af451a5d18fb13d1cf5cbed9a7393ad64ac6039e'
-    $goArchive = Join-Path $private 'go1.26.11.linux-amd64.tar.gz'
-    Fetch-Verified 'https://go.dev/dl/go1.26.11.linux-amd64.tar.gz' $goArchive '9849f4e04ee35303714e34fbc3ac8ab44ea3e448a95aa182f91e3b9b79c710ec'
+    $goArchive = Join-Path $private 'go1.27.4.linux-amd64.tar.gz'
+    Fetch-Verified 'https://go.dev/dl/go1.27.4.linux-amd64.tar.gz' $goArchive '7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840'
     $result['rootfs_sha256'] = 'bb415d824822c4b878125729af451a5d18fb13d1cf5cbed9a7393ad64ac6039e'
-    $result['go_sha256'] = '9849f4e04ee35303714e34fbc3ac8ab44ea3e448a95aa182f91e3b9b79c710ec'
+    $result['go_sha256'] = '7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840'
     $bundle = Join-Path $private 'source.bundle'
     Invoke-Private 'git' @('-C', $env:GITHUB_WORKSPACE, 'bundle', 'create', $bundle, 'HEAD')
     $result.stage = 'WSL2-import'
