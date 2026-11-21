@@ -56,6 +56,37 @@ func readinessServer(t *testing.T, spec Spec, snapshot func() Snapshot) *atomic.
 	return requests
 }
 
+func TestRuntimeInspectRequiresObservedModeMatch(t *testing.T) {
+	for _, test := range []struct {
+		name, requested, reported string
+		accept                    bool
+	}{
+		{"legacy", "", "", true},
+		{"browse", ModeBrowse, ModeBrowse, true},
+		{"diagnostic", ModeDiagnostic, ModeDiagnostic, true},
+		{"missing", ModeBrowse, "", false},
+		{"different", ModeBrowse, ModeDiagnostic, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			spec := readinessSpec(t)
+			spec.Mode = test.requested
+			readinessServer(t, spec, func() Snapshot {
+				return Snapshot{ProfileID: spec.ProfileID, InstanceID: spec.InstanceID, State: "running", Mode: test.reported}
+			})
+			got, err := inspectRuntime(t.Context(), spec, func(context.Context, string) (map[string]string, error) {
+				return readinessProperties(spec, "active"), nil
+			})
+			if test.accept {
+				if err != nil || got.Mode != spec.BrowserMode() {
+					t.Fatalf("mode not retained: %#v %v", got, err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), "browser mode mismatch") {
+				t.Fatalf("mismatched runtime accepted: %#v %v", got, err)
+			}
+		})
+	}
+}
+
 func TestRuntimeInspectWaitsForVerifiedStartingUnitWithoutRelaunch(t *testing.T) {
 	for _, unitState := range []string{"active", "activating"} {
 		for _, endpoint := range []string{"missing", "refused", "starting"} {

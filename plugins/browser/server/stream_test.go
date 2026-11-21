@@ -149,7 +149,7 @@ func TestControlOwnershipRevisionAndNoPromotion(t *testing.T) {
 	status := startProfile(t, worker, "one", "start")
 	for _, id := range []string{"first", "second", "readonly"} {
 		_, cancel := context.WithCancel(context.Background())
-		worker.attachments[id] = &attachment{id: id, profile: "one", instance: status.InstanceId, owner: "owner", canControl: id != "readonly", readOnly: id == "readonly", connection: &recordingConnection{}, cancel: cancel, out: make(chan *epb.BrowserFrame, 8)}
+		worker.attachments[id] = &attachment{id: id, profile: "one", instance: status.InstanceId, owner: "owner", canControl: id != "readonly", readOnly: id == "readonly", connection: &recordingConnection{}, cancel: cancel, out: make(chan *epb.BrowserFrame, 8), controlOut: make(chan *epb.BrowserFrame, 8)}
 	}
 	if worker.controller != "" {
 		t.Fatal("automatic controller assignment")
@@ -294,5 +294,271 @@ func TestRFBFrameIncludesMetadataInItsBound(t *testing.T) {
 	var output [1]byte
 	if _, err := reader.Read(output[:]); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("oversized metadata accepted: %v", err)
+	}
+}
+
+type writeNoticeConnection struct {
+	net.Conn
+	writes  int
+	blocked chan struct{}
+}
+
+func (connection *writeNoticeConnection) SetWriteDeadline(deadline time.Time) error {
+	if !deadline.IsZero() {
+		connection.writes++
+		if connection.writes == 4 {
+			close(connection.blocked)
+		}
+	}
+	return connection.Conn.SetWriteDeadline(deadline)
+}
+
+// A stalled viewer must not hold the shared controller lock for a read-only
+// framebuffer request. Mutating messages remain serialized with takeover.
+func TestReadOnlyBackpressureDoesNotBlockControllerLock(t *testing.T) {
+	worker := NewWithManager(&testManager{})
+	left, right := net.Pipe()
+	defer left.Close()
+	defer right.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	notice := &writeNoticeConnection{Conn: left, blocked: make(chan struct{})}
+	viewer := &attachment{id: "slow", profile: "one", instance: "instance", readOnly: true, connection: notice}
+	input := make(chan received, 1)
+	handshake := append([]byte("RFB 003.008\n"), 1, 1)
+	update := []byte{3, 1, 0, 0, 0, 0, 0, 100, 0, 100}
+	input <- received{frame: &epb.BrowserFrame{Kind: epb.BrowserFrame_DATA, Data: append(handshake, update...)}}
+	result := make(chan error, 1)
+	go func() {
+		result <- worker.forwardInput(ctx, viewer, &frameReader{ctx: ctx, input: input, viewer: viewer})
+	}()
+	defer func() { cancel(); left.Close(); <-result }()
+	if _, err := io.ReadFull(right, make([]byte, len(handshake))); err != nil {
+		t.Fatal(err)
+	}
+	// The fourth write follows the three handshake writes. net.Pipe has no
+	// buffer, so this request remains blocked until the peer reads or closes.
+	select {
+	case <-notice.blocked:
+	case <-time.After(time.Second):
+		t.Fatal("framebuffer write not reached")
+	}
+	acquired := make(chan struct{})
+	go func() { worker.control.Lock(); worker.control.Unlock(); close(acquired) }()
+	select {
+	case <-acquired:
+	case <-time.After(300 * time.Millisecond):
+		t.Fatal("a read-only framebuffer write blocked all controller operations")
+	}
+}
+
+func TestControlNotificationsBypassFullImagesWithoutDroppingBytes(t *testing.T) {
+	worker := NewWithManager(&testManager{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	viewer := &attachment{id: "viewer", profile: "one", instance: "instance", canControl: true,
+		connection: &recordingConnection{}, cancel: cancel,
+		out: make(chan *epb.BrowserFrame, 16), controlOut: make(chan *epb.BrowserFrame, 8)}
+	worker.attachments[viewer.id] = viewer
+	for i := 0; i < cap(viewer.out); i++ {
+		viewer.out <- &epb.BrowserFrame{Kind: epb.BrowserFrame_DATA, Data: []byte{byte(i)}}
+	}
+	for _, owner := range []string{viewer.id, "other", ""} {
+		worker.controller, worker.controlRevision = owner, "rev-"+owner
+		worker.broadcastControlLocked()
+	}
+	if ctx.Err() != nil {
+		t.Fatal("full image queue disconnected viewer during takeover")
+	}
+	for _, owner := range []string{viewer.id, "other", ""} {
+		frame, err := viewer.nextOutput(ctx)
+		if err != nil || frame.Kind != epb.BrowserFrame_CONTROL || frame.ControllerId != owner || frame.ControlRevision != "rev-"+owner || frame.ReadOnly != (owner != viewer.id) {
+			t.Fatalf("control ordering/ownership: %v %v", frame, err)
+		}
+	}
+	for i := 0; i < cap(viewer.out); i++ {
+		frame, err := viewer.nextOutput(ctx)
+		if err != nil || frame.Kind != epb.BrowserFrame_DATA || !bytes.Equal(frame.Data, []byte{byte(i)}) {
+			t.Fatalf("RFB bytes lost/reordered at %d: %v %v", i, frame, err)
+		}
+	}
+	cancel()
+	viewer.out <- &epb.BrowserFrame{Kind: epb.BrowserFrame_DATA}
+	viewer.controlOut <- &epb.BrowserFrame{Kind: epb.BrowserFrame_CONTROL}
+	if frame, err := viewer.nextOutput(ctx); err != context.Canceled || frame != nil {
+		t.Fatalf("canceled attachment emitted queued frame: %v %v", frame, err)
+	}
+}
+
+func TestControlNotificationBacklogRemainsBounded(t *testing.T) {
+	worker := NewWithManager(&testManager{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	left, right := net.Pipe()
+	defer left.Close()
+	defer right.Close()
+	viewer := &attachment{id: "slow", connection: left, cancel: cancel,
+		out: make(chan *epb.BrowserFrame, 16), controlOut: make(chan *epb.BrowserFrame, 8)}
+	worker.attachments[viewer.id] = viewer
+	for i := 0; i < cap(viewer.controlOut); i++ {
+		worker.broadcastControlLocked()
+	}
+	if ctx.Err() != nil {
+		t.Fatal("control queue canceled before reaching its bound")
+	}
+	worker.broadcastControlLocked()
+	if ctx.Err() != context.Canceled || len(viewer.controlOut) != cap(viewer.controlOut) {
+		t.Fatal("slow control reader was not canceled at the fixed bound")
+	}
+	if _, err := right.Read(make([]byte, 1)); err != io.EOF {
+		t.Fatalf("canceled viewer socket remained open: %v", err)
+	}
+}
+
+func TestMutatingRFBWriteRemainsLinearizedWithTakeover(t *testing.T) {
+	worker := NewWithManager(&testManager{})
+	worker.controller, worker.controlRevision = "owner", "current"
+	left, right := net.Pipe()
+	defer left.Close()
+	defer right.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	notice := &writeNoticeConnection{Conn: left, blocked: make(chan struct{})}
+	viewer := &attachment{id: "owner", profile: "one", instance: "instance", canControl: true, connection: notice}
+	input := make(chan received, 2)
+	handshake := append([]byte("RFB 003.008\n"), 1, 1)
+	key := []byte{4, 1, 0, 0, 0, 0, 0, 65}
+	input <- received{frame: &epb.BrowserFrame{Kind: epb.BrowserFrame_DATA, Data: append(handshake, key...), ControlRevision: "current"}}
+	input <- received{err: io.EOF}
+	result := make(chan error, 1)
+	go func() {
+		result <- worker.forwardInput(ctx, viewer, &frameReader{ctx: ctx, input: input, viewer: viewer})
+	}()
+	defer func() { cancel(); left.Close(); <-result }()
+	if _, err := io.ReadFull(right, make([]byte, len(handshake))); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-notice.blocked:
+	case <-time.After(time.Second):
+		t.Fatal("mutating write not reached")
+	}
+	if worker.control.TryLock() {
+		worker.control.Unlock()
+		t.Fatal("takeover can overtake an already authorized mutating write")
+	}
+	actual := make([]byte, len(key))
+	if _, err := io.ReadFull(right, actual); err != nil || !bytes.Equal(actual, key) {
+		t.Fatalf("authorized input delivery: %v %v", actual, err)
+	}
+}
+
+type orderedBrowserStream struct {
+	ctx          context.Context
+	opened       bool
+	frames       chan *epb.BrowserFrame
+	releaseReady chan struct{}
+}
+
+func (stream *orderedBrowserStream) Receive() (*epb.BrowserFrame, error) {
+	if !stream.opened {
+		stream.opened = true
+		return &epb.BrowserFrame{Kind: epb.BrowserFrame_OPEN, ProfileId: "one", OwnerId: "owner", CanControl: true}, nil
+	}
+	<-stream.ctx.Done()
+	return nil, stream.ctx.Err()
+}
+func (stream *orderedBrowserStream) Send(frame *epb.BrowserFrame) error {
+	select {
+	case stream.frames <- frame:
+	case <-stream.ctx.Done():
+		return stream.ctx.Err()
+	}
+	if frame.Kind == epb.BrowserFrame_READY {
+		select {
+		case <-stream.releaseReady:
+		case <-stream.ctx.Done():
+			return stream.ctx.Err()
+		}
+	}
+	return nil
+}
+func TestReadyPrecedesTakeoverQueuedDuringBlockedSend(t *testing.T) {
+	manager := &testManager{}
+	worker := newWorker(t, t.TempDir(), "boot", manager)
+	putProfile(t, worker, "one", false)
+	startProfile(t, worker, "one", "start")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	stream := &orderedBrowserStream{ctx: ctx, frames: make(chan *epb.BrowserFrame, 8), releaseReady: make(chan struct{})}
+	result := make(chan error, 1)
+	go func() { result <- worker.BrowserStream(ctx, stream) }()
+	defer func() {
+		cancel()
+		<-result
+		for _, peer := range manager.peers {
+			peer.Close()
+		}
+	}()
+	next := func() *epb.BrowserFrame {
+		t.Helper()
+		select {
+		case frame := <-stream.frames:
+			return frame
+		case <-ctx.Done():
+			t.Fatal("missing output frame")
+			return nil
+		}
+	}
+	ready := next()
+	if ready.Kind != epb.BrowserFrame_READY {
+		t.Fatalf("first frame is %v", ready.Kind)
+	}
+	worker.control.Lock()
+	viewer := worker.attachments[ready.AttachmentId]
+	viewer.out <- &epb.BrowserFrame{Kind: epb.BrowserFrame_DATA, Data: []byte{1, 2, 3}}
+	worker.control.Unlock()
+	if _, err := worker.TakeBrowserControl(ctx, &epb.BrowserControlRequest{ProfileId: "one", InstanceId: ready.InstanceId, AttachmentId: ready.AttachmentId, OwnerId: "owner", ExpectedControlRevision: ready.ControlRevision}); err != nil {
+		t.Fatal(err)
+	}
+	close(stream.releaseReady)
+	control := next()
+	if control.Kind != epb.BrowserFrame_CONTROL || control.ControllerId != ready.AttachmentId || control.ReadOnly {
+		t.Fatalf("takeover not delivered before image: %v", control)
+	}
+	data := next()
+	if data.Kind != epb.BrowserFrame_DATA || !bytes.Equal(data.Data, []byte{1, 2, 3}) {
+		t.Fatalf("image corrupted: %v", data)
+	}
+}
+
+func TestControlBacklogCancelsOnlySlowAttachment(t *testing.T) {
+	worker := NewWithManager(&testManager{})
+	var slowContext context.Context
+	for _, id := range []string{"slow", "healthy"} {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		viewer := &attachment{id: id, connection: &recordingConnection{}, cancel: cancel, controlOut: make(chan *epb.BrowserFrame, 8)}
+		worker.attachments[id] = viewer
+		if id == "slow" {
+			for range cap(viewer.controlOut) {
+				viewer.controlOut <- &epb.BrowserFrame{Kind: epb.BrowserFrame_CONTROL}
+			}
+			slowContext = ctx
+		} else {
+			// Examine before deferred cleanup cancels its context.
+			worker.controller, worker.controlRevision = "healthy", "new"
+			worker.broadcastControlLocked()
+			if slowContext.Err() != context.Canceled {
+				t.Fatal("slow viewer not canceled")
+			}
+			if ctx.Err() != nil {
+				t.Fatal("healthy peer was canceled by another viewer's backlog")
+			}
+			frame := <-viewer.controlOut
+			if frame.ControllerId != "healthy" || frame.ControlRevision != "new" {
+				t.Fatalf("healthy peer missed takeover: %v", frame)
+			}
+		}
 	}
 }

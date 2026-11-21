@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -81,7 +82,7 @@ func NewWithManager(manager browserruntime.Manager) *Worker {
 	return &Worker{manager: manager, attachments: make(map[string]*attachment), controlRevision: browserruntime.NewID(), fileGate: make(chan struct{}, 1), bootID: linuxBootID, writeJSON: browserruntime.AtomicJSON}
 }
 func (worker *Worker) Info() *ppb.PluginInfo {
-	return &ppb.PluginInfo{Name: "browser", Version: buildinfo.Version, Side: "server", Protocol: &pb.ProtocolOffer{Major: 1, Capabilities: []string{"core.scope.v1", "browser.remote.v1"}}}
+	return &ppb.PluginInfo{Name: "browser", Version: buildinfo.Version, Side: "server", Protocol: &pb.ProtocolOffer{Major: 1, Capabilities: []string{"core.scope.v1", sdk.BrowserCapability, sdk.BrowserLaunchModeCapability}}}
 }
 func (worker *Worker) Init(_ context.Context, input sdk.InitContext) error {
 	if input.Side != "server" || !filepath.IsAbs(input.StateDir) || worker.manager == nil {
@@ -127,6 +128,10 @@ func (worker *Worker) Init(_ context.Context, input sdk.InitContext) error {
 		return errors.New("multiple persisted browser boot targets")
 	}
 	if state.Runtime != nil {
+		if err := hydrateRuntimeMode(input.StateDir, state.Runtime); err != nil {
+			lock.Close()
+			return err
+		}
 		if err := state.Runtime.Validate(); err != nil {
 			lock.Close()
 			return err
@@ -152,8 +157,46 @@ func cloneDatabase(value database) database {
 	_ = json.Unmarshal(encoded, &copy)
 	return copy
 }
+
+// hydrateRuntimeMode recovers mode only from the immutable, private launch
+// record. profiles.json retains its alpha.8 shape so rollback can still read it.
+// Even stopped instances require evidence: missing records are not legacy mode.
+func hydrateRuntimeMode(stateDir string, current *browserruntime.Spec) error {
+	if !browserruntime.ValidID(current.ProfileID) || !browserruntime.ValidID(current.InstanceID) {
+		return errors.New("invalid persisted browser launch identity")
+	}
+	legacy := current.ConfigPath == filepath.Join(stateDir, "runtime", current.InstanceID+".json")
+	if !legacy && current.ConfigPath != filepath.Join(stateDir, "runtime", current.InstanceID+".launch.json") {
+		return errors.New("browser launch record path does not match the persisted instance")
+	}
+	var launch browserruntime.Spec
+	if err := browserruntime.ReadJSON(current.ConfigPath, &launch, browserruntime.MaxControlBody); err != nil {
+		return fmt.Errorf("cannot verify browser launch mode: %w", err)
+	}
+	if (legacy && launch.Mode != "") || (!legacy && launch.Mode == "") {
+		return errors.New("browser launch mode evidence does not match its record generation")
+	}
+	if err := launch.Validate(); err != nil {
+		return err
+	}
+	expected, actual := *current, launch
+	expected.Region, actual.Region = nil, nil
+	expected.Mode, actual.Mode = "", ""
+	if expected != actual || !proto.Equal(current.Region, launch.Region) || (current.Mode != "" && current.Mode != launch.Mode) {
+		return errors.New("browser launch record does not match the persisted instance")
+	}
+	current.Mode = launch.Mode
+	return nil
+}
 func (worker *Worker) saveLocked() error {
-	err := worker.writeJSON(filepath.Join(worker.stateDir, "profiles.json"), &worker.db, maxDatabaseBytes)
+	// Strip only the disk copy; rollback and in-memory identity must retain mode.
+	disk := worker.db
+	if worker.db.Runtime != nil {
+		runtime := *worker.db.Runtime
+		runtime.Mode = ""
+		disk.Runtime = &runtime
+	}
+	err := worker.writeJSON(filepath.Join(worker.stateDir, "profiles.json"), &disk, maxDatabaseBytes)
 	var published *browserruntime.PublishedError
 	if err != nil && !errors.As(err, &published) {
 		worker.db = cloneDatabase(worker.persisted)

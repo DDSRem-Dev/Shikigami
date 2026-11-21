@@ -27,7 +27,10 @@ type SystemManager struct{}
 
 const runtimeReadyTimeout = 90 * time.Second
 
-func (SystemManager) Prepare(_ context.Context, state, profileID, profileRevision, instanceID string, region *epb.RegionConfig, revision string, width, height int) (Spec, error) {
+func (SystemManager) Prepare(_ context.Context, state, profileID, profileRevision, instanceID string, region *epb.RegionConfig, revision string, width, height int, mode string) (Spec, error) {
+	if mode != ModeBrowse && mode != ModeDiagnostic {
+		return Spec{}, errors.New("new browser launches require an explicit browse or diagnostic mode")
+	}
 	if runtime.GOOS != "linux" || os.Getuid() <= 0 {
 		return Spec{}, errors.New("browser requires an unprivileged Linux systemd user")
 	}
@@ -59,7 +62,7 @@ func (SystemManager) Prepare(_ context.Context, state, profileID, profileRevisio
 			return Spec{}, err
 		}
 	}
-	spec := Spec{ProfileID: profileID, ProfileRevision: profileRevision, InstanceID: instanceID, Token: NewID(), Unit: "shiki-browser-" + namespace, ConfigPath: filepath.Join(state, "runtime", instanceID+".json"), SocketDir: socketDir, ProfileDir: profileDir, ExecutableSHA256: executableSHA, Region: region, RegionRevision: revision, Width: width, Height: height}
+	spec := Spec{ProfileID: profileID, ProfileRevision: profileRevision, InstanceID: instanceID, Token: NewID(), Unit: "shiki-browser-" + namespace, ConfigPath: filepath.Join(state, "runtime", instanceID+".launch.json"), SocketDir: socketDir, ProfileDir: profileDir, ExecutableSHA256: executableSHA, Region: region, RegionRevision: revision, Width: width, Height: height, Mode: mode}
 	if err := spec.Validate(); err != nil {
 		return Spec{}, err
 	}
@@ -207,23 +210,26 @@ func inspectRuntime(ctx context.Context, spec Spec, readUnit func(context.Contex
 		if err != nil {
 			return Snapshot{}, err
 		}
-		base := Snapshot{ProfileID: spec.ProfileID, InstanceID: spec.InstanceID, RegionRevision: spec.RegionRevision}
 		if properties["LoadState"] == "not-found" {
-			base.State, base.Reason = "crashed", exitReason(spec, "runtime unit is absent (no automatic restart)")
-			return base, nil
+			return exitSnapshot(spec, "runtime unit is absent (no automatic restart)"), nil
 		}
 		if err := verifyUnit(properties, spec); err != nil {
 			return Snapshot{}, err
 		}
 		if properties["ActiveState"] != "active" && properties["ActiveState"] != "activating" {
-			base.State, base.Reason = "crashed", exitReason(spec, "runtime unit exited: "+properties["Result"]+" (manual restart required)")
-			return base, nil
+			return exitSnapshot(spec, "runtime unit exited: "+properties["Result"]+" (manual restart required)"), nil
 		}
 		var status Snapshot
 		err = controlRequest(ctx, spec, "/status", nil, &status)
 		if err == nil {
 			if status.ProfileID != spec.ProfileID || status.InstanceID != spec.InstanceID {
 				return Snapshot{}, errors.New("runtime socket identity mismatch")
+			}
+			if status.Mode == "" && spec.Mode == "" {
+				status.Mode = ModeDiagnostic
+			}
+			if status.Mode != spec.BrowserMode() {
+				return Snapshot{}, errors.New("runtime browser mode mismatch")
 			}
 			if status.State != "starting" {
 				return status, nil
@@ -242,12 +248,41 @@ func inspectRuntime(ctx context.Context, spec Spec, readUnit func(context.Contex
 	}
 }
 
-func exitReason(spec Spec, fallback string) string {
-	var snapshot Snapshot
-	if ReadJSON(filepath.Join(spec.SocketDir, "exit.json"), &snapshot, MaxControlBody) == nil && snapshot.ProfileID == spec.ProfileID && snapshot.InstanceID == spec.InstanceID && snapshot.State == "crashed" && len(snapshot.Reason) <= 4096 {
-		return snapshot.Reason
+func recordRuntimeExit(ctx context.Context, spec Spec, stoppedReason string, failure error) error {
+	if ctx.Err() != nil {
+		failure = nil
+		stoppedReason = "browser runtime stopped by request; manual start required"
 	}
-	return fallback
+	if failure == nil && stoppedReason == "" {
+		return nil
+	}
+	state, reason := "stopped", stoppedReason
+	if failure != nil {
+		state, reason = "crashed", failure.Error()
+	}
+	if len(reason) > 4096 {
+		reason = reason[:4096]
+	}
+	snapshot := Snapshot{ProfileID: spec.ProfileID, InstanceID: spec.InstanceID, State: state, Reason: reason, RegionRevision: spec.RegionRevision, Mode: spec.BrowserMode()}
+	if err := AtomicJSON(filepath.Join(spec.SocketDir, "exit.json"), snapshot, MaxControlBody); err != nil {
+		return errors.Join(failure, fmt.Errorf("persisting private runtime exit reason: %w", err))
+	}
+	return failure
+}
+
+func exitSnapshot(spec Spec, fallback string) Snapshot {
+	base := Snapshot{ProfileID: spec.ProfileID, InstanceID: spec.InstanceID, RegionRevision: spec.RegionRevision, State: "crashed", Reason: fallback, Mode: spec.BrowserMode()}
+	var snapshot Snapshot
+	if ReadJSON(filepath.Join(spec.SocketDir, "exit.json"), &snapshot, MaxControlBody) == nil && snapshot.ProfileID == spec.ProfileID && snapshot.InstanceID == spec.InstanceID && (snapshot.State == "crashed" || snapshot.State == "stopped") && len(snapshot.Reason) <= 4096 {
+		mode := snapshot.Mode
+		if mode == "" && spec.Mode == "" {
+			mode = ModeDiagnostic
+		}
+		if mode == spec.BrowserMode() {
+			base.State, base.Reason = snapshot.State, snapshot.Reason
+		}
+	}
+	return base
 }
 
 func (SystemManager) Stop(ctx context.Context, spec Spec) error {
@@ -357,6 +392,12 @@ func controlRequest(ctx context.Context, spec Spec, path string, body, result an
 }
 
 func (manager SystemManager) Diagnose(ctx context.Context, spec Spec, request *epb.DiagnosticRequest) (*epb.DiagnosticReport, error) {
+	if err := spec.Validate(); err != nil {
+		return nil, err
+	}
+	if spec.BrowserMode() == ModeBrowse {
+		return nil, errors.New(DiagnosticsDisabledReason)
+	}
 	if _, err := manager.Inspect(ctx, spec); err != nil {
 		return nil, err
 	}

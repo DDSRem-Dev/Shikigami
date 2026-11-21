@@ -52,6 +52,24 @@ func TestChromeArgumentsKeepSandboxPrivateDebuggingAndSecretStorage(t *testing.T
 		}
 	}
 }
+
+func TestOrdinaryChromeHasNoDebuggingOrFingerprintOverride(t *testing.T) {
+	for _, mode := range []string{ModeBrowse, ModeDiagnostic, ""} {
+		arguments := chromeArguments(Spec{ProfileDir: "/private/profile", Mode: mode})
+		joined := strings.Join(arguments, " ")
+		if strings.Contains(joined, "--remote-debugging-pipe") != (mode != ModeBrowse) {
+			t.Fatalf("incorrect debugging mode %q: %v", mode, arguments)
+		}
+		for _, forbidden := range []string{"--remote-debugging-port", "--no-sandbox", "AutomationControlled", "--user-agent", "--disable-web-security", "--password-store=basic"} {
+			if strings.Contains(joined, forbidden) {
+				t.Fatalf("unsafe/fingerprint-altering option %q", forbidden)
+			}
+		}
+		if !strings.Contains(joined, "--password-store=gnome-libsecret") {
+			t.Fatal("secret storage gate removed")
+		}
+	}
+}
 func TestChromePreferencesPreserveCookiesAndUnrelatedUserChoices(t *testing.T) {
 	profile := t.TempDir()
 	directory := filepath.Join(profile, "chrome", "Default")

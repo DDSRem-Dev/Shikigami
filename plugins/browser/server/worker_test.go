@@ -24,17 +24,22 @@ type testManager struct {
 	snapshot     browserruntime.Snapshot
 	inspectError error
 	launchError  error
+	launchState  string
 	peers        []net.Conn
 }
 
-func (manager *testManager) Prepare(_ context.Context, state, profile, profileRevision, instance string, region *epb.RegionConfig, revision string, width, height int) (browserruntime.Spec, error) {
-	return browserruntime.Spec{ProfileID: profile, ProfileRevision: profileRevision, InstanceID: instance, Token: browserruntime.NewID(), Unit: "shiki-browser-test", ConfigPath: filepath.Join(state, "runtime", instance+".json"), SocketDir: filepath.Join("/tmp", instance), ProfileDir: filepath.Join(state, "profiles", profile), ExecutableSHA256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", Region: region, RegionRevision: revision, Width: width, Height: height}, nil
+func (manager *testManager) Prepare(_ context.Context, state, profile, profileRevision, instance string, region *epb.RegionConfig, revision string, width, height int, mode string) (browserruntime.Spec, error) {
+	spec := browserruntime.Spec{ProfileID: profile, ProfileRevision: profileRevision, InstanceID: instance, Token: browserruntime.NewID(), Unit: "shiki-browser-test", ConfigPath: filepath.Join(state, "runtime", instance+".launch.json"), SocketDir: filepath.Join("/tmp", instance), ProfileDir: filepath.Join(state, "profiles", profile), ExecutableSHA256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", Region: region, RegionRevision: revision, Width: width, Height: height, Mode: mode}
+	return spec, browserruntime.AtomicJSON(spec.ConfigPath, spec, browserruntime.MaxControlBody)
 }
 func (manager *testManager) Launch(_ context.Context, spec browserruntime.Spec) (browserruntime.Snapshot, error) {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 	manager.launches++
-	manager.snapshot = browserruntime.Snapshot{ProfileID: spec.ProfileID, InstanceID: spec.InstanceID, RegionRevision: spec.RegionRevision, State: "running"}
+	manager.snapshot = browserruntime.Snapshot{ProfileID: spec.ProfileID, InstanceID: spec.InstanceID, RegionRevision: spec.RegionRevision, State: "running", Mode: spec.BrowserMode()}
+	if manager.launchState != "" {
+		manager.snapshot.State = manager.launchState
+	}
 	return manager.snapshot, manager.launchError
 }
 func (manager *testManager) Inspect(_ context.Context, spec browserruntime.Spec) (browserruntime.Snapshot, error) {

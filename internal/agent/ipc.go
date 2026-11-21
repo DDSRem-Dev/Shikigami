@@ -63,7 +63,7 @@ func (s *Service) SettingsRegistry() *host.SettingsRegistry {
 	return s.settingsRegistry.Load()
 }
 func (s *Service) Handshake(ctx context.Context, in *agentpb.HandshakeRequest) (*agentpb.HandshakeResponse, error) {
-	capabilities := []string{"agent.control.v1", "agent.events.v1", "agent.startup.v1", "region.host.v1", "browser.remote.v1"}
+	capabilities := []string{"agent.control.v1", "agent.events.v1", "agent.startup.v1", "region.host.v1", "browser.remote.v1", "browser.launch-mode.v1"}
 	if manager := s.plugins.Load(); manager != nil && manager.ReadyInstanceID("browser") != "" {
 		capabilities = append(capabilities, "browser.viewer.v1")
 	}

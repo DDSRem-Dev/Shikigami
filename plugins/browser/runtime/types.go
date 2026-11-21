@@ -17,6 +17,10 @@ const Binary = "/usr/lib/shikigami/shiki-browser-runtime"
 const ChromeBinary = "/usr/bin/google-chrome-stable"
 const MaxControlBody = 64 << 10
 const MaxWireFrame = 64 << 10
+const ModeBrowse = "browse"
+const ModeDiagnostic = "diagnostic"
+
+const DiagnosticsDisabledReason = "native browser diagnostics are disabled in ordinary browsing mode; explicitly stop the browser and start it in diagnostic mode"
 
 var executableHashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 var identifier = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$`)
@@ -52,6 +56,16 @@ type Spec struct {
 	RegionRevision   string            `json:"region_revision"`
 	Width            int               `json:"width"`
 	Height           int               `json:"height"`
+	Mode             string            `json:"browser_mode,omitempty"`
+}
+
+// Launch records written before modes existed always used the private CDP pipe.
+// Never relabel a running legacy instance as ordinary browsing.
+func (s Spec) BrowserMode() string {
+	if s.Mode == "" {
+		return ModeDiagnostic
+	}
+	return s.Mode
 }
 
 type Snapshot struct {
@@ -62,10 +76,11 @@ type Snapshot struct {
 	ChromeVersion  string   `json:"chrome_version,omitempty"`
 	RegionRevision string   `json:"region_revision"`
 	Warnings       []string `json:"warnings,omitempty"`
+	Mode           string   `json:"mode,omitempty"`
 }
 
 type Manager interface {
-	Prepare(context.Context, string, string, string, string, *epb.RegionConfig, string, int, int) (Spec, error)
+	Prepare(context.Context, string, string, string, string, *epb.RegionConfig, string, int, int, string) (Spec, error)
 	Launch(context.Context, Spec) (Snapshot, error)
 	Inspect(context.Context, Spec) (Snapshot, error)
 	Stop(context.Context, Spec) error
@@ -74,6 +89,12 @@ type Manager interface {
 }
 
 func (s Spec) Validate() error {
+	if s.Mode == "" && filepath.Base(s.ConfigPath) == s.InstanceID+".launch.json" {
+		return errors.New("new browser launch record is missing its explicit mode")
+	}
+	if s.BrowserMode() != ModeBrowse && s.BrowserMode() != ModeDiagnostic {
+		return errors.New("invalid browser mode")
+	}
 	if !ValidID(s.ProfileID) || !ValidID(s.InstanceID) || !ValidID(s.Token) || !ValidID(s.Unit) || !executableHashPattern.MatchString(s.ExecutableSHA256) || !filepath.IsAbs(s.ConfigPath) || !filepath.IsAbs(s.SocketDir) || !filepath.IsAbs(s.ProfileDir) || s.Width < 640 || s.Width > 4096 || s.Height < 480 || s.Height > 2160 {
 		return errors.New("invalid private browser runtime specification")
 	}

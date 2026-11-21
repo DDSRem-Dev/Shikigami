@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"net"
+	"slices"
 	"testing"
 	"time"
 
@@ -41,7 +42,11 @@ func TestExtensionCapabilitiesMatchRegisteredSide(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(offer.Capabilities) != 2 || offer.Capabilities[0] != CoreCapability || offer.Capabilities[1] != test.capability {
+			want := []string{CoreCapability, test.capability}
+			if test.capability == BrowserCapability {
+				want = append(want, BrowserLaunchModeCapability)
+			}
+			if !slices.Equal(offer.Capabilities, want) {
 				t.Fatalf("unexpected capabilities: %v", offer.Capabilities)
 			}
 			info := &ppb.PluginInfo{Protocol: offer}
@@ -274,5 +279,29 @@ func TestCoreExtensionScopesAreExplicitExceptServerLocalInspect(t *testing.T) {
 	writer := &coreBrowserWriter{opened: true, server: "server", profile: "profile"}
 	if err := writer.Send(&epb.BrowserFileChunk{ProfileId: "other"}); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatal("browser upload profile changed", err)
+	}
+}
+
+func TestBrowserModeCapabilityRequiresServerServiceAndAllowsLegacyWorkers(t *testing.T) {
+	probe := &extensionRegistrationProbe{}
+	for _, side := range []string{"server", "client"} {
+		if err := validateServiceRegistration(side, &ppb.PluginInfo{Protocol: &pb.ProtocolOffer{Capabilities: []string{BrowserLaunchModeCapability}}}, Services{}); err == nil {
+			t.Fatal("mode advertised without browser service", side)
+		}
+	}
+	offer, err := BuiltinProtocol("browser", "server")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(offer.RequiredCapabilities, BrowserLaunchModeCapability) {
+		t.Fatal("legacy status/view workers excluded")
+	}
+	legacy := &ppb.PluginInfo{Protocol: &pb.ProtocolOffer{Capabilities: []string{CoreCapability, BrowserCapability}}}
+	if err := validateServiceRegistration("server", legacy, Services{Browser: probe}); err != nil {
+		t.Fatal("legacy browser service rejected", err)
+	}
+	client, err := BuiltinProtocol("browser", "client")
+	if err != nil || slices.Contains(client.Capabilities, BrowserLaunchModeCapability) {
+		t.Fatal("client worker advertises remote launch", client, err)
 	}
 }

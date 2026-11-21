@@ -297,6 +297,10 @@ func (s *Snapshot) Get(bucket, id string, value any) error {
 	if !ok {
 		return os.ErrNotExist
 	}
+	return decodeRecord(data, value)
+}
+
+func decodeRecord(data []byte, value any) error {
 	destination := reflect.ValueOf(value)
 	if !destination.IsValid() || destination.Kind() != reflect.Pointer || destination.IsNil() {
 		return &json.InvalidUnmarshalError{Type: reflect.TypeOf(value)}

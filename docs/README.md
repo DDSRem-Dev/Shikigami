@@ -1,8 +1,8 @@
 # Shikigami 设计文档导航
 
-**alpha.8已发布（2026-11-20）：** 固定源`3c0d945`的发布前CI最终57/57通过，[发行流水线](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44593959710)完成60项成功、1项条件跳过。23个公开资产、四目标签名/来源及自动Homebrew公式已独立验证，见[发行证据](15-implementation-status.md#evidence-public-alpha8-release-20261120)与[说明](releases/v0.0.1-alpha.8.md)。现行下载入口为alpha.8；用户两端仍为alpha.7，升级复验及beta门槛保持开放。
+**alpha.8已发布（2026-11-20）：** 固定源`3c0d945`的发布前CI最终57/57通过，[发行流水线](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44593959710)完成60项成功、1项条件跳过。23个公开资产、四目标签名/来源及自动Homebrew公式已独立验证，见[发行证据](15-implementation-status.md#evidence-public-alpha8-release-20261120)与[说明](releases/v0.0.1-alpha.8.md)。现行下载入口为alpha.8；用户两端已于2026-11-21升级正式alpha.8，见[两端升级与实测](15-implementation-status.md#evidence-alpha8-upgrade-20261121)，beta门槛保持开放。
 
-**当前实机阻塞（2026-11-19）：** alpha.7会话偶发超时、浏览器秒级卡顿及keep-both部分完成后超时已复现；alpha.8已发布修补不等于现场问题全部解决，beta功能和稳定性验收仍待闭环，见[15实施记录](15-implementation-status.md)。
+**本轮实机复验（2026-11-21）：** 默认预算下6次resolve（0.594–4.938秒）、端口目标拒绝恢复、浏览器输入/5次显式重连/接管/暂存文件功能通过；一次浏览器状态超时经手动Refresh恢复，临时转发后续端口重绑定原因未定。默认`/bin/sh`方向键、长稳、网络专项、Claude登录、物理重启仍开放。2026-11-19的alpha.7间歇超时、卡顿及keep-both部分完成历史证据保留，见[两端升级与实测](15-implementation-status.md#evidence-alpha8-upgrade-20261121)。
 
 **beta 实测计划（2026-11-18）：** [30 用户实机测试手册](30-beta-user-acceptance.md)提供当前安装的详细命令、四插件检查、账号/网络恢复体验、助手分工和反馈模板；计划不等于测试通过或已经发布beta。
 

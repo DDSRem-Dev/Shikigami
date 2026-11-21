@@ -77,8 +77,7 @@ func verifyKeyringCredential(parent context.Context, location keyringLocation, s
 	if err := command.Start(); err != nil {
 		return err
 	}
-	process := &child{command: command, done: make(chan error, 1)}
-	go func() { process.done <- command.Wait() }()
+	process := observeChild(command, childKeyring)
 	defer stopVerificationChild(process)
 	if err := requireUnlockedLogin(ctx, keyringEnvironment(clone), false); err != nil {
 		return errors.New("credential did not unlock the isolated encrypted login keyring copy; no live collection was reset or locked")

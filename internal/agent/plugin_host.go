@@ -171,12 +171,17 @@ func (c *pluginCore) authorize(ctx context.Context, scope *ppb.Scope) error {
 		if scope == nil || scope.ServerId == "" || scope.ProjectId != "" || scope.SessionId != "" || scope.MappingId != "" {
 			return rpcError(connect.CodePermissionDenied, "PLUGIN_SCOPE_DENIED")
 		}
-		snapshot, err := c.resources.store.View()
+		// Every browser frame still checks the live server record. Copy only
+		// that record rather than serializing unrelated state on the input path.
+		var record apb.ServerRecord
+		err := c.resources.store.Get("servers", scope.ServerId, &record)
+		if errors.Is(err, os.ErrNotExist) {
+			return rpcError(connect.CodeNotFound, "SERVER_NOT_FOUND")
+		}
 		if err != nil {
 			return stateError(err)
 		}
-		_, err = storedServer(snapshot, scope.ServerId)
-		return err
+		return ctx.Err()
 	}
 	if c.id == "port" {
 		return c.authorizePort(scope)

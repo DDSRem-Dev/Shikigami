@@ -4,6 +4,7 @@ import (
 	host "github.com/DDSRem-Dev/Shikigami/internal/plugin"
 	sdk "github.com/DDSRem-Dev/Shikigami/pkg/plugin"
 	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
+	erpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/extensions/extensionsconnect"
 	rpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/protocolconnect"
 	"github.com/DDSRem-Dev/Shikigami/pkg/protocol/version"
 )
@@ -11,6 +12,7 @@ import (
 // Only explicitly versioned optional methods require a capability. Core
 // Project/Session CRUD and identity/health methods remain protocol-1 baseline.
 var remoteMethodCapabilities = map[string]string{
+	erpc.BrowserServiceStartBrowserProcedure:       sdk.BrowserLaunchModeCapability,
 	rpc.ShikiDaemonTerminalStreamProcedure:         "terminal.v1",
 	rpc.ShikiDaemonTakeControlProcedure:            "terminal.v1",
 	rpc.ShikiDaemonGetSessionScreenProcedure:       "terminal.screen.v1",
@@ -55,6 +57,9 @@ func (p *remotePool) requireCapability(procedure string) error {
 		return nil
 	}
 	available := p.capabilities.Load()
+	if procedure == erpc.BrowserServiceStartBrowserProcedure && (available == nil || !available.values[sdk.BrowserCapability]) {
+		return version.MissingRemoteCapability(sdk.BrowserCapability)
+	}
 	if available == nil || !available.values[required] {
 		return version.MissingRemoteCapability(required)
 	}

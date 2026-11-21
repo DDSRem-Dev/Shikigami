@@ -13,6 +13,8 @@ const response = (data, status = 200) => ({ok: status === 200, status, json: asy
 
 async function viewer({holdStatus = false, holdClose = false} = {}) {
     const elements = new Map(), rfbs = [], sockets = [], requests = [], controls = [], statuses = [];
+    const intervals = new Map();
+    let clock = 0, nextInterval = 0;
     const element = id => {
         if (!elements.has(id)) elements.set(id, {
             textContent: '', value: '', checked: false, disabled: false, hidden: false,
@@ -45,9 +47,9 @@ async function viewer({holdStatus = false, holdClose = false} = {}) {
     };
     const context = vm.createContext({
         TestRFB: RFB, WebSocket: Socket, TextEncoder, Uint8Array, ArrayBuffer, URL, URLSearchParams, AbortController,
-        fetch, clearInterval() {}, clearTimeout() {}, document: {getElementById: element, hidden: false},
+        fetch, performance: {now: () => clock}, clearInterval(id) { intervals.delete(id); }, clearTimeout() {}, document: {getElementById: element, hidden: false},
         window: {location: {href: 'http://127.0.0.1:1234/v/session/'}, confirm: () => true,
-            addEventListener() {}, setInterval() {}, setTimeout() {}},
+            addEventListener() {}, setInterval(callback, ms) { const id = ++nextInterval; intervals.set(id, {callback, ms}); return id; }, setTimeout() {}},
     });
     vm.runInContext(source, context);
     await flush();
@@ -57,7 +59,8 @@ async function viewer({holdStatus = false, holdClose = false} = {}) {
         rfb.listeners.connect();
     };
     const click = async id => { const pending = element(id).listeners.click(); await flush(); return {pending}; };
-    return {element, rfbs, sockets, requests, controls, statuses, connect, click};
+    const tick = (ms = 1000) => { clock += ms; for (const entry of intervals.values()) if (entry.ms === 1000) entry.callback(); };
+    return {element, rfbs, sockets, requests, controls, statuses, connect, click, tick, intervals};
 }
 
 test('slow status does not block screen attachment; status failure does not revoke stream control', async () => {
@@ -274,4 +277,120 @@ test('stream revocation updates confirmed control text after HTTP already comple
     assert.equal(v.element('control-status').textContent, 'Read-only');
     assert.match(v.element('message').textContent, /confirmed.*now read-only/);
     assert.equal(v.controls.length, 1);
+});
+
+test('picture quality uses public RFB settings, preserves authority, and survives reconnect', async () => {
+    const v = await viewer(); v.connect(); await flush();
+    assert.equal(v.rfbs[0].qualityLevel, 6);
+    assert.equal(v.rfbs[0].compressionLevel, 2);
+    assert.equal(v.element('quality-mode').value, 'balanced');
+    for (const [mode, quality, compression] of [['smooth', 3, 6], ['clear', 8, 2], ['balanced', 6, 2], ['smooth', 3, 6]]) {
+        v.element('quality-mode').value = mode;
+        v.element('quality-mode').listeners.change();
+        assert.equal(v.rfbs[0].qualityLevel, quality);
+        assert.equal(v.rfbs[0].compressionLevel, compression);
+        assert.equal(v.rfbs[0].viewOnly, true);
+        assert.equal(v.rfbs[0].resizeSession, false);
+        assert.equal(v.element('quality-mode').title, v.element('quality-description').textContent.split(' Applies to this viewer;')[0]);
+    }
+    assert.match(v.element('quality-description').textContent, /Smooth/);
+    await v.click('reconnect'); v.connect(); await flush();
+    assert.equal(v.rfbs[1].qualityLevel, 3);
+    assert.equal(v.rfbs[1].compressionLevel, 6);
+    assert.equal(v.rfbs[1].viewOnly, true);
+    assert.equal(v.rfbs[1].resizeSession, false);
+    assert.equal(v.controls.length, 0);
+    assert.equal(v.requests.filter(r => r.method !== 'GET').length, 0);
+    v.element('quality-mode').value = '__proto__';
+    v.element('quality-mode').listeners.change();
+    assert.equal(v.element('quality-mode').value, 'smooth');
+    v.rfbs[1].channel.onEvent({type: 'control', attachment: 'attachment-1', instance: 'instance', revision: 'controlled', controller: true, readOnly: false});
+    v.element('resize-session').checked = true;
+    v.element('resize-session').listeners.change();
+    v.element('quality-mode').value = 'clear';
+    v.element('quality-mode').listeners.change();
+    assert.equal(v.rfbs[1].viewOnly, false);
+    assert.equal(v.rfbs[1].resizeSession, true);
+    assert.equal(v.element('control-status').textContent, 'Controller');
+});
+
+test('transport display counts binary screen bytes and only the current local send buffer', async () => {
+    const v = await viewer(); v.connect(); await flush();
+    v.sockets[0].onmessage({data: new ArrayBuffer(2048)});
+    v.sockets[0].bufferedAmount = 1024;
+    v.tick();
+    assert.equal(v.element('transport-status').textContent, 'Received screen data: 2.0 KiB/s · Local send buffer: 1.0 KiB');
+    v.tick();
+    assert.match(v.element('transport-status').textContent, /0.0 KiB\/s/);
+    const old = [...v.intervals.values()].find(entry => entry.ms === 1000).callback;
+    await v.click('reconnect'); v.connect(); await flush();
+    assert.equal([...v.intervals.values()].filter(entry => entry.ms === 1000).length, 1);
+    v.sockets[1].onmessage({data: new ArrayBuffer(512)});
+    old();
+    assert.equal(v.element('transport-status').textContent, 'Screen transport inactive.');
+    v.tick(2000);
+    assert.equal(v.element('transport-status').textContent, 'Received screen data: 0.3 KiB/s · Local send buffer: 0.0 KiB');
+    v.rfbs[1].channel.onEvent({type: 'error', message: 'Screen ended'});
+    assert.equal([...v.intervals.values()].filter(entry => entry.ms === 1000).length, 0);
+    assert.equal(v.element('transport-status').textContent, 'Screen transport inactive.');
+});
+
+test('remote status keeps long versions and every warning in Details without expanding its summary', async () => {
+    const v = await viewer({holdStatus: true}); v.connect(); await flush();
+    const version = 'Chrome 150.0.1\nDependencies: ' + 'runtime-version; '.repeat(100);
+    const warnings = ['First warning: ' + 'long details '.repeat(150), 'Second warning remains visible in Details'];
+    v.statuses[0].resolve(response({state: 'running', instance_id: 'instance', attachments: 1, chrome_version: version, warnings})); await flush();
+    const summary = v.element('remote-status').textContent;
+    assert.match(summary, /State: running.*Attachments: 1.*Chrome: Chrome 150.0.1/);
+    assert.match(summary, /Warnings: 2 \(see Details\)/);
+    assert.ok(summary.length < 200, summary);
+    assert.ok(v.element('status-details-content').textContent.includes(version));
+    for (const warning of warnings) assert.ok(v.element('status-details-content').textContent.includes(warning));
+    assert.equal(v.rfbs[0].viewOnly, true);
+});
+
+test('remote mode stays unknown when older servers omit it or return an unrecognized value', async () => {
+    for (const fields of [{}, {mode: ''}, {mode: 'future-mode'}, {mode: '__proto__'}]) {
+        const v = await viewer({holdStatus: true}); v.connect(); await flush();
+        v.statuses[0].resolve(response({state: 'running', instance_id: 'instance', ...fields})); await flush();
+        assert.match(v.element('remote-status').textContent, /Mode: unknown/);
+        assert.match(v.element('status-details-content').textContent, /Mode: unknown/);
+        assert.doesNotMatch(v.element('remote-status').textContent, /Mode: Browsing|Mode: Diagnostics/);
+    }
+});
+
+test('remote mode reports Browsing or Diagnostics only from the current successful status', async () => {
+    const v = await viewer({holdStatus: true}); v.connect(); await flush();
+    v.statuses[0].resolve(response({state: 'running', instance_id: 'instance', mode: 'browse'})); await flush();
+    assert.match(v.element('remote-status').textContent, /Mode: Browsing/);
+    assert.match(v.element('status-details-content').textContent, /Mode: Browsing/);
+    const refresh = await v.click('refresh-status');
+    v.statuses[1].resolve(response({state: 'running', instance_id: 'instance', mode: 'diagnostic'})); await refresh.pending;
+    assert.match(v.element('remote-status').textContent, /Mode: Diagnostics/);
+    assert.match(v.element('status-details-content').textContent, /Mode: Diagnostics/);
+    const failed = await v.click('refresh-status');
+    v.statuses[2].resolve(response({message: 'Status unavailable'}, 503)); await failed.pending;
+    assert.match(v.element('remote-status').textContent, /status: unknown/);
+    assert.doesNotMatch(v.element('remote-status').textContent, /Mode: Diagnostics/);
+    assert.match(v.element('status-details-label').textContent, /Previous.*latest refresh failed/);
+    assert.match(v.element('status-details-content').textContent, /Mode: Diagnostics/);
+});
+
+test('failed and restart-required status stays visible; refresh failure never reports the old snapshot as ready', async () => {
+    const v = await viewer({holdStatus: true}); v.connect(); await flush();
+    const reason = 'KEYRING_LOCKED: ' + 'explanation '.repeat(100);
+    v.statuses[0].resolve(response({state: 'failed', instance_id: 'instance', restart_required: true, reason, warnings: ['Unlock is required']})); await flush();
+    assert.match(v.element('remote-status').textContent, /State: failed/);
+    assert.match(v.element('remote-status').textContent, /Restart required/);
+    assert.match(v.element('remote-status').textContent, /KEYRING_LOCKED/);
+    assert.match(v.element('remote-status').textContent, /Warnings: 1/);
+    assert.ok(v.element('status-details-content').textContent.includes(reason));
+    const snapshot = v.element('status-details-content').textContent;
+    const refresh = await v.click('refresh-status');
+    v.statuses[1].resolve(response({message: 'Status query timed out'}, 504)); await refresh.pending;
+    assert.match(v.element('remote-status').textContent, /status: unknown.*timed out/);
+    assert.match(v.element('status-details-label').textContent, /Previous.*latest refresh failed/);
+    assert.equal(v.element('status-details-content').textContent, snapshot);
+    assert.equal(v.rfbs[0].viewOnly, true);
+    assert.equal(v.element('control-status').textContent, 'Read-only');
 });

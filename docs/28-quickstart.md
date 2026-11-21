@@ -2,7 +2,7 @@
 
 用户要求（2026-11-16）：普通用户在 VPS 和 Mac 各执行一条命令，由工具完成依赖、服务、登录引导和插件配置，不再手工下载公钥、拼接 bundle/pin、编辑 YAML 或串联管理命令。
 
-**alpha.8已发布并完成公开资产独立验签：** 本页下载命令现指向alpha.8，作为下一轮修复测试目标。发行与验证结果见[15](15-implementation-status.md#evidence-public-alpha8-release-20261120)，修复内容见[alpha.8说明](releases/v0.0.1-alpha.8.md)。当前用户两端仍为alpha.7，升级后必须另行验证同步默认预算、端口后端恢复及浏览器控制；已有alpha.7功能实测不记为alpha.8通过。
+**alpha.8已发布并完成公开资产独立验签：** 本页下载命令现指向alpha.8，作为下一轮修复测试目标。发行与验证结果见[15](15-implementation-status.md#evidence-public-alpha8-release-20261120)，修复内容见[alpha.8说明](releases/v0.0.1-alpha.8.md)。用户VPS与Mac已于2026-11-21升级正式alpha.8，见[两端升级与实测](15-implementation-status.md#evidence-alpha8-upgrade-20261121)。默认预算下6次resolve（0.594–4.938秒）、端口目标拒绝恢复、浏览器输入/5次显式重连/接管/暂存文件功能通过；浏览器一次状态超时经手动Refresh恢复，临时转发后续端口重绑定原因未定。默认`/bin/sh`方向键尚未修复，长稳/网络专项/Claude登录/物理重启仍开放。
 
 **版本边界：本页使用 v0.0.1-alpha.8 修复入口，延续 alpha.4–alpha.7 的安装与连接修补，新增同步复合预算/副本保护、端口目标拒绝隔离及浏览器控制竞态修补。发行状态与验证见[15](15-implementation-status.md)。alpha.3 不含 `shiki-install quickstart` 或 `shiki setup`，历史归档不改写；真实完整双机首装、账号授权和物理重启仍按外部门槛登记。**
 
@@ -87,7 +87,7 @@ shiki --server my-vps browser status work
 
 systemd/LaunchAgent 存活、节点 online 或 doctor 输出均不单独代表应用 ready。Claude 未授权时先交付连接凭据解除“需要浏览器登录，却必须先登录才能连接”的引导循环，状态仍为 pending。
 
-本地隔离测试不访问真实账号，不安装宿主包，不修改用户系统服务。公开发行和资产验证见[15](15-implementation-status.md)；历史 alpha.6 已使用公开签名包完成现有 VPS/Mac 升级；alpha.7部署与交互验证以[29](29-alpha6-installation-followup.md)的实际记录为准。alpha.8本次只完成公开发行和资产验证，用户两端升级与现场复验尚未执行。首次完整向导、官方 Claude 登录、物理重启及本批实机回滚仍单列外部门槛。11/27 的签名、普通 UID、权限、revision、取消和就绪要求保持，细分命令继续用于高级配置和故障处理。
+本地隔离测试不访问真实账号，不安装宿主包，不修改用户系统服务。公开发行和资产验证见[15](15-implementation-status.md)；历史 alpha.6 已使用公开签名包完成现有 VPS/Mac 升级；alpha.7部署与交互验证以[29](29-alpha6-installation-followup.md)的实际记录为准。alpha.8已于2026-11-21完成两端正式升级及部分现场功能复验，范围和遗留问题见[两端升级与实测](15-implementation-status.md#evidence-alpha8-upgrade-20261121)；不是全部测试通过。首次完整向导、官方 Claude 登录、物理重启及本批实机回滚仍单列外部门槛。11/27 的签名、普通 UID、权限、revision、取消和就绪要求保持，细分命令继续用于高级配置和故障处理。
 
 ## alpha.6 已发布的体验改进
 

@@ -236,10 +236,13 @@ func TestVerboseExecutionDoesNotConfuseTruncatedLogsWithFailure(t *testing.T) {
 
 func TestBrowserDependenciesInstallNativeGTK3Bridge(t *testing.T) {
 	for _, component := range []string{"region", "browser", "all"} {
-		bridge := 0
+		bridge, xprops := 0, 0
 		for _, pkg := range extensionPackages(ExtensionOptions{Component: component}) {
 			if pkg == "ibus" || pkg == "ibus-daemon" || pkg == "ibus-gtk3" {
 				t.Fatal("browser support must not install a second IME daemon", pkg)
+			}
+			if pkg == "x11-utils" {
+				xprops++
 			}
 			if pkg == "fcitx5-frontend-gtk3" {
 				bridge++
@@ -248,6 +251,9 @@ func TestBrowserDependenciesInstallNativeGTK3Bridge(t *testing.T) {
 		expected := 1
 		if component == "region" {
 			expected = 0
+		}
+		if xprops != expected {
+			t.Fatalf("%s native X11 readiness package count = %d, want %d", component, xprops, expected)
 		}
 		if bridge != expected {
 			t.Fatalf("%s native GTK3 bridge count = %d, want %d", component, bridge, expected)

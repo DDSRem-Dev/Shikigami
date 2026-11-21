@@ -136,7 +136,7 @@ func (s *Service) capabilities() []string {
 					capability = sdk.BrowserCapability
 				}
 				for _, offered := range status.Protocol.GetCapabilities() {
-					if (offered == capability && capability != "") || (status.PluginId == "port" && (offered == sdk.PortCheckCapability || offered == sdk.PortAutoCapability)) {
+					if (offered == capability && capability != "") || (status.PluginId == "port" && (offered == sdk.PortCheckCapability || offered == sdk.PortAutoCapability)) || (status.PluginId == "browser" && offered == sdk.BrowserLaunchModeCapability) {
 						available[offered] = true
 					}
 				}

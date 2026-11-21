@@ -146,7 +146,7 @@ func (r *Resources) connectionPath(ctx context.Context, route, address string) s
 }
 
 func remoteProtocolOffer() *pb.ProtocolOffer {
-	return &pb.ProtocolOffer{Major: 1, Capabilities: []string{"terminal.v1", "terminal.screen.v1", "terminal.logs.v1", "session.cleanup.v1", "project.directories.v1", "session-config-snapshot.v1", "sync.revision.v1", "port.tcp-half-close.v1", "port.authorization.v1", "port.auto-forward.v1", "plugin.manage.v1", "stats.v1", "region.host.v1", "browser.remote.v1"}}
+	return &pb.ProtocolOffer{Major: 1, Capabilities: []string{"terminal.v1", "terminal.screen.v1", "terminal.logs.v1", "session.cleanup.v1", "project.directories.v1", "session-config-snapshot.v1", "sync.revision.v1", "port.tcp-half-close.v1", "port.authorization.v1", "port.auto-forward.v1", "plugin.manage.v1", "stats.v1", "region.host.v1", "browser.remote.v1", "browser.launch-mode.v1"}}
 }
 
 // Identity verification never depends on an unrelated business permission for

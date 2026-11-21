@@ -8,6 +8,7 @@ import (
 
 const RegionCapability = "region.host.v1"
 const BrowserCapability = "browser.remote.v1"
+const BrowserLaunchModeCapability = "browser.launch-mode.v1"
 const BrowserViewerCapability = "browser.viewer.v1"
 
 // ExtensionLifecycle is optional so existing plugin hosts and fixtures retain

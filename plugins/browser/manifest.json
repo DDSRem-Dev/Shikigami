@@ -4,7 +4,7 @@
   "version": "${BUILD_VERSION}",
   "display_name": "远程浏览器",
   "description": "持久 Chrome profile、服务端中日文输入法、单控制者远程查看和显式暂存文件传输",
-  "capabilities": ["core.scope.v1", "browser.remote.v1", "browser.viewer.v1"],
+  "capabilities": ["core.scope.v1", "browser.remote.v1", "browser.viewer.v1", "browser.launch-mode.v1"],
   "sides": ["client", "server"],
   "binary": "shiki-plugin-browser",
   "binary_flags": ["--side=${side}"],

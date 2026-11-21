@@ -37,7 +37,7 @@ func (a *app) browserCommands() *cobra.Command {
 	}}
 	root.AddCommand(status)
 	for _, action := range []string{"start", "stop"} {
-		var yes, replaceRunning bool
+		var yes, replaceRunning, diagnostics bool
 		command := &cobra.Command{Use: action + " <profile-id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateCLIProfileID(args[0]); err != nil {
 				return err
@@ -45,12 +45,17 @@ func (a *app) browserCommands() *cobra.Command {
 			label := "Stop remote Chrome profile " + safeText(args[0]) + "; profile data remains, but unsaved pages may be lost"
 			if action == "start" {
 				label = "Start remote Chrome profile " + safeText(args[0]) + " with its saved regional settings"
+				if diagnostics {
+					label += " in diagnostic mode (native browser diagnostics enabled; some websites may behave differently)"
+				} else {
+					label += " in normal browsing mode"
+				}
 				if replaceRunning {
-					label += "; stop any other running profile first (unsaved pages may be lost)"
+					label += "; stop any other running profile or restart this profile in the selected mode (unsaved pages may be lost)"
 				}
 			}
 			return a.withConfirmedExtensionServer(cmd.Context(), label, yes, func(c *client.Client, serverID string) error {
-				request := &epb.BrowserActionRequest{ServerId: serverID, ProfileId: args[0], RequestId: a.id(), Confirm: true, ReplaceRunning: replaceRunning}
+				request := &epb.BrowserActionRequest{ServerId: serverID, ProfileId: args[0], RequestId: a.id(), Confirm: true, ReplaceRunning: replaceRunning, Diagnostics: diagnostics}
 				var result *epb.BrowserStatus
 				var err error
 				if action == "start" {
@@ -71,8 +76,9 @@ func (a *app) browserCommands() *cobra.Command {
 			})
 		}}
 		if action == "start" {
-			command.Short = "Start one profile; never silently replace an existing managed instance"
-			command.Flags().BoolVar(&replaceRunning, "replace-running", false, "Explicitly permit stopping another profile before starting this one")
+			command.Short = "Start normal Chrome browsing; diagnostics require explicit opt-in"
+			command.Flags().BoolVar(&diagnostics, "diagnostics", false, "Enable native browser diagnostics; some websites may behave differently; changing a running mode requires --replace-running")
+			command.Flags().BoolVar(&replaceRunning, "replace-running", false, "Explicitly permit stopping another profile or restarting this profile in a different mode")
 		} else {
 			command.Short = "Stop the specified managed instance while retaining its private profile data"
 		}

@@ -4,6 +4,8 @@
 
 地区/远程浏览器扩展的独立 schema 来源为 `proto/extensions.proto`，行为与权限基线见[27](27-region-browser-plugins.md)。RegionService 和 BrowserService 在远端/agent 代理使用 Connect，在宿主→插件使用原生 gRPC；BrowserLocalService 只在本机开放。所有 owner/grant 字段由认证宿主覆盖，不能接受前端自报授权；明确 scope、revision/request_id、流撤销和插件 ready 准入不变。
 
+浏览器启动模式使用 `BrowserActionRequest.diagnostics`（字段6，false为普通浏览，true为原生诊断）与 `BrowserStatus.mode`（字段12，`browse`/`diagnostic`，报告实际运行实例）。`browser.launch-mode.v1` 是启动模式语义能力；所有新版 StartBrowser（包括默认普通浏览）必须通过本地agent、远端daemon和实际worker的能力检查，不能让旧组件忽略新增字段后按旧方式启动。daemon仅在ready浏览器worker协商该能力时广告它，并在实际分发时复核worker代次能力；状态、停止、查看等已有方法仍使用 `browser.remote.v1`。模式切换及旧运行实例的兼容约束见27。
+
 ## 协议行为
 
 - 单用户、多设备；user 字段仅展示或过滤同一配置用户，不能用于身份切换。所有 RPC（含 stream）必须认证授权。

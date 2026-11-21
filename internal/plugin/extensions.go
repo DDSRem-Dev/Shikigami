@@ -135,8 +135,17 @@ func (d *DaemonDataPlane) DeleteBrowserProfile(ctx context.Context, request *epb
 	return response, connection.RebuildError(err)
 }
 func (d *DaemonDataPlane) StartBrowser(ctx context.Context, request *epb.BrowserActionRequest) (response *epb.BrowserStatus, err error) {
-	err = d.Supervisor.BrowserCall(ctx, func(call context.Context, client sdk.BrowserClient) error {
-		response, err = client.StartBrowser(call, request)
+	if d.Supervisor == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, "browser plugin is unavailable")
+	}
+	// Check the actual worker generation at dispatch, not only the daemon's
+	// earlier capability advertisement. Old workers must never ignore the mode.
+	err = d.Supervisor.Call(ctx, "browser", sdk.BrowserLaunchModeCapability, func(call context.Context, lifecycle sdk.Lifecycle) error {
+		extensions, ok := lifecycle.(sdk.ExtensionLifecycle)
+		if !ok || extensions.Browser() == nil {
+			return connect.NewError(connect.CodeFailedPrecondition, "browser service is unavailable")
+		}
+		response, err = extensions.Browser().StartBrowser(call, request)
 		return err
 	})
 	return response, connection.RebuildError(err)

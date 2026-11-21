@@ -33,7 +33,7 @@ const chromePolicyPath = "/etc/opt/chrome/policies/managed/shikigami-browser.jso
 const extensionReceiptPath = "/var/lib/shikigami-install/extensions.json"
 
 var regionPackages = []string{"sudo", "locales", "tzdata"}
-var browserPackages = []string{"ca-certificates", "gnupg", "tigervnc-standalone-server", "tigervnc-common", "xauth", "x11-xkb-utils", "dbus-user-session", "dbus-x11", "openbox", "fcitx5", "fcitx5-chinese-addons", "fcitx5-mozc", "fcitx5-frontend-gtk3", "fonts-noto-cjk", "gnome-keyring", "libsecret-tools", "libsecret-1-0", "libglib2.0-bin", "locales"}
+var browserPackages = []string{"ca-certificates", "gnupg", "tigervnc-standalone-server", "tigervnc-common", "xauth", "x11-xkb-utils", "x11-utils", "dbus-user-session", "dbus-x11", "openbox", "fcitx5", "fcitx5-chinese-addons", "fcitx5-mozc", "fcitx5-frontend-gtk3", "fonts-noto-cjk", "gnome-keyring", "libsecret-tools", "libsecret-1-0", "libglib2.0-bin", "locales"}
 var browserUnitName = regexp.MustCompile(`^shiki-browser-[0-9a-f]{12}\.service$`)
 
 type extensionReceipt struct {

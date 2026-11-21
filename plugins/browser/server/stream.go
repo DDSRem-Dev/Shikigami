@@ -25,6 +25,7 @@ type attachment struct {
 	connection net.Conn
 	cancel     context.CancelFunc
 	out        chan *epb.BrowserFrame
+	controlOut chan *epb.BrowserFrame
 }
 
 func (worker *Worker) detachAllLocked() {
@@ -40,7 +41,7 @@ func (worker *Worker) broadcastControlLocked() {
 	for _, viewer := range worker.attachments {
 		frame := &epb.BrowserFrame{Kind: epb.BrowserFrame_CONTROL, ProfileId: viewer.profile, InstanceId: viewer.instance, AttachmentId: viewer.id, ControlRevision: worker.controlRevision, ControllerId: worker.controller, CanControl: viewer.canControl && !viewer.readOnly, ReadOnly: worker.controller != viewer.id, Reason: "controller changed; no automatic promotion"}
 		select {
-		case viewer.out <- frame:
+		case viewer.controlOut <- frame:
 		default:
 			viewer.cancel()
 			viewer.connection.Close()
@@ -185,11 +186,10 @@ func (worker *Worker) BrowserStream(parent context.Context, stream sdk.BrowserSe
 		worker.mu.Unlock()
 		return err
 	}
-	viewer := &attachment{id: browserruntime.NewID(), profile: current.ProfileID, instance: current.InstanceID, owner: open.OwnerId, readOnly: open.ReadOnly || !open.CanControl, canControl: open.CanControl, connection: connection, cancel: cancel, out: make(chan *epb.BrowserFrame, 16)}
+	viewer := &attachment{id: browserruntime.NewID(), profile: current.ProfileID, instance: current.InstanceID, owner: open.OwnerId, readOnly: open.ReadOnly || !open.CanControl, canControl: open.CanControl, connection: connection, cancel: cancel, out: make(chan *epb.BrowserFrame, 16), controlOut: make(chan *epb.BrowserFrame, 8)}
 	worker.control.Lock()
 	worker.attachments[viewer.id] = viewer
 	ready := &epb.BrowserFrame{Kind: epb.BrowserFrame_READY, ProfileId: viewer.profile, InstanceId: viewer.instance, AttachmentId: viewer.id, ReadOnly: viewer.readOnly, CanControl: viewer.canControl && !viewer.readOnly, ControlRevision: worker.controlRevision, ControllerId: worker.controller}
-	viewer.out <- ready
 	worker.control.Unlock()
 	worker.mu.Unlock()
 	stop := context.AfterFunc(ctx, func() { connection.Close() })
@@ -206,16 +206,21 @@ func (worker *Worker) BrowserStream(parent context.Context, stream sdk.BrowserSe
 	}()
 	outputDone := make(chan error, 1)
 	go func() {
+		// READY must precede both RFB bytes and any concurrent takeover. After
+		// it, control notifications can bypass queued image data, but never
+		// reorder or discard the stateful RFB byte stream itself.
+		if err := stream.Send(ready); err != nil {
+			outputDone <- err
+			return
+		}
 		for {
-			select {
-			case <-ctx.Done():
-				outputDone <- ctx.Err()
+			frame, err := viewer.nextOutput(ctx)
+			if err == nil {
+				err = stream.Send(frame)
+			}
+			if err != nil {
+				outputDone <- err
 				return
-			case frame := <-viewer.out:
-				if err := stream.Send(frame); err != nil {
-					outputDone <- err
-					return
-				}
 			}
 		}
 	}()
@@ -301,17 +306,48 @@ func (worker *Worker) forwardInput(ctx context.Context, viewer *attachment, read
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		worker.control.Lock()
-		allowed := ctx.Err() == nil && (!mutating || (!viewer.readOnly && viewer.canControl && worker.controller == viewer.id && reader.messageRevision == worker.controlRevision))
-		if allowed {
+		if !mutating {
+			// Negotiation and update requests affect this viewer's RFB socket,
+			// not the shared desktop. A stalled spectator must not block input
+			// or takeover for every other attachment.
 			err = writeMessage(viewer.connection, message)
+		} else {
+			// Keep authorization and delivery linearized with takeover. In
+			// particular, never release this lock before sending old-owner input.
+			worker.control.Lock()
+			allowed := ctx.Err() == nil && !viewer.readOnly && viewer.canControl && worker.controller == viewer.id && reader.messageRevision == worker.controlRevision
+			if allowed {
+				err = writeMessage(viewer.connection, message)
+			}
+			worker.control.Unlock()
 		}
-		worker.control.Unlock()
 		if err != nil {
 			return err
 		}
 	}
 }
+
+// nextOutput prioritizes bounded control metadata at send boundaries. It cannot
+// preempt a transport Send already in progress; slow transports still cancel.
+func (viewer *attachment) nextOutput(ctx context.Context) (*epb.BrowserFrame, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	select {
+	case frame := <-viewer.controlOut:
+		return frame, nil
+	default:
+	}
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case frame := <-viewer.controlOut:
+		return frame, nil
+	case frame := <-viewer.out:
+		return frame, nil
+	}
+}
+
 func writeMessage(connection net.Conn, data []byte) error {
 	if err := connection.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
 		return err

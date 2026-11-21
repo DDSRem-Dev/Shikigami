@@ -24,8 +24,10 @@ label { display: inline-flex; align-items: center; gap: .4rem; }
 #message { padding: .55rem; border: 1px solid #e8ac65; background: #543516; overflow-wrap: anywhere; }
 #message.info { border-color: #76a7d7; background: #213b57; }
 .hint { color: #b4c0d4; font-size: .85rem; }
+#transport-status { font-variant-numeric: tabular-nums; }
+#status-details-content { white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 .7rem .7rem; font: inherit; font-size: .85rem; }
 .panels { display: flex; gap: .7rem; flex-wrap: wrap; }
-details { flex: 1 1 26rem; border: 1px solid #4c566a; border-radius: .25rem; margin: .4rem 0; }
+details { flex: 1 1 20rem; border: 1px solid #4c566a; border-radius: .25rem; margin: .4rem 0; }
 summary { padding: .45rem; cursor: pointer; }
 .panel-content { padding: 0 .7rem .7rem; }
 .panel-content > label { display: block; margin-top: .6rem; }

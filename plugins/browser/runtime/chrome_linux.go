@@ -16,7 +16,10 @@ import (
 )
 
 func chromeArguments(spec Spec) []string {
-	arguments := []string{"--user-data-dir=" + filepath.Join(spec.ProfileDir, "chrome"), "--no-first-run", "--no-default-browser-check", "--disable-sync", "--password-store=gnome-libsecret", "--ozone-platform=x11", "--gtk-version=3", "--start-maximized", "--remote-debugging-pipe"}
+	arguments := []string{"--user-data-dir=" + filepath.Join(spec.ProfileDir, "chrome"), "--no-first-run", "--no-default-browser-check", "--disable-sync", "--password-store=gnome-libsecret", "--ozone-platform=x11", "--gtk-version=3", "--start-maximized"}
+	if spec.BrowserMode() == ModeDiagnostic {
+		arguments = append(arguments, "--remote-debugging-pipe")
+	}
 	if spec.Region != nil && len(spec.Region.Languages) > 0 {
 		arguments = append(arguments, "--lang="+strings.ReplaceAll(spec.Region.Languages[0], "_", "-"))
 	}

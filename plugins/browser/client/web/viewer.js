@@ -4,13 +4,41 @@ const byId = (id) => document.getElementById(id);
 const protocol = "shiki-browser-rfb-v1";
 const clipboardLimit = 64 * 1024;
 const encoder = new TextEncoder();
+const qualityModes = {
+    smooth: {quality: 3, compression: 6, description: "Smooth: lower image quality and stronger compression to reduce traffic."},
+    balanced: {quality: 6, compression: 2, description: "Balanced: the original image quality and compression settings."},
+    clear: {quality: 8, compression: 2, description: "Clear: higher image quality, which may require more bandwidth."},
+};
 const state = {
     session: null, csrf: "", rfb: null, channel: null, generation: 0,
     screenReady: false, attached: false, controller: false, canControl: false,
     attachment: "", instance: "", revision: "", controllerId: "",
     pendingControl: false, connecting: false, closed: false, transferring: false,
     statusRequest: null, controlRequest: null, statusTimer: null, screenClosing: null,
+    qualityMode: "balanced", transportTimer: null,
 };
+
+function applyQuality() {
+    const mode = qualityModes[state.qualityMode];
+    byId("quality-mode").value = state.qualityMode;
+    byId("quality-mode").title = mode.description;
+    byId("quality-description").textContent = mode.description + " Applies to this viewer; remote resolution and control permissions are unchanged.";
+    if (state.rfb) {
+        state.rfb.qualityLevel = mode.quality;
+        state.rfb.compressionLevel = mode.compression;
+    }
+}
+
+function updateTransport(channel) {
+    if (state.channel !== channel || state.closed) return;
+    const now = performance.now();
+    const elapsed = now - channel.sampleTime;
+    if (elapsed <= 0) return;
+    const rate = (channel.receivedBytes - channel.sampleBytes) * 1000 / elapsed / 1024;
+    byId("transport-status").textContent = `Received screen data: ${rate.toFixed(1)} KiB/s · Local send buffer: ${(channel.socket.bufferedAmount / 1024).toFixed(1)} KiB`;
+    channel.sampleBytes = channel.receivedBytes;
+    channel.sampleTime = now;
+}
 
 function showMessage(message, info = false) {
     const element = byId("message");
@@ -62,6 +90,7 @@ function renderAuthority() {
     byId("connection-status").textContent = state.connecting ? "Connecting" : state.screenReady ? "Connected" : "Disconnected";
     byId("refresh-status").disabled = state.closed;
     byId("close-viewer").disabled = state.closed;
+    byId("quality-mode").disabled = state.closed;
     byId("read-clipboard").disabled = state.closed;
     byId("copy-clipboard").disabled = state.closed || !byId("remote-clipboard").value;
     byId("local-clipboard").disabled = state.closed;
@@ -72,6 +101,9 @@ function detachScreen() {
     // Invalidate callbacks before closing the old channel. A delayed HTTP
     // takeover/status response must not affect a replacement attachment.
     ++state.generation;
+    clearInterval(state.transportTimer);
+    state.transportTimer = null;
+    byId("transport-status").textContent = "Screen transport inactive.";
     const statusRequest = state.statusRequest, controlRequest = state.controlRequest;
     state.statusRequest = state.controlRequest = null;
     statusRequest?.abort.abort();
@@ -110,6 +142,8 @@ class ViewerChannel {
         this.revision = "";
         this.readyState = WebSocket.CONNECTING;
         this.onEvent = onEvent;
+        this.receivedBytes = this.sampleBytes = 0;
+        this.sampleTime = performance.now();
         this.closed = new Promise((resolve) => { this.resolveClosed = resolve; });
         this.socket = new WebSocket(url, [protocol, `csrf.${csrf}`]);
         this.socket.binaryType = "arraybuffer";
@@ -136,6 +170,7 @@ class ViewerChannel {
                 this.fail("The remote screen exceeded the viewer's bounded frame limit.");
                 return;
             }
+            this.receivedBytes += event.data.byteLength;
             this.onmessage?.(event);
         };
         this.socket.onerror = (event) => {
@@ -236,6 +271,8 @@ async function connectScreen() {
         state.channel = channel;
         const rfb = new RFB(byId("screen"), channel, {shared: true});
         state.rfb = rfb;
+        applyQuality();
+        state.transportTimer = window.setInterval(() => updateTransport(channel), 1000);
         rfb.viewOnly = true;
         rfb.scaleViewport = true;
         rfb.resizeSession = false;
@@ -283,6 +320,33 @@ async function connectScreen() {
     }
 }
 
+function statusPreview(value, limit) {
+    const text = String(value).replace(/\s+/g, " ").trim();
+    return text.length > limit ? text.slice(0, limit) + "… (see Details)" : text;
+}
+
+function renderRemoteStatus(status) {
+    const remoteState = status.state || "unknown";
+    const mode = status.mode === "browse" ? "Browsing" : status.mode === "diagnostic" ? "Diagnostics" : "unknown";
+    const chrome = status.chrome_version || "unknown";
+    const warnings = Array.isArray(status.warnings) ? status.warnings : [];
+    const summary = [`State: ${statusPreview(remoteState, 40)}`, `Mode: ${mode}`, `Attachments: ${status.attachments || 0}`, `Chrome: ${statusPreview(chrome, 48)}`];
+    const details = [`State: ${remoteState}`, `Mode: ${mode}`, `Attachments: ${status.attachments || 0}`, `Chrome: ${chrome}`];
+    if (status.restart_required) {
+        summary.push("Restart required (not automatic)");
+        details.push("Configuration changed: remote restart required (not automatic)");
+    }
+    if (status.reason) {
+        summary.push(`Reason: ${statusPreview(status.reason, 160)}`);
+        details.push(`Reason: ${status.reason}`);
+    }
+    summary.push(`Warnings: ${warnings.length}${warnings.length ? " (see Details)" : ""}`);
+    details.push(`Warnings: ${warnings.length}`, ...warnings.map((warning, index) => `${index + 1}. ${warning}`));
+    byId("remote-status").textContent = summary.join(" · ");
+    byId("status-details-label").textContent = "Remote status Details";
+    byId("status-details-content").textContent = details.join("\n");
+}
+
 async function refreshStatus() {
     if (!state.session || state.closed || state.statusRequest) return;
     const generation = state.generation;
@@ -291,11 +355,7 @@ async function refreshStatus() {
     try {
         const status = await api("status", {signal: request.abort.signal});
         if (state.closed || generation !== state.generation || state.statusRequest !== request) return;
-        const details = [`State: ${status.state || "unknown"}`, `Attachments: ${status.attachments || 0}`, `Chrome: ${status.chrome_version || "unknown"}`];
-        if (status.restart_required) details.push("Configuration changed: remote restart required (not automatic)");
-        if (status.reason) details.push(`Reason: ${status.reason}`);
-        if (status.warnings?.length) details.push(`Warnings: ${status.warnings.join("; ")}`);
-        byId("remote-status").textContent = details.join(" · ");
+        renderRemoteStatus(status);
         // Stream control updates, not a potentially stale HTTP snapshot, govern
         // input. A status request must never silently grant this page control.
         if (!state.attached) state.revision = status.control_revision || "";
@@ -304,7 +364,10 @@ async function refreshStatus() {
             showMessage("The managed browser instance changed. Reconnect the screen explicitly; no input will be replayed.");
         }
     } catch (error) {
-        if (!state.closed && generation === state.generation && state.statusRequest === request) byId("remote-status").textContent = `Remote browser status: unknown. ${error.message}`;
+        if (!state.closed && generation === state.generation && state.statusRequest === request) {
+            byId("remote-status").textContent = `Remote browser status: unknown. ${error.message}`;
+            byId("status-details-label").textContent = "Previous status Details — latest refresh failed";
+        }
     } finally { if (state.statusRequest === request) state.statusRequest = null; }
 }
 
@@ -320,6 +383,12 @@ function controlResultMessage(request) {
 }
 
 byId("refresh-status").addEventListener("click", refreshStatus);
+byId("quality-mode").addEventListener("change", () => {
+    if (state.closed) return;
+    const selected = byId("quality-mode").value;
+    if (Object.hasOwn(qualityModes, selected)) state.qualityMode = selected;
+    applyQuality();
+});
 byId("reconnect").addEventListener("click", connectScreen);
 byId("resize-session").addEventListener("change", renderAuthority);
 byId("take-control").addEventListener("click", async () => {
@@ -502,6 +571,7 @@ window.addEventListener("unhandledrejection", () => {
         if (!/^[A-Za-z0-9_-]{43}$/.test(session.csrf) || !Number.isSafeInteger(session.maxFileBytes) || session.maxFileBytes < 1) throw new Error("Invalid local viewer session response");
         state.session = session;
         state.csrf = session.csrf;
+        applyQuality();
         byId("scope").textContent = `Server: ${session.server} · Profile: ${session.profile}`;
         byId("file-limit").textContent = `Configured file limit: ${session.maxFileBytes} bytes per file; one active transfer per viewer. Downloads are temporarily spooled in the private client plugin state and deleted when the request finishes.`;
         // Status is useful diagnostics, not a prerequisite for attaching.

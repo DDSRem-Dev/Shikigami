@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -152,11 +153,20 @@ func TestBrowserProfileAuthorizationAndPersistence(t *testing.T) {
 	if _, err = browser.ListBrowserProfiles(ctx, &epb.BrowserScope{}); connect.CodeOf(err) != connect.CodeFailedPrecondition {
 		t.Fatalf("disabled browser did not fail closed: %v", err)
 	}
+	offer := &pb.ProtocolOffer{Major: 1, Capabilities: []string{sdk.BrowserCapability, sdk.BrowserLaunchModeCapability}}
+	beforeEnable, err := core.NegotiateProtocol(ctx, offer)
+	if err != nil || slices.Contains(beforeEnable.GetCapabilities(), sdk.BrowserLaunchModeCapability) {
+		t.Fatal("disabled worker advertised mode support", beforeEnable, err)
+	}
 	status := daemonPluginStatus(t, ctx, core, "browser")
 	if _, err = core.ManagePlugin(ctx, &pb.ManagePluginRequest{PluginId: "browser", Action: pb.ManagePluginRequest_ENABLE, ExpectedRevision: status.Revision, RequestId: "enable-browser"}); err != nil {
 		t.Fatal(err)
 	}
 	awaitDaemonPlugin(t, ctx, core, "browser", "ready")
+	afterEnable, err := core.NegotiateProtocol(ctx, offer)
+	if err != nil || !slices.Contains(afterEnable.GetCapabilities(), sdk.BrowserLaunchModeCapability) {
+		t.Fatal("ready mode-aware worker capability missing", afterEnable, err)
+	}
 	create := &epb.PutBrowserProfileRequest{Profile: &epb.BrowserProfile{Name: "work", Region: &epb.RegionConfig{Country: "JP", Timezone: "Asia/Tokyo", Locale: "ja_JP.UTF-8", Languages: []string{"ja-JP"}}}, RequestId: "create-work"}
 	profile, err := browser.PutBrowserProfile(ctx, create)
 	if err != nil {

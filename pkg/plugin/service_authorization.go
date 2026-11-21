@@ -25,6 +25,9 @@ func validateServiceRegistration(side string, info *ppb.PluginInfo, services Ser
 	for _, capability := range info.Protocol.Capabilities {
 		capabilities[capability] = true
 	}
+	if capabilities[BrowserLaunchModeCapability] && (side != "server" || services.Browser == nil || !capabilities[BrowserCapability]) {
+		return errors.New("browser launch mode capability requires the server browser service")
+	}
 	if side == "server" {
 		if (services.Files != nil) != capabilities[FileCapability] || (services.Ports != nil) != capabilities[PortCapability] ||
 			(services.Region != nil) != capabilities[RegionCapability] || (services.Browser != nil) != capabilities[BrowserCapability] {

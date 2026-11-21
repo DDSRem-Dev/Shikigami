@@ -59,11 +59,6 @@ func verifyExecutableChain(path string, executableLeaf bool) error {
 	return nil
 }
 
-type child struct {
-	command *exec.Cmd
-	done    chan error
-}
-
 func startChild(path string, args, environment []string, output io.Writer) (*child, error) {
 	if err := verifyExecutable(path); err != nil {
 		return nil, err
@@ -74,9 +69,7 @@ func startChild(path string, args, environment []string, output io.Writer) (*chi
 	if err := command.Start(); err != nil {
 		return nil, err
 	}
-	process := &child{command: command, done: make(chan error, 1)}
-	go func() { process.done <- command.Wait() }()
-	return process, nil
+	return observeChild(command, componentForExecutable(path)), nil
 }
 
 // Run is entered only by the independent systemd user service. It never
@@ -114,17 +107,13 @@ func Run(configPath string) (failure error) {
 		return errors.New("browser instance already owned")
 	}
 	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer cancel()
+	var stoppedReason string
 	defer func() {
-		if failure == nil {
-			return
-		}
-		reason := failure.Error()
-		if len(reason) > 4096 {
-			reason = reason[:4096]
-		}
-		if err := AtomicJSON(filepath.Join(spec.SocketDir, "exit.json"), Snapshot{ProfileID: spec.ProfileID, InstanceID: spec.InstanceID, State: "crashed", Reason: reason, RegionRevision: spec.RegionRevision}, MaxControlBody); err != nil {
-			failure = errors.Join(failure, fmt.Errorf("persisting private runtime exit reason: %w", err))
-		}
+		// This runs before our own deferred cancel, so only an actual requested
+		// stop suppresses failure, including cancellation during startup/cleanup.
+		failure = recordRuntimeExit(ctx, spec, stoppedReason, failure)
 	}()
 	actualDigest, err := executableDigest("/proc/self/exe")
 	if err != nil {
@@ -133,8 +122,6 @@ func Run(configPath string) (failure error) {
 	if actualDigest != spec.ExecutableSHA256 {
 		return errors.New("runtime image does not match immutable launch record; maintenance won the pending-start race, use a new explicit start")
 	}
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
-	defer cancel()
 	environment, err := launchEnvironment(spec)
 	if err != nil {
 		return err
@@ -228,46 +215,36 @@ func Run(configPath string) (failure error) {
 	if err != nil {
 		return err
 	}
-	readInput, writeInput, err := os.Pipe()
-	if err != nil {
-		return err
-	}
-	defer writeInput.Close()
-	readOutput, writeOutput, err := os.Pipe()
-	if err != nil {
-		readInput.Close()
-		return err
-	}
-	defer readOutput.Close()
-	chrome := exec.Command(ChromeBinary, chromeArguments(spec)...)
-	chrome.Env = chromeEnvironment
-	chrome.ExtraFiles = []*os.File{readInput, writeOutput}
 	chromeLog := newChromeProblems()
-	chrome.Stdout, chrome.Stderr = io.Discard, chromeLog
-	if err := chrome.Start(); err != nil {
-		readInput.Close()
-		writeOutput.Close()
+	chromeChild, cdp, err := startChromeProcess(spec, chromeEnvironment, chromeLog)
+	if err != nil {
 		return err
 	}
-	readInput.Close()
-	writeOutput.Close()
-	chromeChild := &child{command: chrome, done: make(chan error, 1)}
 	children = append(children, chromeChild)
-	go func() { chromeChild.done <- chrome.Wait() }()
-	cdp := newCDP(writeInput, readOutput)
-	defer cdp.Close()
+	if cdp != nil {
+		defer cdp.Close()
+	}
 	ready, readyCancel := context.WithTimeout(ctx, 15*time.Second)
-	_, err = cdp.call(ready, "", "Browser.getVersion", nil)
+	if cdp != nil {
+		_, err = cdp.call(ready, "", "Browser.getVersion", nil)
+	} else {
+		err = awaitChromeWindow(ready, chromeEnvironment, chromeChild.command.Process.Pid, children)
+	}
 	readyCancel()
 	if err != nil {
-		return fmt.Errorf("Chrome did not initialize sandbox/CDP (%s): %w", chromeLog.summary(), err)
+		var exited childExit
+		if errors.As(err, &exited) && exited.normalChrome() {
+			stoppedReason = exited.Error()
+			return nil
+		}
+		return fmt.Errorf("Chrome did not become ready in %s mode (%s): %w", spec.BrowserMode(), chromeLog.summary(), err)
 	}
 	select {
 	case <-chromeLog.failure:
 		return errors.New("Chrome reported OS secret storage failure; refusing a plaintext fallback")
 	default:
 	}
-	snapshot := Snapshot{ProfileID: spec.ProfileID, InstanceID: spec.InstanceID, State: "running", RegionRevision: spec.RegionRevision, ChromeVersion: strings.TrimSpace(string(version)), Warnings: []string{"Cookies persist; passwords and Chrome sync are disabled. OS keyring availability is not bypassed.", "Ctrl+Space toggles the server IME; Ctrl+Shift+Space cycles Chinese Pinyin/Japanese Mozc; candidates render in the remote display.", "Profile file pickers run as the daemon UID, not inside a whole-machine file sandbox."}}
+	snapshot := Snapshot{ProfileID: spec.ProfileID, InstanceID: spec.InstanceID, State: "running", RegionRevision: spec.RegionRevision, Mode: spec.BrowserMode(), ChromeVersion: strings.TrimSpace(string(version)), Warnings: []string{"Cookies persist; passwords and Chrome sync are disabled. OS keyring availability is not bypassed.", "Ctrl+Space toggles the server IME; Ctrl+Shift+Space cycles Chinese Pinyin/Japanese Mozc; candidates render in the remote display.", "Profile file pickers run as the daemon UID, not inside a whole-machine file sandbox."}}
 	snapshot.Warnings = append(snapshot.Warnings, dependencyVersions...)
 	listener, err := net.Listen("unix", filepath.Join(spec.SocketDir, "control.sock"))
 	if err != nil {
@@ -299,6 +276,10 @@ func Run(configPath string) (failure error) {
 				http.Error(writer, "invalid diagnostic scope", http.StatusBadRequest)
 				return
 			}
+			if cdp == nil {
+				http.Error(writer, DiagnosticsDisabledReason, http.StatusConflict)
+				return
+			}
 			if !diagnose.TryLock() {
 				http.Error(writer, "diagnostic busy", http.StatusTooManyRequests)
 				return
@@ -318,36 +299,8 @@ func Run(configPath string) (failure error) {
 	serveDone := make(chan error, 1)
 	go func() { serveDone <- server.Serve(guarded) }()
 	defer server.Close()
-	// One read per child, including early startup failures; do not spin-restart.
-	exit := make(chan error, len(children))
-	for _, process := range children {
-		go func(process *child) {
-			select {
-			case failure := <-process.done:
-				process.done <- failure
-				exit <- failure
-			case <-ctx.Done():
-			}
-		}(process)
-	}
-	select {
-	case <-ctx.Done():
-		return nil
-	case <-chromeLog.failure:
-		return errors.New("Chrome reported OS secret storage failure; manual restart after keyring repair is required")
-	case err := <-serveDone:
-		return err
-	case err := <-exit:
-		select {
-		case <-chromeLog.failure:
-			return errors.New("Chrome reported OS secret storage failure; manual restart after keyring repair is required")
-		default:
-		}
-		if err == nil {
-			return errors.New("browser dependency exited; manual start required")
-		}
-		return fmt.Errorf("browser dependency crashed (no automatic restart): %w", err)
-	}
+	stoppedReason, failure = awaitRuntimeExit(ctx, children, chromeLog.failure, serveDone)
+	return failure
 }
 
 type peerListener struct{ net.Listener }

@@ -28,6 +28,7 @@ import (
 )
 
 type extensionCLIProbe struct {
+	oldAgent bool
 	arpc.UnimplementedAgentHandler
 	erpc.UnimplementedRegionServiceHandler
 	erpc.UnimplementedBrowserServiceHandler
@@ -47,7 +48,11 @@ func (p *extensionCLIProbe) Handshake(_ context.Context, request *apb.HandshakeR
 	if len(request.GetProtocol().GetRequiredCapabilities()) != 1 || request.Protocol.RequiredCapabilities[0] != "agent.control.v1" {
 		return nil, errors.New("extensions must not become mandatory for unrelated clients")
 	}
-	return &apb.HandshakeResponse{InstanceId: "instance", FrontendId: "frontend", Protocol: &pb.ProtocolAgreement{Major: 1, Capabilities: []string{"agent.control.v1", "region.host.v1", "browser.remote.v1", "browser.viewer.v1"}}}, nil
+	capabilities := []string{"agent.control.v1", "region.host.v1", "browser.remote.v1", "browser.viewer.v1"}
+	if !p.oldAgent {
+		capabilities = append(capabilities, "browser.launch-mode.v1")
+	}
+	return &apb.HandshakeResponse{InstanceId: "instance", FrontendId: "frontend", Protocol: &pb.ProtocolAgreement{Major: 1, Capabilities: capabilities}}, nil
 }
 func (p *extensionCLIProbe) GetStatus(context.Context, *pb.Empty) (*apb.AgentStatus, error) {
 	return &apb.AgentStatus{InstanceId: "instance", State: "ready"}, nil
@@ -59,7 +64,7 @@ func (p *extensionCLIProbe) GetPreferences(context.Context, *pb.Empty) (*apb.Pre
 	return &apb.Preferences{DefaultServerId: "srv_cli"}, nil
 }
 func (p *extensionCLIProbe) ListServers(context.Context, *pb.Empty) (*apb.ServerList, error) {
-	return &apb.ServerList{Servers: []*apb.ServerRecord{{Config: &apb.ServerConfig{Id: "srv_cli", Name: "cli-server"}, RemoteProtocol: &pb.ProtocolAgreement{Major: 1, Capabilities: []string{"region.host.v1", "browser.remote.v1"}}}}}, nil
+	return &apb.ServerList{Servers: []*apb.ServerRecord{{Config: &apb.ServerConfig{Id: "srv_cli", Name: "cli-server"}, RemoteProtocol: &pb.ProtocolAgreement{Major: 1, Capabilities: []string{"region.host.v1", "browser.remote.v1", "browser.launch-mode.v1"}}}}}, nil
 }
 func (p *extensionCLIProbe) record(ctx context.Context, message proto.Message, server string, mutation bool) error {
 	info, _ := connect.CallInfoForServerContext(ctx)
@@ -172,7 +177,11 @@ func (p *extensionCLIProbe) StartBrowser(ctx context.Context, request *epb.Brows
 	if !request.Confirm {
 		return nil, errors.New("confirmation omitted")
 	}
-	return &epb.BrowserStatus{ProfileId: request.ProfileId, InstanceId: "instance_cli", State: "running"}, nil
+	mode := "browse"
+	if request.Diagnostics {
+		mode = "diagnostic"
+	}
+	return &epb.BrowserStatus{ProfileId: request.ProfileId, InstanceId: "instance_cli", State: "running", Mode: mode}, nil
 }
 func (p *extensionCLIProbe) StopBrowser(ctx context.Context, request *epb.BrowserActionRequest) (*epb.BrowserStatus, error) {
 	if err := p.record(ctx, request, "srv_cli", true); err != nil {
@@ -558,5 +567,52 @@ func TestRegionRollbackConflictReturnsFailureWithEvidence(t *testing.T) {
 	result := new(epb.RegionOperation)
 	if decodeErr := protojson.Unmarshal([]byte(output), result); decodeErr != nil || result.Id != "operation_cli" || result.State != "rollback_conflict" {
 		t.Fatalf("rollback failure lost its structured recovery evidence: %q, %v", output, decodeErr)
+	}
+}
+
+func TestBrowserLaunchModeCLIAndOldAgentGate(t *testing.T) {
+	for _, old := range []bool{false, true} {
+		for _, diagnostics := range []bool{false, true} {
+			p := &extensionCLIProbe{oldAgent: old}
+			path := extensionCLIFixture(t, p)
+			args := []string{"browser", "start", "profile_cli", "--yes", "--replace-running"}
+			if diagnostics {
+				args = append(args, "--diagnostics")
+			}
+			output, err := runManagement(t, path, args...)
+			p.mu.Lock()
+			mutations := append([]proto.Message(nil), p.mutations...)
+			p.mu.Unlock()
+			if old {
+				if err == nil || !strings.Contains(err.Error(), "browser.launch-mode.v1") || len(mutations) != 0 {
+					t.Fatalf("old agent received start: %v %v", err, mutations)
+				}
+				continue
+			}
+			if err != nil || len(mutations) != 1 {
+				t.Fatal(err, mutations)
+			}
+			request := mutations[0].(*epb.BrowserActionRequest)
+			if request.Diagnostics != diagnostics || !request.ReplaceRunning || !request.Confirm {
+				t.Fatal(request)
+			}
+			mode := "browse"
+			if diagnostics {
+				mode = "diagnostic"
+			}
+			if !strings.Contains(output, mode) {
+				t.Fatal("CLI omitted actual launch mode", output)
+			}
+		}
+	}
+	p := &extensionCLIProbe{}
+	path := extensionCLIFixture(t, p)
+	if _, err := runManagement(t, path, "browser", "stop", "profile_cli", "--yes", "--diagnostics"); err == nil {
+		t.Fatal("stop accepted diagnostic launch option")
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.mutations) != 0 {
+		t.Fatal("invalid stop reached mutation")
 	}
 }

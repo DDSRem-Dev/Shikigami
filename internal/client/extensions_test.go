@@ -10,6 +10,33 @@ import (
 	erpc "github.com/DDSRem-Dev/Shikigami/pkg/protocol/extensions/extensionsconnect"
 )
 
+func TestBrowserStartRequiresModeAwareAgentBeforeSending(t *testing.T) {
+	for _, modeAware := range []bool{false, true} {
+		capabilities := []string{"browser.remote.v1"}
+		if modeAware {
+			capabilities = append(capabilities, "browser.launch-mode.v1")
+		}
+		c := &Client{lifetime: context.Background(), timeout: time.Second, capabilities: capabilities}
+		called := false
+		call := c.extensionIdentity("server", "browser.remote.v1")(func(context.Context, connect.Spec) (connect.ClientStream, error) {
+			called = true
+			return nil, context.Canceled
+		})
+		_, err := call(t.Context(), connect.Spec{StreamType: connect.StreamTypeUnary, Procedure: erpc.BrowserServiceStartBrowserProcedure})
+		if called != modeAware {
+			t.Fatalf("old agent received mode-sensitive start: called=%v modeAware=%v", called, modeAware)
+		}
+		if !modeAware && (connect.CodeOf(err) != connect.CodeUnimplemented || !strings.Contains(err.Error(), "browser.launch-mode.v1")) {
+			t.Fatalf("missing actionable mode gate: %v", err)
+		}
+		called = false
+		_, _ = call(t.Context(), connect.Spec{StreamType: connect.StreamTypeUnary, Procedure: erpc.BrowserServiceGetBrowserStatusProcedure})
+		if !called {
+			t.Fatal("old agent lost compatible status query")
+		}
+	}
+}
+
 func TestExtensionCapabilityGateDoesNotRequireNewCapabilitiesForOldClients(t *testing.T) {
 	c := &Client{lifetime: context.Background(), timeout: time.Second, capabilities: []string{"agent.control.v1"}}
 	for _, capability := range []string{"region.host.v1", "browser.remote.v1", "browser.viewer.v1"} {

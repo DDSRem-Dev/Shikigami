@@ -1,6 +1,6 @@
 # Shikigami（式神）
 
-**alpha.8已发布：** [v0.0.1-alpha.8](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.8)用于下一轮修复后测试。固定源CI最终57/57通过，发行完成60项成功、1项条件跳过；23个公开资产、四目标签名/来源及自动Homebrew公式已独立核验，见[发行证据](docs/15-implementation-status.md#evidence-public-alpha8-release-20261120)和[变更说明](docs/releases/v0.0.1-alpha.8.md)。用户两端仍为alpha.7，尚未升级；发布不等于beta或实机稳定性验收通过。
+**alpha.8已发布：** [v0.0.1-alpha.8](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.8)用于下一轮修复后测试。固定源CI最终57/57通过，发行完成60项成功、1项条件跳过；23个公开资产、四目标签名/来源及自动Homebrew公式已独立核验，见[发行证据](docs/15-implementation-status.md#evidence-public-alpha8-release-20261120)和[变更说明](docs/releases/v0.0.1-alpha.8.md)。VPS与Mac已于2026-11-21升级正式alpha.8，见[两端升级与实测](docs/15-implementation-status.md#evidence-alpha8-upgrade-20261121)。部分同步、端口和浏览器功能复验通过，浏览器状态超时与临时转发端口重绑定仍保留；默认shell方向键、长稳、网络专项、Claude登录和物理重启未闭环，未进入beta。
 
 通过本地 CLI/TUI 和常驻 agent，使用远端 VPS 上的 tmux / Claude Code。核心链路采用 Connect/protobuf over HTTP/2；文件同步和 TCP 转发由双端插件执行。
 

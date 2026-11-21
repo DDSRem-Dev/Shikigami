@@ -1530,6 +1530,7 @@ type BrowserActionRequest struct {
 	RequestId      string                 `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	Confirm        bool                   `protobuf:"varint,4,opt,name=confirm,proto3" json:"confirm,omitempty"`
 	ReplaceRunning bool                   `protobuf:"varint,5,opt,name=replace_running,json=replaceRunning,proto3" json:"replace_running,omitempty"`
+	Diagnostics    bool                   `protobuf:"varint,6,opt,name=diagnostics,proto3" json:"diagnostics,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1599,6 +1600,13 @@ func (x *BrowserActionRequest) GetReplaceRunning() bool {
 	return false
 }
 
+func (x *BrowserActionRequest) GetDiagnostics() bool {
+	if x != nil {
+		return x.Diagnostics
+	}
+	return false
+}
+
 type BrowserStatus struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	ProfileId       string                 `protobuf:"bytes,1,opt,name=profile_id,json=profileId,proto3" json:"profile_id,omitempty"`
@@ -1612,6 +1620,7 @@ type BrowserStatus struct {
 	Warnings        []string               `protobuf:"bytes,9,rep,name=warnings,proto3" json:"warnings,omitempty"`
 	Attachments     uint32                 `protobuf:"varint,10,opt,name=attachments,proto3" json:"attachments,omitempty"`
 	ChromeVersion   string                 `protobuf:"bytes,11,opt,name=chrome_version,json=chromeVersion,proto3" json:"chrome_version,omitempty"`
+	Mode            string                 `protobuf:"bytes,12,opt,name=mode,proto3" json:"mode,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1719,6 +1728,13 @@ func (x *BrowserStatus) GetAttachments() uint32 {
 func (x *BrowserStatus) GetChromeVersion() string {
 	if x != nil {
 		return x.ChromeVersion
+	}
+	return ""
+}
+
+func (x *BrowserStatus) GetMode() string {
+	if x != nil {
+		return x.Mode
 	}
 	return ""
 }
@@ -2551,7 +2567,7 @@ const file_extensions_proto_rawDesc = "" +
 	"\x11expected_revision\x18\x03 \x01(\tR\x10expectedRevision\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x04 \x01(\tR\trequestId\x12\x18\n" +
-	"\aconfirm\x18\x05 \x01(\bR\aconfirm\"\xb4\x01\n" +
+	"\aconfirm\x18\x05 \x01(\bR\aconfirm\"\xd6\x01\n" +
 	"\x14BrowserActionRequest\x12\x1b\n" +
 	"\tserver_id\x18\x01 \x01(\tR\bserverId\x12\x1d\n" +
 	"\n" +
@@ -2559,7 +2575,8 @@ const file_extensions_proto_rawDesc = "" +
 	"\n" +
 	"request_id\x18\x03 \x01(\tR\trequestId\x12\x18\n" +
 	"\aconfirm\x18\x04 \x01(\bR\aconfirm\x12'\n" +
-	"\x0freplace_running\x18\x05 \x01(\bR\x0ereplaceRunning\"\x86\x03\n" +
+	"\x0freplace_running\x18\x05 \x01(\bR\x0ereplaceRunning\x12 \n" +
+	"\vdiagnostics\x18\x06 \x01(\bR\vdiagnostics\"\x9a\x03\n" +
 	"\rBrowserStatus\x12\x1d\n" +
 	"\n" +
 	"profile_id\x18\x01 \x01(\tR\tprofileId\x12\x1f\n" +
@@ -2574,7 +2591,8 @@ const file_extensions_proto_rawDesc = "" +
 	"\bwarnings\x18\t \x03(\tR\bwarnings\x12 \n" +
 	"\vattachments\x18\n" +
 	" \x01(\rR\vattachments\x12%\n" +
-	"\x0echrome_version\x18\v \x01(\tR\rchromeVersion\"\xf0\x01\n" +
+	"\x0echrome_version\x18\v \x01(\tR\rchromeVersion\x12\x12\n" +
+	"\x04mode\x18\f \x01(\tR\x04mode\"\xf0\x01\n" +
 	"\x15BrowserControlRequest\x12\x1b\n" +
 	"\tserver_id\x18\x01 \x01(\tR\bserverId\x12\x1d\n" +
 	"\n" +

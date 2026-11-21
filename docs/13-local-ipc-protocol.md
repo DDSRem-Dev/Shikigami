@@ -24,6 +24,8 @@ UDS transport 固定拨号该 socket，使用合成 base URL `http://shiki-agent
 
 地区/浏览器扩展另注册`shiki.extensions.v1.RegionService`、`BrowserService`受限远端代理，以及只在本机调用的`BrowserLocalService`；schema复用`proto/extensions.proto`，不增加通用远端action。远端扩展同样检查frontend/instance与显式server路由，请求中的server_id须与header一致；host派生身份和权限，忽略调用者自报owner/grant。`BrowserLocalService`创建查看器，不把agent IPC暴露给网页。
 
+`BrowserService.StartBrowser`另要求本地握手的 `browser.launch-mode.v1`，agent在远端代理前再次检查daemon协商能力。普通浏览（`diagnostics=false`）也必须检查，避免旧端忽略模式字段而启动原生诊断。缺少能力时在对应边界明确失败并要求升级，不降级、不以构建版本字符串推测兼容。已有状态/停止/查看方法继续按原浏览器能力调用；返回的 `mode` 仅说明实际实例，不授予输入控制权。
+
 此外注册 `NodeControl`，用于内嵌 tsnet 的本地引导。daemon 在自己的 `/var/lib/shiki/run/admin.sock` 上注册 NodeControl 与独立只读 DaemonReadiness，安装器以 daemon 用户访问；不在该 socket 暴露 agent 业务或远端文件 RPC。NodeControl 独立协商，登录尚未完成也必须可调用。GetStatus 属于基础只读诊断，不要求 node.login.v1；关闭节点或身份状态不可用的端点仍以兼容协议与自己的 instance_id 提供实际状态。BeginLogin/CancelLogin 及需要登录的连接流程继续要求 node.login.v1，不能因诊断可读而开放登录。前端读取状态仍须校验同 UID socket、协议 major/minor、实例与截止，不能根据当前磁盘配置猜运行中节点状态。DaemonReadiness 不增加 NodeControl 方法，不注册在远端 listener 或 agent 代理。
 
 前端先调用 Agent.Handshake，发送协议范围、所需能力和设备显示名称。响应包括协议交集、instance_id、frontend_id。其后 Agent 业务调用和代理调用必须携带：

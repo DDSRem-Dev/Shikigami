@@ -56,6 +56,10 @@ func (worker *Worker) StartBrowser(parent context.Context, request *epb.BrowserA
 	if request == nil || !browserruntime.ValidID(request.ProfileId) {
 		return nil, connect.NewError(connect.CodeInvalidArgument, "profile_id is required")
 	}
+	mode := browserruntime.ModeBrowse
+	if request.Diagnostics {
+		mode = browserruntime.ModeDiagnostic
+	}
 	worker.mu.Lock()
 	defer worker.mu.Unlock()
 	if err := ctx.Err(); err != nil {
@@ -78,7 +82,7 @@ func (worker *Worker) StartBrowser(parent context.Context, request *epb.BrowserA
 			return nil, err
 		}
 		if snapshot.State == "running" {
-			if current.ProfileID == request.ProfileId {
+			if current.ProfileID == request.ProfileId && current.BrowserMode() == mode {
 				status := worker.statusLocked(snapshot)
 				if err := worker.rememberLocked(request.RequestId, "start", request, status); err != nil {
 					return nil, err
@@ -86,7 +90,7 @@ func (worker *Worker) StartBrowser(parent context.Context, request *epb.BrowserA
 				return status, nil
 			}
 			if !request.ReplaceRunning || !request.Confirm {
-				return nil, connect.NewError(connect.CodeFailedPrecondition, "switching profiles requires replace_running and explicit confirmation to stop the old browser")
+				return nil, connect.NewError(connect.CodeFailedPrecondition, "switching profiles or browser modes requires replace_running and explicit confirmation to stop the old browser")
 			}
 		}
 		if worker.db.LastStartRequest == request.RequestId {
@@ -106,7 +110,7 @@ func (worker *Worker) StartBrowser(parent context.Context, request *epb.BrowserA
 		return nil, err
 	}
 	instanceID := browserruntime.NewID()
-	spec, err := worker.manager.Prepare(ctx, worker.stateDir, profile.Id, profile.Revision, instanceID, region, revision, worker.config.Width, worker.config.Height)
+	spec, err := worker.manager.Prepare(ctx, worker.stateDir, profile.Id, profile.Revision, instanceID, region, revision, worker.config.Width, worker.config.Height, mode)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, "browser runtime preparation failed: "+err.Error())
 	}
@@ -119,11 +123,11 @@ func (worker *Worker) StartBrowser(parent context.Context, request *epb.BrowserA
 	snapshot, launchErr := worker.manager.Launch(ctx, spec)
 	if launchErr != nil {
 		worker.db.State, worker.db.Reason = "unknown", launchErr.Error()
-		if snapshot.State == "crashed" {
-			worker.db.State = "crashed"
+		if snapshot.State == "crashed" || snapshot.State == "stopped" {
+			worker.db.State = snapshot.State
 		}
 		failure := connect.NewError(connect.CodeFailedPrecondition, "Chrome start failed; manual restart required: "+launchErr.Error())
-		status := &epb.BrowserStatus{ProfileId: spec.ProfileID, InstanceId: spec.InstanceID, State: worker.db.State, Reason: worker.db.Reason, RegionRevision: spec.RegionRevision}
+		status := &epb.BrowserStatus{ProfileId: spec.ProfileID, InstanceId: spec.InstanceID, State: worker.db.State, Reason: worker.db.Reason, RegionRevision: spec.RegionRevision, Mode: spec.BrowserMode()}
 		if err := worker.rememberOutcomeLocked(request.RequestId, "start", request, status, failure); err != nil {
 			return nil, err
 		}
@@ -144,8 +148,8 @@ func (worker *Worker) StopBrowser(parent context.Context, request *epb.BrowserAc
 		return nil, err
 	}
 	defer done()
-	if request == nil || !browserruntime.ValidID(request.ProfileId) {
-		return nil, connect.NewError(connect.CodeInvalidArgument, "profile_id is required")
+	if request == nil || !browserruntime.ValidID(request.ProfileId) || request.Diagnostics {
+		return nil, connect.NewError(connect.CodeInvalidArgument, "profile_id is required; diagnostics is only valid when starting Chrome")
 	}
 	worker.mu.Lock()
 	defer worker.mu.Unlock()
@@ -169,7 +173,7 @@ func (worker *Worker) StopBrowser(parent context.Context, request *epb.BrowserAc
 		}
 		worker.detachAllLocked()
 		worker.db.State, worker.db.Reason = "stopped", "explicitly stopped; automatic restart disabled for this boot"
-		status.InstanceId, status.Reason = current.InstanceID, worker.db.Reason
+		status.InstanceId, status.Reason, status.Mode = current.InstanceID, worker.db.Reason, current.BrowserMode()
 	}
 	if err := worker.rememberLocked(request.RequestId, "stop", request, status); err != nil {
 		return nil, err
@@ -256,9 +260,12 @@ func (worker *Worker) DeleteBrowserProfile(parent context.Context, request *epb.
 }
 
 func (worker *Worker) statusLocked(snapshot browserruntime.Snapshot) *epb.BrowserStatus {
+	if snapshot.Mode == "" && worker.db.Runtime != nil && worker.db.Runtime.InstanceID == snapshot.InstanceID {
+		snapshot.Mode = worker.db.Runtime.BrowserMode()
+	}
 	worker.control.Lock()
 	defer worker.control.Unlock()
-	return &epb.BrowserStatus{ProfileId: snapshot.ProfileID, InstanceId: snapshot.InstanceID, State: snapshot.State, Reason: snapshot.Reason, ControllerId: worker.controller, ControlRevision: worker.controlRevision, RegionRevision: snapshot.RegionRevision, Attachments: uint32(len(worker.attachments)), ChromeVersion: snapshot.ChromeVersion, Warnings: snapshot.Warnings}
+	return &epb.BrowserStatus{ProfileId: snapshot.ProfileID, InstanceId: snapshot.InstanceID, State: snapshot.State, Reason: snapshot.Reason, ControllerId: worker.controller, ControlRevision: worker.controlRevision, RegionRevision: snapshot.RegionRevision, Attachments: uint32(len(worker.attachments)), ChromeVersion: snapshot.ChromeVersion, Warnings: snapshot.Warnings, Mode: snapshot.Mode}
 }
 func (worker *Worker) GetBrowserStatus(parent context.Context, request *epb.BrowserScope) (*epb.BrowserStatus, error) {
 	ctx, done, err := worker.begin(parent)
@@ -270,40 +277,96 @@ func (worker *Worker) GetBrowserStatus(parent context.Context, request *epb.Brow
 		return nil, connect.NewError(connect.CodeInvalidArgument, "profile_id is required")
 	}
 	worker.mu.Lock()
-	defer worker.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		worker.mu.Unlock()
+		return nil, err
+	}
 	profile := worker.db.Profiles[request.ProfileId]
 	if profile == nil {
+		worker.mu.Unlock()
 		return nil, connect.NewError(connect.CodeNotFound, "browser profile not found")
 	}
 	if profile.State == "deleting" {
+		worker.mu.Unlock()
 		return &epb.BrowserStatus{ProfileId: profile.Id, State: "deleting", Reason: "confirmed deletion is pending; retry DeleteBrowserProfile"}, nil
 	}
 	current := worker.db.Runtime
 	if current == nil || current.ProfileID != profile.Id {
+		worker.mu.Unlock()
 		return &epb.BrowserStatus{ProfileId: profile.Id, State: "stopped"}, nil
 	}
 	if worker.db.State == "stopped" {
-		return &epb.BrowserStatus{ProfileId: profile.Id, InstanceId: current.InstanceID, State: "stopped", Reason: worker.db.Reason}, nil
+		status := &epb.BrowserStatus{ProfileId: profile.Id, InstanceId: current.InstanceID, State: "stopped", Reason: worker.db.Reason, Mode: current.BrowserMode()}
+		worker.mu.Unlock()
+		return status, nil
 	}
-	snapshot, err := worker.manager.Inspect(ctx, *current)
+	// Inspect and inherited-region lookup can perform slow external I/O. Keep
+	// an independent snapshot, then reject drift instead of publishing an old
+	// observation over a stop, profile edit, new runtime or monitor update.
+	profile = proto.Clone(profile).(*epb.BrowserProfile)
+	spec := *current
+	if spec.Region != nil {
+		spec.Region = proto.Clone(spec.Region).(*epb.RegionConfig)
+	}
+	settings := worker.config
+	state, reason, observationError := worker.db.State, worker.db.Reason, worker.observationError
+	worker.mu.Unlock()
+	checkLocked := func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if worker.closed {
+			return connect.NewError(connect.CodeFailedPrecondition, "BROWSER_NOT_READY")
+		}
+		sameRuntime := worker.db.Runtime != nil
+		if sameRuntime {
+			actual, expected := *worker.db.Runtime, spec
+			actual.Region, expected.Region = nil, nil
+			sameRuntime = actual == expected && proto.Equal(worker.db.Runtime.Region, spec.Region)
+		}
+		if !sameRuntime || !proto.Equal(worker.db.Profiles[profile.Id], profile) || worker.config != settings || worker.db.State != state || worker.db.Reason != reason || worker.observationError != observationError {
+			return connect.NewError(connect.CodeAborted, "browser state changed during status inspection; refresh status")
+		}
+		return nil
+	}
+	snapshot, err := worker.manager.Inspect(ctx, spec)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	if err != nil {
 		return nil, err
 	}
-	if worker.db.State != snapshot.State || worker.db.Reason != snapshot.Reason {
+	worker.mu.Lock()
+	err = checkLocked()
+	if err == nil && (worker.db.State != snapshot.State || worker.db.Reason != snapshot.Reason) {
 		worker.db.State, worker.db.Reason = snapshot.State, snapshot.Reason
 		if snapshot.State != "running" {
 			worker.detachAllLocked()
 		}
-		if err := worker.saveLocked(); err != nil {
-			return nil, err
-		}
+		err = worker.saveLocked()
 	}
-	status := worker.statusLocked(snapshot)
-	_, revision, warnings, err := worker.launchRegion(ctx, profile)
+	// Preserve the existing contract: a verified runtime observation is saved
+	// even when the subsequent region inspection fails. Validate again after
+	// that second I/O before combining it with current control information.
+	state, reason, observationError = worker.db.State, worker.db.Reason, worker.observationError
+	worker.mu.Unlock()
 	if err != nil {
 		return nil, err
 	}
-	status.RestartRequired = revision != current.RegionRevision || current.Width != worker.config.Width || current.Height != worker.config.Height
+	_, revision, warnings, err := worker.launchRegion(ctx, profile)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if err != nil {
+		return nil, err
+	}
+	worker.mu.Lock()
+	defer worker.mu.Unlock()
+	if err := checkLocked(); err != nil {
+		return nil, err
+	}
+	status := worker.statusLocked(snapshot)
+	status.RestartRequired = revision != spec.RegionRevision || spec.Width != settings.Width || spec.Height != settings.Height
 	status.Warnings = append(status.Warnings, warnings...)
 	return status, nil
 }
@@ -321,6 +384,10 @@ func (worker *Worker) DiagnoseBrowser(parent context.Context, request *epb.Diagn
 	if current == nil || current.ProfileID != request.ProfileId || worker.db.State != "running" {
 		worker.mu.Unlock()
 		return nil, connect.NewError(connect.CodeFailedPrecondition, "target Chrome is not running")
+	}
+	if current.BrowserMode() != browserruntime.ModeDiagnostic {
+		worker.mu.Unlock()
+		return nil, connect.NewError(connect.CodeFailedPrecondition, "native browser diagnostics require an explicitly started diagnostic instance; restart with --diagnostics --replace-running and confirmation")
 	}
 	spec := *current
 	worker.mu.Unlock()

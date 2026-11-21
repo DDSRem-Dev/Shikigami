@@ -168,7 +168,7 @@ func dial(ctx context.Context, path string, cfg *config.Client, timeout time.Dur
 	defer stop()
 	probe, _ = connect.NewClientContext(probe)
 	device, _ := os.Hostname()
-	hello, e := raw.Handshake(probe, &apb.HandshakeRequest{Protocol: &pb.ProtocolOffer{Major: 1, Capabilities: []string{"agent.control.v1", "agent.events.v1", "agent.startup.v1", "region.host.v1", "browser.remote.v1", "browser.viewer.v1"}, RequiredCapabilities: []string{"agent.control.v1"}}, ClientBuild: buildinfo.Version, DeviceName: device})
+	hello, e := raw.Handshake(probe, &apb.HandshakeRequest{Protocol: &pb.ProtocolOffer{Major: 1, Capabilities: []string{"agent.control.v1", "agent.events.v1", "agent.startup.v1", "region.host.v1", "browser.remote.v1", "browser.launch-mode.v1", "browser.viewer.v1"}, RequiredCapabilities: []string{"agent.control.v1"}}, ClientBuild: buildinfo.Version, DeviceName: device})
 	if e != nil {
 		cancel()
 		endpoint.Close()

@@ -32,8 +32,15 @@ func (c *Client) extensionIdentity(serverID, capability string) connect.ClientIn
 	return func(next connect.ClientFunc) connect.ClientFunc {
 		identified := c.identity(serverID)(next)
 		return func(ctx context.Context, spec connect.Spec) (connect.ClientStream, error) {
+			required := capability
+			if spec.Procedure == erpc.BrowserServiceStartBrowserProcedure {
+				required = "browser.launch-mode.v1"
+			}
 			if !slices.Contains(c.capabilities, capability) {
-				return nil, connect.NewError(connect.CodeUnimplemented, fmt.Sprintf("agent did not negotiate %s; update the agent and enable the required plugin (the local browser plugin is required for viewers)", capability))
+				required = capability
+			}
+			if !slices.Contains(c.capabilities, required) {
+				return nil, connect.NewError(connect.CodeUnimplemented, fmt.Sprintf("agent did not negotiate %s; update the agent and enable the required plugin (the local browser plugin is required for viewers)", required))
 			}
 			if capability != "browser.viewer.v1" && serverID == "" {
 				return nil, connect.NewError(connect.CodeInvalidArgument, "remote extension calls require an explicit resolved server ID")

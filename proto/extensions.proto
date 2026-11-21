@@ -107,13 +107,13 @@ message DeleteBrowserProfileRequest {
 }
 message BrowserActionRequest {
   string server_id = 1; string profile_id = 2; string request_id = 3;
-  bool confirm = 4; bool replace_running = 5;
+  bool confirm = 4; bool replace_running = 5; bool diagnostics = 6;
 }
 message BrowserStatus {
   string profile_id = 1; string instance_id = 2; string state = 3;
   string reason = 4; string controller_id = 5; string control_revision = 6;
   string region_revision = 7; bool restart_required = 8;
-  repeated string warnings = 9; uint32 attachments = 10; string chrome_version = 11;
+  repeated string warnings = 9; uint32 attachments = 10; string chrome_version = 11; string mode = 12;
 }
 message BrowserControlRequest {
   string server_id = 1; string profile_id = 2; string instance_id = 3;

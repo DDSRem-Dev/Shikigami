@@ -55,6 +55,9 @@ func BuiltinProtocol(id, side string) (*pb.ProtocolOffer, error) {
 	default:
 		return nil, errors.New("invalid plugin side")
 	}
+	if id == "browser" && side != "client" {
+		offer.Capabilities = append(offer.Capabilities, BrowserLaunchModeCapability)
+	}
 	if id == "port" {
 		offer.Capabilities = append(offer.Capabilities, PortAutoCapability)
 		if side != "client" {

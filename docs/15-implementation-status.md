@@ -1,8 +1,102 @@
 # 实施与验收记录
 
+## alpha.9 授权发行、两端升级与清理（2026-11-22，执行中）
+
+- [x] 用户授权alpha.9公开发行、升级两端及重启Chrome，页面已保存。
+- [ ] 固定提交完整CI通过后创建不可变tag，完成签名发行及独立公开资产验证。
+- [ ] 只部署正式签名alpha.9，检查原身份、凭据、浏览器profile及日常模式。
+- [ ] 扫描并清理确认属于Shikigami的开发/临时/旧验收数据，先停用测试同步映射再删本地测试目录；保留agent-remote、正式安装/历史发行/升级备份和真实用户数据。
+- [ ] 新版本原网络交互复验及用户人工Cloudflare验证；账号登录仍不代做。
+
+
+## 浏览器兼容性与响应路径优化（2026-11-21～22，候选源码修复与隔离复验完成，未发布/部署）
+
+用户接受“优先日常浏览兼容性”：新启动默认browse，不启用Chrome调试接口；需要原生浏览器诊断时显式切换diagnostic并确认重启。旧实例不静默重启、不伪报browse。此取舍不修改浏览器指纹，不自动处理Cloudflare挑战，不改变出口、代理、DNS或账号登录安排。
+
+已定位的独立代码瓶颈：每个浏览器帧复制整个agent状态；只读RFB请求在慢socket写入期间占用全局控制锁；状态查询在外部runtime/region等待期间占用worker锁；控制通知与约1MiB图像队列共用容量。候选改为单记录即时授权读取、只读写入独立于控制锁、状态检查两阶段释放锁并核对期间变更，以及有界独立控制队列。RFB字节不可丢弃/重排，真正修改桌面的输入仍在权限和控制revision检查下串行发送。当前传输Send不能被控制通知抢占；长期慢连接仍可能取消，不承诺消除网络延迟。
+
+查看器新增Smooth/Balanced/Clear画质选项（noVNC公开quality/compression参数），默认保留原Balanced；显示本机WebSocket接收速率及发送缓冲区，明确不是RTT或远端画面延迟测量。依赖详情折叠以腾出显示空间。Chrome主动正常退出与异常依赖退出区分，状态不得再把用户关闭窗口统一误报为未知依赖崩溃。
+
+局部证据：固定4MiB无关状态的授权基准，原实现21.589–27.827ms，新单记录读取0.762–0.775µs；仅代表该函数/该受控状态规模，不代表真实帧延迟或整机加速比例。只读阻塞回归已在旧实现确定失败；慢状态检查旧实现两个阶段均阻塞Stop，修改后18个Linux并发场景通过。首轮固定源码快照的组合race已通过：Mac cmd/shiki53.765s、client20.244s、agent72.514s、server36.457s、host plugin5.213s、SDK2.435s、state2.595s、browser client1.809s、architecture1.187s；普通UID的Linux arm64隔离容器中runtime3.661s、browser server21.411s、install5.636s、architecture1.134s、daemon跨进程integration10.560s通过。对应Mac go vet通过；Linux运行按脚本冻结源码、只读挂载，未使用用户状态。该快照不覆盖随后发现的持久格式回滚补修，补修须独立验证。真实Chrome模式切换与画面A/B仍另行验证，不能计为实机修复完成。
+
+查看器24项JS回归通过（无跳过），包括画质重连保留、旧状态/控制回调隔离及mode缺失不猜测。Ego隔离合成页在1280×720下折叠画面高362.58px、无横向溢出，检查了Details、只读、失败/unknown展示；这是布局/模拟UI证据，不是真实RFB或网络性能。测试页loopback服务和临时目录已关闭删除。
+
+独立复核发现并修复最初方案的回滚格式回归：Mode不写入profiles.json.Runtime，磁盘维持alpha.8可严格读取的shape；仅浅复制Runtime投影，不增加整库复制。模式权威在新`<instance>.launch.json`，旧`<instance>.json`只接受无mode的legacy。加载前验证ID和固定私有路径，再核对全部Spec/Region后恢复内存mode；新文件缺mode、缺失/损坏/字段不一致均拒绝，不能猜成diagnostic。内存深拷贝、未发布保存失败恢复与PublishedError保留mode。独立审查直接对照alpha.8真实Spec/database及旧manager路径校验，无剩余阻塞问题；本地旧shape读写后再升级不等于正式两端服务回滚验收。
+
+最终补修快照普通UID Linux arm64 race：runtime3.742s、browser server21.323s、architecture1.233s通过；覆盖模式持久兼容、新命名必须有mode、状态/流并发及X11就绪修正。随后仅新增的路径逃逸、非固定路径和旧名携带新mode负向测试在普通UID禁网容器定向通过，无后续生产变更。Linux amd64 runtime交叉编译及Linux相关go vet通过；锁定生成器重复生成17个protocol Go文件逐字节未变。
+
+真实Chrome隔离验收先发现候选X11匹配缺陷：官方Chrome的第一项res_name带profile路径，最初要求两项均为google-chrome导致15秒超时。修为有界quoted res_name解析、不以其作身份、不记录其值，严格核对第二项res_class=Google-chrome与本Chrome PID，并拒绝重复或多余属性行；未延长15秒期限。修补后普通browse实例窗口就绪、原生webdriver=false、/diagnose返回409拒绝、关闭最后窗口退出0且stopped通过。此前失败保留；这不证明Cloudflare放行。
+
+研究依据：[Cloudflare挑战循环排查](https://developers.cloudflare.com/cloudflare-challenges/troubleshooting/challenge-solve-issues/)、[支持浏览器与自动化限制](https://developers.cloudflare.com/cloudflare-challenges/reference/supported-browsers/)、[noVNC公开API](https://novnc.com/noVNC/docs/API.html)、[Tailscale连接类型](https://tailscale.com/kb/1257/connection-types)、[MDN webdriver](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/webdriver)。官方资料支持分别检查浏览器配置、挑战网络稳定性与中继延迟，不能证明本次Cloudflare拒绝的单一原因。已有截图显示重复挑战；页面标识不等于站点侧原因。不得用本机浏览器或自动化通过冒充远端人工登录通过。
+
+最终真实独立runtime两模式复验通过：UTC2026-11-21 16:18:23.324～16:18:41.638（18.314s），官方Google Chrome158.0.8127.36、Linux arm64普通UID、加密测试keyring与Chrome sandbox保留；容器network none、零宿主mount、非privileged、无cap_add。Docker默认namespace门禁曾导致sandbox失败；仅任务容器使用基于Moby default的专用seccomp，增加USER/PID/NET相关clone及仅NEWUSER的unshare许可，其余默认限制和clone3 ENOSYS保持，未改宿主策略。browse实际running/browse、窗口本PID/class匹配、合成loopback页原生webdriver=false、diagnose409、正常关窗exit0/stopped。diagnostic新实例running/diagnostic、原生diagnose200并含observed browser.context、同合成页webdriver=true、SIGTERM后exit0/stopped。两次/proc固定debug flag观察均为空，原因未解释；未把最初精确flag断言失败追认为成功，仅由真实CDP功能证明诊断可用。没有自动处理Cloudflare、修改webdriver或使用真实账号。
+
+该验收binary SHA256为`cf8a6b9de9042d65f6b7d604ace935ae5b50ae90e1932d68117e306b2228ca7a`，33个runtime Go文件清单摘要`6c867ae505ee64cc9ecbe6e6d32aa2801fd75afb4809cce38455039f55211c48`；不是正式发行签名产物。独立runtime测试不代表完整systemd安装、两端Shiki链路、真实原网络画面A/B或Cloudflare放行。真实网络体验、公开发行/升级和用户人工验证继续保留开放。
+
+本批清理完成：合成查看器loopback服务/TaskSpace关闭，专用Chrome测试容器及镜像、私有测试profile/keyring/脚本、临时测试bin/截图及本批新建的.tools目录均已删除；未执行Docker prune或清理用户通用缓存。正式Mac/VPS服务、agent-remote、原项目/会话/profile与凭据未改。用户于2026-11-22明确授权提交推送、CI全通过后发布alpha.9、升级两端并重启已保存页面的Chrome；另授权全面扫描并清理Shikigami开发/临时数据及旧本地测试目录。正式发行与清理执行证据另行登记，不能提前记完成。
+
+七类最终源码复核：业务仍在browser插件、共享单记录读取在SDK状态包、宿主只负责授权/路由，架构检查通过；RPC只增加模式字段及逐层Start能力门槛，既有权限和当前控制revision不放宽。profiles旧shape与launch新代次分离，atomic发布、request_id去重及内存失败恢复均有回归。Chrome独立进程归属、断线不结束浏览器和显式重启保持，正常退出/依赖异常/取消分列。RFB不丢字节不重放、mutating输入保持授权线性化，队列/超时有界；文件与终端行为不扩展。CLI显式诊断及模式切换确认、x11-utils安装依赖与新旧端报错已同步；查看器模式unknown不冒充browse。实现/本地回归、隔离Chrome、正式发行/部署及公网人工验收分别记账，08/15/16/27/30一致，beta未推进。
+
+- [x] 候选组合回归、七类架构复核与隔离Chrome两模式启动验证完成（范围和失败历史见上文）。
+- [ ] 正式新版本发行/两端升级后，用户远端人工Cloudflare复验通过。
+- [ ] 原网络真实使用延迟与稳定性达到可接受水平；beta门槛仍开放。
+
+
+## alpha.8 用户体验复验反馈（2026-11-21，卡顿与网站验证未通过）
+
+用户反馈仍卡顿，访问claude.ai时勾选Cloudflare后返回验证页。B06实际流畅性与网站可用性未通过，先前短时功能成功不覆盖此失败。账号登录继续暂停，未尝试代做挑战、修改出口/代理/DNS或浏览器指纹。
+
+只读检查：daemon及7插件ready/core ready，现场路由tailscale-relay；work状态为crashed、reason为browser dependency exited。用户随后明确说明已主动关闭远端Chrome窗口，因此该记录不能算意外崩溃，也不能用于解释关闭前卡顿。VPS journal显示23:54:20起依赖清理、23:54:28 runtime退出；源码将某受监控子进程Wait()==nil归为通用dependency exited并标crashed，未保存组件身份。这是退出诊断粒度不足，尚未修改/部署修补。
+
+VPS只读观察：Asia/Tokyo、NTPSynchronized=yes，可用内存约2.5GiB、load约0.18/0.23/0.25；本次时间窗未发现内核OOM记录，不能由事后采样排除使用过程瞬时资源问题。所查Chrome默认内容设置及claude.ai例外未发现JavaScript/Cookie禁止；受管策略仅密码保存/Chrome同步/浏览器账号登录限制，不等于禁止网站登录。VNC日志显示已有Tight/JPEG编码，不能把卡顿简单归为未压缩传输。原生诊断因浏览器已关闭返回failed_precondition，不记成功。
+
+代码固定带remote-debugging-pipe，上一轮原生诊断webdriver=true；仅登记真实运行事实及待核查的兼容性因素，不断言它导致本次Cloudflare拒绝。未取得失败页错误码/Ray ID或站点侧原因，出口IP地理库分歧仍保留；日本时区/语言不能证明网站资格或挑战会通过。未重启用户已关闭的Chrome、未清理Cookie/配置、未执行外部供应商检测。
+
+- [x] 收录用户失败反馈、纠正主动关闭与意外崩溃的区分，核对服务/日志/有限配置。
+- [ ] 卡顿端到端归因、浏览器退出诊断改进及候选复验。
+- [ ] Cloudflare循环原因与用户手动验证成功；缺少失败页证据，不能宣称已解决。
+
+七类复核：本批只有只读诊断和文档，目录/依赖、RPC权限能力、持久schema/revision、进程策略、文件/终端/网络契约及CLI/安装布局均未修改；区分用户反馈、当前采样、旧版证据与未测试项，08/15/16/30一致，不推进beta。
+
+<a id="evidence-alpha8-upgrade-20261121"></a>
+
+## alpha.8 两端升级与自动化复验（2026-11-21，功能子项通过，稳定性仍开放）
+
+用户授权升级VPS和本机，再自动完成可执行测试；Claude授权继续暂停、网络专项暂跳。本批只部署公开签名alpha.8（固定源`3c0d9454cf139eb854e046ae74a1579c9045f7b4`），未安装开发bin，未修改生产源码、DNS、出口、代理或路由，未重启物理主机。保留agent-remote、现有映射、两个原会话、work profile及凭据。记录日期采用本轮工作区日期；现场采样原时间戳保留其原值，不据此宣称主机时钟已验收。
+
+- [x] Debian12/amd64与Mac arm64正式alpha.7→alpha.8签名升级；独立信任公钥、归档hash及checksums pin核验通过。
+- [x] VPS18个/Mac14个已安装payload、两项root支持程序匹配已验签alpha.8；receipt active/current一致、无pending，原安装Plan保持。
+- [x] 实际终端attach/detach保活、配置快照恢复语义，以及sync/port/browser/region下列功能子项复验。
+- [x] 清理本批测试会话、快照、同步测试文件、转发、HTTP夹具、浏览器测试页和暂存文件；原文件、原会话及配置/凭据保留核对通过。
+- [ ] 默认空shell仍为`/bin/sh`，方向键交互缺陷未修复；B02不得整体勾选。
+- [ ] 浏览器状态偶发超时与一般连接稳定性、长用体验继续开放；不以短时通过抵消失败。
+- [ ] 真实Claude授权/任务、切网/睡眠、物理重启、新环境首装/本批回滚及其它原生平台保留未测；不发布beta。
+
+升级时沿用完整原Plan和已注册加密凭据。daemon普通用户、原节点地址/daemon身份、Mac配置/plist/凭据及VPS配置/Token/auth/加密credential/keyring摘要均保持；插件配置revision保持，7个实例均alpha.8 ready。支持setup在明确停止Chrome后更新两项root程序并复用密钥环，官方依赖步骤将Chrome157.0.8103.78更新到158.0.8127.36。work profile定义及地区revision不变，随后启动成功。未采集停止前标签页清单，不能宣称原打开页面全部恢复。两端正式升级备份保留。
+
+安装器服务激活后的首次探测均出现`node_uninitialized`/退出码3；后续节点online，未重新登录或换Token。VPS应用授权仍`CLAUDE_LOGIN_REQUIRED`，与core ready分列。升级前同步曾offline/REMOTE_RETRY_EXHAUSTED，升级重启后active；这是该次重启恢复证据，不能替代自然断线恢复。更新支持前首次`browser stop work --yes`返回`unavailable: service unavailable`，只读确认仍running且无pending任务后，新一次显式stop成功；首次失败保留。
+
+### 实机功能与限制
+
+| 项目 | 正式alpha.8实际结果 | 不能据此关闭的边界 |
+|---|---|---|
+| B01基线 | 客户端/daemon/7插件alpha.8 ready，最终doctor core ready、节点online，实际项目/会话查询成功 | doctor不检查Claude登录；短时健康不是长期可用性 |
+| B02终端 | 临时shell普通用户与cwd正确；实际detach/attach后PID和环境标记相同；配置快照恢复为新PID且不带原环境标记。原两个tmux PID在升级/收尾均保持 | 默认`/bin/sh`方向键问题仍在；快照不恢复进程/文件/对话 |
+| B04同步 | 隔离子目录双向初始/后续更新、pause/resume、keep-local/remote/both、重命名、删除、删除对修改冲突均核对两端字节；清理后active、pending=0、conflicts=0 | 6次resolve使用默认调用路径，耗时0.594–4.938秒；均小于旧5秒，不能声称本次实机跨越旧截止或验证完整15分钟上限。部分提交/未知结果故障注入仍依赖已有隔离回归 |
+| B05端口 | 仅127.0.0.1 HTTP夹具；首次0.695秒返回正确。停止后端listener时新连接失败、已有TCP仍可响应(0.127秒)；同一forward/listener恢复后新请求1.065秒成功，未改3000/40000 allowlist | 后续浏览器阶段向原临时端口请求另有reset；查询发现forward已在另一个随机端口listening。未取得该次重绑定原因，单列一般连接稳定性，不能冒充目标拒绝回归失败或证明无故障 |
+| B06浏览器 | 鼠标点击/英文退格、滚动、中日IME实际转换、显式剪贴板发送/接收缓冲区、CLI上传/取回以及远端Chrome原生文件选择/下载均通过，文本/字节匹配。强制只读查看器不能取得控制；第二可控查看器接管后旧页Read-only且撤销旧控制提示 | 未读写用户OS剪贴板、未做账号登录/Cookie续期；不宣称主观流畅或长期低延迟 |
+| B06重连 | 5次显式Reconnect均先Connected+Read-only，再确认Take control成功；重连1.243–1.677秒，总含重新接管1.907–2.333秒。关闭所有查看器后Chrome同实例running，重开后测试页内容保留 | 原生文件测试时出现一次状态查询unknown/timeout，Refresh status恢复；此失败仍保留，不把5次重连通过推广为状态/所有竞态闭环 |
+| B07地区 | host为Asia/Tokyo、ja_JP.UTF-8；JP只读plan changes为空、changes_dns=false。远端work原生Chrome诊断timezone=Asia/Tokyo、languages=ja-JP/ja且同实例配置一致 | 未调用外部供应商，出口IP地理库分歧未解决；Secure DNS/WebRTC/权威DNS仍unknown。缺fonts-noto-color-emoji警告保留，未为测试临时安装 |
+
+同步keep-both正常冲突在默认路径2.094秒完成，两端两份内容均保留。测试只使用既有验收项目内独立子目录，不修改原三文件。浏览器原生上传28bytes、下载30bytes均经实际文件通道与内容校验；本地查看器只承载VPS画面，没有用本机Chrome冒充远端环境。短采样12次默认projects/sessions/browser-status查询全成功，0.174–0.465秒；与上述超时分别登记，不声称本批所有请求无失败。
+
+收尾通过摘要对比确认：原三文件、本机/VPS配置与凭据未变；原两会话PID不变，临时两会话和一个配置快照已删除；临时forward为空，HTTP夹具监听已关闭，临时目录及浏览器上传/下载文件已清理；owned远端测试标签页关闭，原about:blank保留，work同实例running、无controller、restart_required=false。同步测试文件先经正常同步删除并核对两端为空，再移除空目录。VPS本批升级暂存目录、本机下载包/验签工具/测试脚本/截图与私有临时日志已移除，SSH复用连接已关闭；正式release、安装备份与agent-remote保留。验收摘要保存在本节，未将Token、引导URL或账号秘密写入仓库。
+
+七类文档复核：目录/SDK-host-plugin归属不变，无业务源码修改；RPC、准入、权限能力不变且不扩大负向授权验收；原Plan/凭据/文件保留，测试使用真实revision与request_id但不冒充故障原子性矩阵；tmux/Chrome独立生命周期按实际验证、物理重启另列；文件冲突和端口拒绝语义核对，终端默认shell及一般连接失败仍开放；CLI/安装只用正式包，签名payload及root支持程序复核；实现回归、公开发行、本批功能实测和外部门槛分开，跳过/unknown不计通过。08/15/16及30同步更新，历史alpha.7失败不删除。
+
 ## alpha.8 授权发行（2026-11-20，公开发行与独立验签完成）
 
-用户明确要求发布v0.0.1-alpha.8，用于下一轮修复后测试。本次范围为提交当前修补、固定源CI、不可变新tag、四目标签名归档/公开Release及自动Homebrew更新。VPS/Mac当前仍为alpha.7；两端升级与现场复验不由发布成功替代，账号授权及网络专项维持既有暂停安排。
+用户明确要求发布v0.0.1-alpha.8，用于下一轮修复后测试。本次范围为提交当前修补、固定源CI、不可变新tag、四目标签名归档/公开Release及自动Homebrew更新。本发行批次结束时VPS/Mac仍为alpha.7；随后两端升级见本页2026-11-21记录，升级与现场复验不由发布成功替代，账号授权及网络专项维持既有暂停安排。
 
 变更包含会话错误码/未知结果提示、ResolveConflict复合预算和显式timeout、未决keep-both副本保护、端口目标ECONNREFUSED隔离、浏览器attachment控制归属和迟到响应提示。沿用上一批七类审查，发布批不改RPC方法、权限能力、持久schema或安装布局；插件生产边界与SDK封装保持。已知实机失败和默认shell体验复验保留，不将alpha预发布写成beta验收通过。
 
@@ -16,7 +110,8 @@
 - [x] 冻结提交3c0d9454cf139eb854e046ae74a1579c9045f7b4的完整CI44579854243通过，创建并推送不可变v0.0.1-alpha.8 tag。
 - [x] 同源发行检查、四目标构建/签名、公开23资产和Homebrew更新成功。
 - [x] 下载公开资产独立验证签名、来源、内容和公式。
-- [ ] 两端升级及修复后实机复验（独立后续批次）。
+- [x] 两端升级（后续2026-11-21批次已验证，见本页顶部）。
+- [ ] 修复后全部实机门槛闭环（本批功能通过项与仍开放项见顶部；不等于全部验收通过）。
 
 
 <a id="evidence-public-alpha8-release-20261120"></a>
