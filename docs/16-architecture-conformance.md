@@ -1,5 +1,16 @@
 # 架构与文档一致性检查
 
+<a id="evidence-alpha9-observer-fixture-20261122"></a>
+## 发行后 CI 采样夹具竞态修复（2026-11-22）
+
+文档提交`6106fec8`的[CI 44937051142](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44937051142)最终52项成功、1项失败、2项下游矩阵跳过。唯一失败是Intel Mac的`TestDefaultRotationProcessObserverOwnsAndJoinsSamples`：异步观察器启动40毫秒后测试就结束子进程，首次探测已看到进程不存在，导致LastPresent为空。日志不能区分调度延迟与系统探测耗时；这不是产品超时的证据。
+
+夹具改为等待真实身份探测返回首次alive，再结束其拥有的子进程；等待有截止、探测失败仍失败，原2秒退出join及非空/有序时间戳、正采样间隔断言保持。仅修改测试，不更改生产观察器、产品、协议、安装或已发布alpha.9资产。Mac arm64的两项相关测试以`-race -count=20 -p=1`通过，共40次顶层执行、1.821秒，覆盖自有进程退出与未知错误/取消负例；未生成持久测试bin，自有sleep进程均Wait回收。后续完整CI以本修复提交的GitHub检查结果为准，不将旧失败或下游skip计为通过。新版本浏览器交互、Cloudflare人工验证及其他外部门槛保持开放。
+
+
+七类复核：目录和SDK/host/plugin依赖方向保持；RPC、准入、授权和能力未变；持久状态、revision、原子性与去重未变；测试独占子进程并在所有路径取消/join观察器、回收子进程；文件/终端/网络语义与限额未变；CLI/TUI/配置/安装及冻结资产未变；行为证据保留首次CI失败，新增局部race证据不替代完整平台CI或用户外部验收。
+
+
 <a id="evidence-alpha9-upgrade-20261122"></a>
 ## alpha.9 正式升级的七类复核（2026-11-22）
 

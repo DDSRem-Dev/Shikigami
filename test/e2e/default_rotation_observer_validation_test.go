@@ -78,9 +78,28 @@ func TestDefaultRotationProcessObserverOwnsAndJoinsSamples(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	observer := startRotationProcessObserver(t.Context(), rotationProcessIdentity{PID: command.Process.Pid, Created: created})
+	firstPresent := make(chan struct{})
+	announcedPresent := false // Accessed only by the observer's sampling goroutine.
+	observer := startRotationProcessObserverWithProbe(t.Context(), rotationProcessIdentity{PID: command.Process.Pid, Created: created}, func(ctx context.Context, identity rotationProcessIdentity) (bool, error) {
+		alive, err := rotationObservedAlive(ctx, identity)
+		if alive && err == nil && !announcedPresent {
+			announcedPresent = true
+			close(firstPresent)
+		}
+		return alive, err
+	})
 	defer observer.close()
-	time.Sleep(40 * time.Millisecond)
+	// The real probe must observe the owned process before we retire it. A
+	// fixed sleep cannot establish that ordering on a busy native runner.
+	select {
+	case <-firstPresent:
+	case <-observer.done:
+		t.Fatal("observer ended before observing the owned process", observer.result)
+	case <-t.Context().Done():
+		t.Fatal("waiting for initial process observation", t.Context().Err())
+	case <-time.After(2 * time.Second):
+		t.Fatal("observer did not observe the owned process before retirement")
+	}
 	if err := command.Process.Kill(); err != nil {
 		t.Fatal(err)
 	}
