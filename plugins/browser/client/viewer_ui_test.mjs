@@ -281,9 +281,9 @@ test('stream revocation updates confirmed control text after HTTP already comple
 
 test('picture quality uses public RFB settings, preserves authority, and survives reconnect', async () => {
     const v = await viewer(); v.connect(); await flush();
-    assert.equal(v.rfbs[0].qualityLevel, 6);
-    assert.equal(v.rfbs[0].compressionLevel, 2);
-    assert.equal(v.element('quality-mode').value, 'balanced');
+    assert.equal(v.rfbs[0].qualityLevel, 3);
+    assert.equal(v.rfbs[0].compressionLevel, 6);
+    assert.equal(v.element('quality-mode').value, 'smooth');
     for (const [mode, quality, compression] of [['smooth', 3, 6], ['clear', 8, 2], ['balanced', 6, 2], ['smooth', 3, 6]]) {
         v.element('quality-mode').value = mode;
         v.element('quality-mode').listeners.change();

@@ -23,7 +23,7 @@ test-tools:
 
 test-viewer:
 	@node -e 'if (Number(process.versions.node.split(".")[0]) < 22) { console.error("Viewer tests require Node.js 22 or newer."); process.exit(1); }'
-	node --test plugins/browser/client/viewer_ui_test.mjs
+	node --test plugins/browser/client/viewer_ui_test.mjs plugins/browser/client/novnc_display_test.mjs
 
 test-linux:
 	./scripts/test-linux.sh

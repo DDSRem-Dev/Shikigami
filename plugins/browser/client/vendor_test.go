@@ -24,7 +24,7 @@ func TestEmbeddedNoVNCImmutableSourcesAndLicenses(t *testing.T) {
 	if err := json.Unmarshal(encoded, &upstream); err != nil {
 		t.Fatal(err)
 	}
-	if upstream.Version != "1.6.0" || upstream.Commit != "a8dfd6a3ea3c74244f5ebdaa5a7f1023007a7820" || upstream.ArchiveSHA256 != "ebb8eabcd3670ce1a02e4025f03976826c289121cf631183647bd8325b003403" {
+	if upstream.Version != "1.7.0" || upstream.Commit != "63107bd06d9e1f6136ff21aeda8cd62cbf0d433e" || upstream.ArchiveSHA256 != "06dac239be3973ed79a00e357a68aab996e6ed2fd496ee2cc6e6a34020344ac9" {
 		t.Fatal("noVNC provenance changed without a reviewed pin update")
 	}
 	for _, required := range []string{"core/rfb.js", "core/websock.js", "vendor/pako/lib/zlib/inflate.js", "LICENSE.txt", "AUTHORS", "docs/LICENSE.MPL-2.0", "docs/LICENSE.BSD-2-Clause", "docs/LICENSE.BSD-3-Clause", "vendor/pako/LICENSE"} {

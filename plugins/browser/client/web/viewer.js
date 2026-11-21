@@ -15,7 +15,7 @@ const state = {
     attachment: "", instance: "", revision: "", controllerId: "",
     pendingControl: false, connecting: false, closed: false, transferring: false,
     statusRequest: null, controlRequest: null, statusTimer: null, screenClosing: null,
-    qualityMode: "balanced", transportTimer: null,
+    qualityMode: "smooth", transportTimer: null,
 };
 
 function applyQuality() {

@@ -1,5 +1,31 @@
 # 实施与验收记录
 
+<a id="evidence-viewer-memory-latency-batch-20261122"></a>
+## 后续查看器改进与延迟归因（2026-11-22，源码未发布、严重卡顿未关闭）
+
+- [x] 固定官方noVNC1.7.0源码，commit `63107bd06d9e1f6136ff21aeda8cd62cbf0d433e`、归档SHA256 `06dac239be3973ed79a00e357a68aab996e6ed2fd496ee2cc6e6a34020344ac9`，61项payload清单与完整来源核对。纳入已绘图Image.src释放、JPEG扫描优化及H264能力探测VideoFrame.close；无私改vendor。上游依据：[图像释放](https://github.com/novnc/noVNC/commit/23b7219a5d39577f752be939ee25db2484d465b6)、[JPEG扫描](https://github.com/novnc/noVNC/commit/356eab4f4d259b6db7d1c7b84d43408b2e7acb09)。本机image decode短测0–7ms，因此不能把本次严重卡顿归因于解码或宣称升级已解决。
+- [x] 新查看器默认Smooth（quality3/compression6），用户仍可选Balanced/Clear，重连保留本窗口选择；权限、分辨率与控制权不随画质改变。正式alpha.9仍默认Balanced。无并发下载的同一15fps动画交替Balanced/Smooth各12次：Balanced343–1034ms、中位439.5ms；Smooth146–720ms、中位288.5ms。只说明该页面短样本改善，未证明真实网站或长期体验。早先口头约465ms为汇总误差，以这里完整24样本计算为准。
+- [x] 真实vendor行为回归覆盖异步解码乱序/flush/释放后可见像素快照、64帧源释放、错误尺寸拒绝及JPEG18个分片点；旧1.6在两项释放测试失败。Image/canvas为double，不等于浏览器GC、真实图片像素或性能验收。补齐51个Fence解析/转发子用例，保留二进制payload/flags、跨DATA分片、只读与revision变化，旧revision按键仍拒绝；未发现Fence生产缺陷。
+- [ ] 用户反馈低帧率、输入延迟及冻结/断开恢复仍开放。远端点击至双rAF短测2–27ms、图像解码0–7ms；双rAF不证明实际合成呈现，跨主机时钟未校准，不推断单向网络延迟。前批不同工具轮询/rAF测量不作为严格对照。
+
+**传输证据：** 用户确认套餐5Mbps（理论625kB/s）。自有随机2MiB通过正式API上传3.796秒、首次下载16.129秒；其后下载15.554/9.780秒与动画重叠，仅为竞争负载证据，不算干净吞吐对照；该重叠画面测试出现4546/9155ms及一次10秒未观察到目标变化。独立分段客户端经正式agent IPC、不读取Token：首metadata219ms，全部32个64KiB DATA及终帧/EOF14076ms，本机write+hash5390μs、fsync3ms，完整hash匹配。首轮探针错误使用err==io.EOF而非errors.Is，全部数据20398ms到达后误报EOF，已修正，不能记首轮终态成功。源码审计无每块应用ACK或fsync，HTTP2客户端默认4MiB流窗口，不能归因为64KiB窗口等待。单次SSH/SCP同文件约1秒、显示1.7MB/s且hash一致，小文件可能受突发带宽影响，不能声称5Mbps套餐突破或定位ISP；后续doctor显示tailscale-direct，之前relay观察保留，路线可变，尚未证明丢包/中继/拥塞算法哪个为主因。
+
+**验证和架构：** `make test-viewer`28/28通过；`go test -race -p 2 ./plugins/browser/client ./plugins/browser/server ./test/architecture`全部通过（1.987/1.341/1.383秒），`git diff --check`通过。源码边界仍为插件内嵌静态资源与插件本地测试，无host业务依赖；RPC、能力、身份授权和RFB字节保序不变；没有修改持久数据、revision、请求去重、进程归属及启动恢复；未扩张文件、网络、剪贴板或终端权限，默认画质仅作用于viewer；安装布局和冻结alpha.9资产不变。新增测试验证真实vendor逻辑/生产Fence分支，但浏览器GC、Linux运行时及长期公网门槛独立保留。此前固定8f7481d的CI44945455780为57/57成功，不覆盖本批未提交源。
+
+**清理：** 自有loopback内存HTTP夹具已停止；删除两个自建远端标签，保留原about:blank及Claude登录页，点击网站自身暂停按钮暂停背景视频，无账号操作。本机临时viewer关闭、TaskSpace31完成，临时instrumentation移除。远端自有2MiB上传文件核验固定路径/无symlink/完整SHA后删除；本机19文件13,231,736字节临时目录及1文件1,622字节探针目录已删除；SSH会话关闭。未安装dev二进制，未删除或重置用户Chrome profile/密钥环，agent-remote保留。
+
+**下一归因候选：** 官方Tailscale1.104.2（2026-10-21发布）netstack已从Reno改CUBIC并更新恢复算法，来源注明修复旧CUBIC整型溢出后才启用；该版本要求Go1.27.3。当前仍固定1.98.10及原Go工具链，未盲改协议栈/窗口、未部署候选。需要独立兼容性、安全边界和真实节点验证，不能凭上游注释宣称现场改善。
+
+<a id="evidence-alpha9-latency-followup-20261122"></a>
+## alpha.9 后续严重卡顿反馈（2026-11-22，未解决）
+
+用户在本次人工验证进入Claude登录页后明确反馈：Ego测试窗口和自行打开的日常查看器都仍严重卡顿、难以使用。因此前一批短时点击/输入/重连成功仅为功能证据，不代表可用体验已通过；本次进入登录页的事实保持，账号授权仍暂停。正在继续分段测量输入、画面传输与实际绘制；新修正尚未完成，不改写正式alpha.9资产。
+
+已识别测量干扰：Ego页面visible/focused时requestAnimationFrame仍出现约1000/16毫秒交替间隔，因此基于该回调或外层工具轮询的约1秒结果不能当作纯网络延迟。改为在本地查看器临时包装真实noVNC send、message和display.flip，以pointerdown到目标像素实际变化为界：静态页10次128–366毫秒，15fps自有彩色动画下10次316–808毫秒；不外推其他网站/浏览器长期体验。连续更新与Fence实际启用；一次队列为空的快照不排除其他层积压。VPS短时vmstat未见CPU、swap、磁盘等待或steal饱和；公网5次ping109.675–116.126毫秒、无丢包不代表tsnet链路或长期网络。
+
+现场TigerVNC1.12.0+dfsg-8、FrameRate=60；尝试通过vncconfig在线设置15失败，随后读取仍为60，没有实际改变或重启Chrome。后续代码及验证、测试资源清理尚待完成，原网络长期体验门槛保持开放。
+
+
 <a id="evidence-alpha9-viewer-20261122"></a>
 ## alpha.9 真实查看器交互复验（2026-11-22，已进入登录页并完成临时收尾）
 

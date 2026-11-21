@@ -1,5 +1,7 @@
 # alpha.9 修复复验与 beta.1：实机测试执行手册
 
+**最新用户反馈：alpha.9仍严重卡顿，Ego和日常查看器都难以使用；体验验收未通过。** 本次已进入Claude登录页仍成立，账号授权暂停；继续定位见[后续记录](15-implementation-status.md#evidence-alpha9-latency-followup-20261122)。
+
 **当前两端：正式签名alpha.9（2026-11-22），短时浏览器交互与本次人工进入Claude登录页已通过，账号授权待验。** 固定源`0b4847d`的[发布前CI](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44924752906)57/57通过，[Release44929424103](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44929424103)成功并公开23资产；[28](28-quickstart.md)安装入口已切换alpha.9。两端7插件ready、work为running/browse，原配置、Token/auth、密钥环、profile及daemon身份保持；Chrome158.0.8127.36和x11-utils7.7+5已核对。12次CLI成功（0.180–0.211秒）只证明短时健康，见[升级证据](15-implementation-status.md#evidence-alpha9-upgrade-20261122)。本轮正式alpha.9已另行完成自有data:页面点击/输入/滚动和5次显式重连回只读后接管；Balanced/Smooth各5次计时含工具开销，不能严格比较前版不同夹具或证明全局流畅。用户人工验证后已进入claude.ai/login，助手截图确认Google/Apple/email正常登录表单，未输入账号；本轮viewer/TaskSpace/10个临时文件已清理，远端Chrome登录页明确保留，见[alpha.9查看器证据](15-implementation-status.md#evidence-alpha9-viewer-20261122)。历史alpha.8记录保持原版本，不自动扩大为本版其它功能通过。
 
 当前执行方式：用户已授权助手自动执行命令与可自动化项目；账号登录和主观体验单独交接。历史alpha.7已完成冲突恢复、同步功能、终端保活/配置快照、端口与浏览器自动化实测，当时端口恢复及间歇超时失败且后续修补尚未部署；resolve使用显式2分钟预算，原默认超时门槛不因此关闭。当前alpha.9已部署，这些历史功能记录仍不能替代新版复验。
