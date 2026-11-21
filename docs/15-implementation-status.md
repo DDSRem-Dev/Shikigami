@@ -1,15 +1,82 @@
 # 实施与验收记录
 
-## alpha.9 授权发行、两端升级与清理（2026-11-22，执行中）
+<a id="evidence-alpha9-upgrade-20261122"></a>
+## alpha.9 两端正式升级与健康复验（2026-11-22，交互及网站验收待验）
+
+已将Debian12/amd64 VPS与Mac arm64从公开签名alpha.8升级为alpha.9，固定来源`0b4847d879d10bd2a79b9df348857ab27dafa848`。先经CLI显式停止work，再复用两端完整原receipt Plan执行安装；VPS setup复用原dedicated加密凭据并更新root管理的runtime/helper，没有重新签发或输出设备Token。升级与健康检查已完成，浏览器交互A/B、人工Cloudflare与Claude验收尚未完成，不能宣称卡顿或挑战循环已解决。
+
+VPS的SHA256SUMS清单19项、Mac清单15项全部匹配已验签bundle（均包含release.json），VPS两项root支持二进制另外核对一致。两端安装首次均退出3、报告node_uninitialized；后续实际节点online，原daemon_id及100.71.151.36保持。随后正式doctor报告alpha.9、core healthy、7个插件ready，插件配置revision全部保持。首次pending没有被计作ready；安装器本地探测与后续真实远端RPC健康分别记录。
+
+Mac配置、LaunchAgent plist与凭据的3项hash保持；VPS配置、Token、加密credential、keyring policy、加密keyring及auth current/previous/lock共8项hash保持，未在文档输出其内容。profile列表逐结构一致，正式alpha.5–9发行目录及升级backups保留。Chrome仍为158.0.8127.36，新增x11-utils7.7+5；work新实例`712be7ec4555dc68c4f91a66d5c9dc76`实际running、mode=browse，region revision保持原值。普通模式原生diagnose明确返回failed_precondition，属于模式契约的正确拒绝，不冒充诊断完成或网站验证通过。
+
+### RPC与浏览器交互证据边界
+
+升级后12次默认预算的projects/sessions/browser status调用全部成功，耗时0.180–0.211秒；升级前对应12次为0.179–0.241秒。该小样本只证明当次RPC健康，不能量化画面或输入改善。升级前alpha.8真实viewer在原网络tailscale-relay下完成5次点击和输入回传：点击至结果区域canvas变化为2039、2588、719、1130、1331毫秒，count最终5、输入alpha8-test真实回传；采样含Ego操作和轮询开销，不是纯RTT。旧实例原生观察为webdriver=true、ja-JP、Asia/Tokyo。
+
+升级后原Ego TaskSpace29消失，listTaskSpaces返回空列表；依据浏览器skill已异步询问是否允许新建TaskSpace，登记时尚未收到答复，因此没有绕过继续浏览器操作，也未将升级后交互A/B记为通过。未使用的alpha.9 viewer已关闭。人工Cloudflare与Claude仍未测，未代做挑战、未修改出口、DNS或代理；普通模式running不能替代这两项。
+
+### VPS清理完成与本机收尾
+
+升级worker释放旧锁后，VPS原测试project的sync历史取得原state.lock排他锁，核对精确树结构且无symlink后删除19文件、11,906字节；没有绕过锁或编辑正式ledger。VPS本轮root安装staging已清理，普通UID loopback测试服务核对PID/cwd/cmdline后停止并清理；复扫/root、/tmp、/var/tmp未见本轮staging。最终VPS projects与sync projects列表均空，3个正式systemd服务active，正式发行与backups保留。本机本轮暂存目录已在关闭SSH复用连接后删除，共74个文件、976,054,591逻辑文件字节（不是实测释放磁盘空间）。临时目录复扫12,874条，仅剩保留的正式tmux socket；56个macOS系统保护目录仍不可访问，未绕过权限。正式安装、alpha.5–9、升级备份、凭据、浏览器profile与agent-remote保留。
+
+本批没有改写产品源码、正式签名资产或冻结发布说明。安装复用原Plan与身份，普通用户宿主/插件和root受管支持的归属不变；模式能力与原授权边界保持；原子安装receipt、升级备份、配置revision及凭据保留分别核对；Chrome先显式停止后重新启动，不把宿主重启当作无感恢复。只清理经准确身份和原锁验证的测试数据，不扩大文件/网络权限。健康探测、实际RPC、前版本viewer采样与尚未执行的新版本交互/公网验收分列，beta及外部门槛不推进。
+
+<a id="evidence-public-alpha9-release-20261122"></a>
+## alpha.9 公开发行与独立资产验证（2026-11-22）
+
+固定标签`v0.0.1-alpha.9`指向`0b4847d879d10bd2a79b9df348857ab27dafa848`。[发布前CI 44924752906](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44924752906) attempt1最终57/57成功；[发行流水线44929424103](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44929424103) attempt1最终60项成功、1项条件Homebrew检查跳过，跳过不计通过。[Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.9)于UTC2026-11-21T18:13:58Z公开，共23个资产。两端正式升级已完成，独立部署证据见[alpha.9升级记录](15-implementation-status.md#evidence-alpha9-upgrade-20261122)；原网络交互体验、用户人工Cloudflare验证、真实账号与物理重启继续开放。
+
+独立验证23资产精确清单、GitHub元数据size/digest、四目标Ed25519签名与完整payload hash、PROVENANCE/tag/run/source、公钥及固定源码bootstrap一致。34个二进制只读核验实际GOOS/GOARCH和Go1.26.11；四目标`shiki`另从ELF/Mach-O真实Go字符串符号读取Version/Commit/BuiltAt，分别一致为alpha.9、上述完整源码和2026-11-21T17:19:42Z。其余30个二进制不宣称均保留这些字符串；未执行下载的跨平台二进制。
+
+独立审计脚本曾有两项错误假设，均保留失败与修正范围：正式alpha.8样本的debug/buildinfo不含`-ldflags`，故改用实际ELF/Mach-O符号中的Go字符串；首轮alpha.9签名/payload/GitHub摘要已通过，但要求全部二进制保留BuiltAt时，在linux/amd64的shiki-agent失败。源码确认agent只调用不引用BuiltAt的buildinfo.String/Version，链接器可消除未用字段；改为四目标CLI必须验证三字符串，其余30个仍核平台/工具链及签名payload，不降低任何资产、签名或来源门槛。修正后的完整audit实际通过；没有改写公开资产或将失败测试冒充成功。
+
+| 平台 | 归档SHA-256 | 签名绑定的SHA256SUMS pin |
+|---|---|---|
+| linux/amd64 | `80b3fef983016d1297f911a7887d18d6db453fda0cd634c1fc1a495e97e1eb94` | `86c06eb1278c3cfd9d4ddcc095b93771a856a60c8fab4fb5e3ec615823232043` |
+| linux/arm64 | `39a0ad3e14ee213992498981f256b370d4fd11394509ae51283b7dae38ff6790` | `c1b4aeb2b55e77b4eddfa296c55956f4772b60b9a3dfa6230f0a384f9620771f` |
+| darwin/amd64 | `c413f342769e8f7c603168b51dbd46020e584b1236d95866a570b158138a1585` | `97abb022f46146d07035902d814cb4c47a09d5a29ab510233b60f4f76d74c03e` |
+| darwin/arm64 | `52086542daac7e28bbb814ad5d715a50dd03371e765f13708cfc913a812dfcea` | `addbccad912290a12669097a20a17f9f55439f332651983e110b0af3b5ad593c` |
+
+Homebrew公式已自动推进，bot提交[`e0888009cc634de8c6e09b0962b44934498f2f7b`](https://github.com/DDSRem-Dev/Shikigami/commit/e0888009cc634de8c6e09b0962b44934498f2f7b)；从认证资产重新渲染与已下载公式逐字节一致，公式SHA-256为`7c57e9bbdc86922edccb677d4a9b2929d703d6e4c19777267847b7202b534ddb`。这不是新版本真实tap安装/重装或受管服务升级验收。
+
+临时审计报告曾位于`/tmp/shiki-alpha9.gGYgWZ/public-audit.json`（SHA-256 `5ddc3679a29f658ece13ec22565643b1ee626be3408f42102c8d5f793f6c2c56`）；本轮曾采集release/run/tag元数据、alpha8-buildinfo-sample.json与audit-assumption-correction.json，现均已按清理授权删除。临时路径不是永久公开存档，摘要保存在本文，公开来源以固定Release与Actions链接为准。可信Ed25519 SPKI指纹为`e21f6dd671ea5042c43c492b759b933dda73985f89a823b43c651ff7c787c17d`。
+
+本批七类复核：没有修改冻结生产源码；目录与SDK/host/plugin依赖方向保持；协议、准入、授权和能力不因发行核验扩大；持久格式、revision、去重与状态恢复仍按候选修复契约；服务/Chrome进程归属、取消和显式启动保持；文件、终端、RFB及网络限额不变；CLI/安装/四目标产物与已冻结说明一致。验证明确区分本地回归、公开签名来源、实际部署及公网人工验收，条件skip不计通过，不以发行完成推进beta或宣称Cloudflare/卡顿解决。
+
+## alpha.9 发行、两端升级与本轮清理完成，交互及外部验收待验（2026-11-22）
+
+固定源码`0b4847d879d10bd2a79b9df348857ab27dafa848`的完整CI、alpha.9签名公开发行和独立资产验证已完成，见[发行证据](15-implementation-status.md#evidence-public-alpha9-release-20261122)。两端正式升级和RPC健康检查已完成，见[升级证据](15-implementation-status.md#evidence-alpha9-upgrade-20261122)；本机临时材料收尾已完成，浏览器交互/公网人工验收待验，此记录批次不修改冻结生产源码。
 
 - [x] 用户授权alpha.9公开发行、升级两端及重启Chrome，页面已保存。
-- [ ] 固定提交完整CI通过后创建不可变tag，完成签名发行及独立公开资产验证。
-- [ ] 只部署正式签名alpha.9，检查原身份、凭据、浏览器profile及日常模式。
-- [ ] 扫描并清理确认属于Shikigami的开发/临时/旧验收数据，先停用测试同步映射再删本地测试目录；保留agent-remote、正式安装/历史发行/升级备份和真实用户数据。
+- [x] 固定提交完整CI通过后创建不可变tag，完成签名发行及独立公开资产验证。
+- [x] 只部署正式签名alpha.9，检查原身份、凭据、浏览器profile及日常模式。
+- [x] 完成本轮两端有明确范围的元数据扫描；经既有API暂停并移除旧验收映射，删除两个已停止测试会话、测试项目及两端原验收目录。
+- [x] 升级worker释放锁后，以原state.lock和精确结构校验清理VPS旧测试sync历史及本轮VPS安装staging/loopback夹具。
+- [x] 完成本机`/tmp/shiki-alpha9.gGYgWZ`临时材料收尾及SSH连接关闭；保留agent-remote、正式安装/历史发行/升级备份、正式归档记录和真实用户数据，不宣称全盘无残留。
 - [ ] 新版本原网络交互复验及用户人工Cloudflare验证；账号登录仍不代做。
 
+<a id="evidence-alpha9-cleanup-20261122"></a>
+### 升级前旧验收环境清理与扫描证据（历史快照）
 
-## 浏览器兼容性与响应路径优化（2026-11-21～22，候选源码修复与隔离复验完成，未发布/部署）
+用户本次明确允许删除旧本地Shiki测试目录，取代先前保留该验收项目/会话的安排；agent-remote、正式凭据及work profile仍保留。初次直接unmap被`MAPPING_MUST_BE_PAUSED`拒绝且未产生修改；随后正常CLI pause得到`rev_2214f959bb59b5ae5342fb469abd9391`，再unmap成功。原`terminal-check`与`jp-auth-check`两个测试session均为stopped、attachments=0，经正常CLI删除；测试project随后通过正常CLI删除，没有直接编辑状态库。
+
+两端`beta-accept-20261118-235852`目录删除前逐项核对仅含原`from-mac.txt`（18字节）、冲突副本（19字节）、`terminal-check.txt`（18字节），名称及hash匹配后各删除55字节。本地空`/Users/rem/Shikigami-Acceptance`父目录也已删除，VPS projects根保留。首轮删除检查因冲突副本文件名末尾误多抄一个“1”而拒绝，未删除任何文件；重新列出并核对后才执行正确清理。此前Mac lsof显示sync worker与一个终端cwd引用测试目录，因此先停用映射，未直接在活动同步下删除或杀掉用户终端。
+
+| 扫描面 | 实际覆盖与结果 | 排除及结论边界 |
+|---|---|---|
+| Mac home | 对`/Users/rem`无深度限制枚举路径与元数据，访问84,860个目录、516,703个文件条目，权限/读取错误0；命名候选仅已知验收目录、正式路径/命令链接及源码repo，没有新增待删开发bin/归档候选 | 不跟随symlink、不跨文件系统；跳过2个同名agent-remote目录、6,597个依赖/cache目录、116个.git、565个目录symlink、12个Library/指定软件缓存根，以及正式state/install/keys和本repo各1。未读取文件内容，不覆盖排除区域或任意改名材料 |
+| Mac repo与正式安装 | 初扫repo ignored构建文件0、untracked均为本批源码/测试；提交后补查Git仅主worktree、无未追踪开发产物。三条.local/bin命令链接均指向正式current，当时current为alpha.8 | .config/shikigami下release-keys仅确认目录归属，不读取密钥内容；正式alpha.5–8发行目录及升级backups保留；不清通用软件缓存 |
+| Mac临时目录补扫 | 初次只检查`/private/tmp`及TMPDIR根层已知前缀未发现候选，不能覆盖子目录。随后递归补扫发现90个旧shiki-test-* tmux socket；逐个核对socket类型、本UID、连接均为ECONNREFUSED，删除前复核inode相同后全部unlink，0个活动socket。复扫12,881条，匹配项仅本轮alpha.9 staging、正式tmux shiki-501及CI审查代理当前目录 | 不跟随symlink，排除node_modules/.git及本轮staging内部；56个macOS受保护TemporaryItems访问拒绝，未提权或绕过。正式tmux和当前任务目录保留，未将拒绝区域计作无残留 |
+| VPS | 对`/root`、`/home`、`/tmp`、`/var/tmp`、`/opt`、`/usr/local/bin`、`/etc/systemd/system`递归元数据扫描共1,258条、错误0，未发现新增dev候选 | 不跟随symlink，排除依赖/cache/.local/profile，保留agent-remote、正式alpha.5–8发行/备份、root支持程序及系统私有目录；不是全磁盘或排除区域内容扫描 |
+
+补充同步私有数据核查：本地sync_mappings已为空，旧map由插件正常归档，ledger中archive的state为archived、operations/conflicts均0。源码复核确认Unmap关闭tree/staging并保留正式归档tombstone。清理时成功取得原state.lock的排他非阻塞flock，验证目标全目录无symlink及精确tree顶层结构后，删除该map的trees子目录（6文件共2,722字节，含3个旧history副本）及空staging子目录；正式ledger的归档、去重和防ID复用记录未修改。VPS对应已删除project的sync历史已只读列清单，但LOCK_EX|LOCK_NB仍阻塞，故未删除、未绕过或替换锁，待升级worker重启释放后再核查清理。
+
+补充运行资源核查：Git只有主worktree，无未追踪开发产物；Docker列表没有shiki测试容器，其他容器保留；VPS systemd仅3个正式Shiki服务，未发现dev服务。清理后正式doctor仍报告alpha.8、7插件ready，work浏览器running并保留；身份、凭据和正式浏览器数据未变。本批清理只使用已有CLI/API及经精确清单、原有锁核验的测试文件删除，未改变认证、插件配置或浏览器启动模式。上表“未发现”仅适用于本次扫描规则及覆盖面；不等于全机无残留。VPS旧测试sync历史、发行/部署后新材料收尾、alpha.9实际安装、原网络稳定性与人工Cloudflare验证另行登记，不能以此次清理提前关闭。
+
+
+## 浏览器兼容性与响应路径优化（2026-11-21～22，发行前候选验证记录）
+
+以下保留发行前候选源码、隔离复验及失败记录的原始范围；现已随alpha.9公开，发行证据见上，部署与公网人工验收另记。
 
 用户接受“优先日常浏览兼容性”：新启动默认browse，不启用Chrome调试接口；需要原生浏览器诊断时显式切换diagnostic并确认重启。旧实例不静默重启、不伪报browse。此取舍不修改浏览器指纹，不自动处理Cloudflare挑战，不改变出口、代理、DNS或账号登录安排。
 

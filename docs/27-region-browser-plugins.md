@@ -25,7 +25,7 @@
 - Claude Code由用户通过远程Chrome人工完成官方授权，不复制Cookie、不抓取密码、不承诺自动回调集成。
 - Chrome/系统依赖首次安装与维护更新展示清单和来源，管理员确认。不静默重启、不关闭系统既有更新策略。
 
-当前开发源码把新启动分为普通浏览 `browse`（默认，不建立原生Chrome诊断通道）和诊断 `diagnostic`（显式 `browser start --diagnostics`，专用私有调试管道，不开放公网调试端口）。诊断模式可能影响网站兼容性，普通浏览不承诺通过任何网站风控。模式属于本次runtime，不写入profile偏好；新开机目标默认普通浏览。相同profile且相同模式复用现有实例；切换模式或profile必须 `--replace-running` 并显式确认停止旧实例。旧 `<instance>.json` launch record 无mode字段时按其真实历史行为解释为diagnostic；新 `<instance>.launch.json` 必须显式包含有效mode，字段丢失不能回退为旧行为。不静默改为普通浏览或重启。状态返回实际模式；普通浏览实例调用原生诊断明确返回FailedPrecondition。该变化未包含在已发布alpha.8中，部署与公网兼容性仍需单独验收。
+alpha.9把新启动分为普通浏览 `browse`（默认，不建立原生Chrome诊断通道）和诊断 `diagnostic`（显式 `browser start --diagnostics`，专用私有调试管道，不开放公网调试端口）。诊断模式可能影响网站兼容性，普通浏览不承诺通过任何网站风控。模式属于本次runtime，不写入profile偏好；新开机目标默认普通浏览。相同profile且相同模式复用现有实例；切换模式或profile必须 `--replace-running` 并显式确认停止旧实例。旧 `<instance>.json` launch record 无mode字段时按其真实历史行为解释为diagnostic；新 `<instance>.launch.json` 必须显式包含有效mode，字段丢失不能回退为旧行为。不静默改为普通浏览或重启。状态返回实际模式；普通浏览实例调用原生诊断明确返回FailedPrecondition。该变化已随alpha.9发布，alpha.8不含此功能；两端已升级正式签名alpha.9，7插件ready、work实际为running/browse，Chrome158.0.8127.36与x11-utils7.7+5已核对，原profile/密钥环保留，见[升级证据](15-implementation-status.md#evidence-alpha9-upgrade-20261122)。新版浏览器交互与公网兼容性仍需单独验收。
 
 模式权威保存在私有、不可变的launch record中。`profiles.json` 的Runtime磁盘副本保留alpha.8字段形状，不写入新增mode；内存实例、保存失败回滚及去重结果保留实际模式。插件初始化先验证profile/instance ID与固定launch路径，再安全读取文件，完整校验其余Spec字段及Region一致后恢复mode。缺失、损坏、权限异常或身份不匹配均拒绝，即使实例已停止也不能猜测legacy。旧字段形状严格解码、改写后再次升级的本地测试不等于已经执行正式alpha.8服务回滚；公开包/用户环境升级回滚仍需独立验收。
 
@@ -62,7 +62,7 @@ agent继续持有连接和scope；CLI不得启动插件或拥有loopback listene
 
 查看器控制请求必须绑定用户确认时的attachment、instance和control revision；本地插件在锁内核对当前连接，转发固定旧scope并随该attachment取消，不能将迟到请求改绑到重连后的连接。前端只接受当前generation且匹配scope的流事件授予/撤销控制，HTTP成功和状态快照不能授权。已由流确认的控制结果不被迟到HTTP超时提示覆盖，撤权同步更新只读提示；显式重连取消旧控制/状态请求，旧请求完成不能占用或释放新一代刷新槽。这些修补已随alpha.8发布并于2026-11-21部署到用户两端；本轮5次显式重连和接管功能通过，但另有一次状态查询超时经手动Refresh恢复，不能宣称所有超时或长稳问题已解决，见[两端升级与实测](15-implementation-status.md#evidence-alpha8-upgrade-20261121)。alpha.7历史失败记录保留。
 
-候选响应路径：每帧仍实时核查本机服务器记录及撤销上下文，只复制单条记录而非整个状态；只读RFB协商/更新请求仅写自身socket，不占用全局控制锁。修改桌面的按键/鼠标/剪贴板/resize仍在控制revision及权限检查后、同锁内发送，不能让旧控制者输入越过接管边界。READY始终先于控制通知和图像；CONTROL独立有界队列在发送边界优先，DATA保持全部字节顺序，不能丢帧/重排RFB块。已阻塞的transport Send不能被抢占，控制队列耗尽只取消该慢attachment。状态查询释放worker锁等待runtime/region，返回前验证完整状态/配置/实例版本，发生漂移返回Aborted供显式刷新。
+alpha.9响应路径：每帧仍实时核查本机服务器记录及撤销上下文，只复制单条记录而非整个状态；只读RFB协商/更新请求仅写自身socket，不占用全局控制锁。修改桌面的按键/鼠标/剪贴板/resize仍在控制revision及权限检查后、同锁内发送，不能让旧控制者输入越过接管边界。READY始终先于控制通知和图像；CONTROL独立有界队列在发送边界优先，DATA保持全部字节顺序，不能丢帧/重排RFB块。已阻塞的transport Send不能被抢占，控制队列耗尽只取消该慢attachment。状态查询释放worker锁等待runtime/region，返回前验证完整状态/配置/实例版本，发生漂移返回Aborted供显式刷新。
 
 查看器Smooth采用quality=3/compression=6，Balanced保持原quality=6/compression=2，Clear采用quality=8/compression=2；只使用noVNC公开API。更强压缩可减少流量但增加服务端CPU成本，必须实际比较，不自动改变分辨率或取得控制权。屏幕接收速率和本地WebSocket发送buffer不等于RTT、远端队列或最终显示延迟。模式显示仅由status报告的browse/diagnostic映射，缺失/未知值显示unknown；状态查询失败时历史模式仅留在明确标记为旧快照的Details中。
 
@@ -78,7 +78,7 @@ Linux Chrome固定使用GTK3及发行版`fcitx5-frontend-gtk3`，不使用XIM或
 
 ## 当前源码命令流程
 
-以下命令自公开alpha.3提供，当前安装入口为alpha.8，不适用于alpha.2；系统支持安装及平台验收状态以08/15/16为准。先按[11](11-automated-installation.md)完成可信bundle安装、管理员依赖/策略/密钥环配置，再通过既有连接命令登记服务器。
+以下命令自公开alpha.3提供，当前安装入口为alpha.9，不适用于alpha.2；系统支持安装及平台验收状态以08/15/16为准。先按[11](11-automated-installation.md)完成可信bundle安装、管理员依赖/策略/密钥环配置，再通过既有连接命令登记服务器。
 
 ```sh
 shiki --server my-vps plugins --side remote enable region
@@ -101,7 +101,7 @@ shiki --server my-vps browser start jp-work --yes
 shiki --server my-vps browser open jp-work --read-only=false --launch
 ```
 
-当前开发源码进行原生诊断须先显式切换模式；以下启动模式选项需要新版CLI、agent、daemon及浏览器worker协商 `browser.launch-mode.v1`，alpha.8不支持：
+alpha.9进行原生诊断须先显式切换模式；以下启动模式选项需要新版CLI、agent、daemon及浏览器worker协商 `browser.launch-mode.v1`，alpha.8不支持：
 
 ```sh
 shiki --server my-vps browser start jp-work --diagnostics --replace-running --yes

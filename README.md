@@ -1,10 +1,10 @@
 # Shikigami（式神）
 
-**alpha.8已发布：** [v0.0.1-alpha.8](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.8)用于下一轮修复后测试。固定源CI最终57/57通过，发行完成60项成功、1项条件跳过；23个公开资产、四目标签名/来源及自动Homebrew公式已独立核验，见[发行证据](docs/15-implementation-status.md#evidence-public-alpha8-release-20261120)和[变更说明](docs/releases/v0.0.1-alpha.8.md)。VPS与Mac已于2026-11-21升级正式alpha.8，见[两端升级与实测](docs/15-implementation-status.md#evidence-alpha8-upgrade-20261121)。部分同步、端口和浏览器功能复验通过，浏览器状态超时与临时转发端口重绑定仍保留；默认shell方向键、长稳、网络专项、Claude登录和物理重启未闭环，未进入beta。
+**alpha.9已发布：** [v0.0.1-alpha.9](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.9)修补浏览器普通浏览/诊断模式、响应路径、画质选择和退出状态。固定源`0b4847d`的[发布前CI](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44924752906)57/57通过，[发行流水线](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44929424103)已成功，23个资产于`2026-11-21T18:13:58Z`公开；见[变更说明](docs/releases/v0.0.1-alpha.9.md)及[实施记录](docs/15-implementation-status.md)。VPS/Mac已升级正式签名alpha.9，7插件ready、work运行于browse，原配置、凭据、密钥环、profile及daemon身份保持，见[两端升级证据](docs/15-implementation-status.md#evidence-alpha9-upgrade-20261122)。12次CLI请求成功（0.180–0.211秒）仅证明短时健康；新版浏览器交互尚未复验，不能将历史alpha.8功能测试或隔离Chrome验收算作本版实机通过。原网络卡顿、Cloudflare人工验证、Claude登录与物理重启等边界继续保留，未进入beta。
 
 通过本地 CLI/TUI 和常驻 agent，使用远端 VPS 上的 tmux / Claude Code。核心链路采用 Connect/protobuf over HTTP/2；文件同步和 TCP 转发由双端插件执行。
 
-**当前源码的 Phase 0–5 验收清单已闭环（42/42）。** 功能、已验平台、证据来源及未支持范围见[支持声明](docs/18-release-readiness.md#current-support)，逐项进度见[路线图](docs/08-roadmap.md)。认证生命周期及长稳、资源与性能按用户确认测试通过关闭；真实 Claude 登录/推理、物理主机重启和生产 heap/object 归因仍保留未实测边界。当前公开安装入口为 alpha.8，修补同步复合预算/副本恢复保护、端口目标拒绝隔离与浏览器控制竞态，包含 VPS/Mac 一键安装向导及地区环境与远程浏览器插件；不是 beta 或稳定版。
+**当前源码的 Phase 0–5 验收清单已闭环（42/42）。** 功能、已验平台、证据来源及未支持范围见[支持声明](docs/18-release-readiness.md#current-support)，逐项进度见[路线图](docs/08-roadmap.md)。认证生命周期及长稳、资源与性能按用户确认测试通过关闭；真实 Claude 登录/推理、物理主机重启和生产 heap/object 归因仍保留未实测边界。当前公开安装入口为 alpha.9，新增普通浏览模式、浏览器响应路径与退出诊断修补，并保留alpha.8的同步和端口修复，包含 VPS/Mac 一键安装向导及地区环境与远程浏览器插件；不是 beta 或稳定版。
 
 历史 alpha.6 固定源码的发布前 CI 为 57/57；发行工作流完成 60 项成功、1 项条件跳过（不计通过），自动构建、签名、公开发布和 Homebrew 更新成功。23 个公开资产、四目标签名与产物来源、自动公式已独立核验，见[发行证据](docs/15-implementation-status.md#evidence-public-alpha6-release-20261117)。该版两端已完成签名升级，部署后CLI采样和浏览器交互验证分别记录；真实账号授权与物理重启仍未实测，见[发行说明](docs/releases/v0.0.1-alpha.6.md)。[alpha.3 历史发行证据](docs/15-implementation-status.md#evidence-public-alpha3-release-20261115)保留，不扩大为新向导验收。
 
@@ -12,19 +12,19 @@
 
 ## 安装
 
-VPS 和 Mac 各执行一条命令，向导处理依赖、服务、登录和插件配置：
+VPS 和 Mac 各执行一条命令，向导处理依赖、服务、登录和插件配置。升级已有浏览器环境前，先保存页面内容并显式停止受管Chrome（例如 `shiki --server my-vps browser stop work --yes`，按实际名称替换）；本版需同时更新两端应用及VPS浏览器系统支持：
 
 ```bash
 # VPS（Debian 12 / Ubuntu 24.04）
-curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.8/bootstrap.sh | sudo bash -s -- --quickstart --version=v0.0.1-alpha.8
+curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.9/bootstrap.sh | sudo bash -s -- --quickstart --version=v0.0.1-alpha.9
 
 # Mac（当前登录用户，不加 sudo）
-curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.8/bootstrap.sh | bash -s -- --quickstart --role=client --version=v0.0.1-alpha.8
+curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.9/bootstrap.sh | bash -s -- --quickstart --role=client --version=v0.0.1-alpha.9
 ```
 
 按提示确认系统变更、完成账号授权，并将 VPS 显示的地址和 Token 填入 Mac 向导。默认配置全部插件；仅需终端、同步和端口转发时，两端均追加 `--components=core`。已有受管客户端可运行 `shiki setup`。重复同一命令可继续引导，详细行为、插件说明和恢复方式见[一键安装](docs/28-quickstart.md)。
 
-当前公开预发布为 [v0.0.1-alpha.8](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.8)。也可通过 Homebrew 安装命令和完整 bundle：
+当前公开预发布为 [v0.0.1-alpha.9](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.9)。也可通过 Homebrew 安装命令和完整 bundle：
 
 ```bash
 brew tap ddsrem-dev/shikigami https://github.com/DDSRem-Dev/Shikigami

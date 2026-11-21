@@ -2,11 +2,11 @@
 
 用户要求（2026-11-16）：普通用户在 VPS 和 Mac 各执行一条命令，由工具完成依赖、服务、登录引导和插件配置，不再手工下载公钥、拼接 bundle/pin、编辑 YAML 或串联管理命令。
 
-**alpha.8已发布并完成公开资产独立验签：** 本页下载命令现指向alpha.8，作为下一轮修复测试目标。发行与验证结果见[15](15-implementation-status.md#evidence-public-alpha8-release-20261120)，修复内容见[alpha.8说明](releases/v0.0.1-alpha.8.md)。用户VPS与Mac已于2026-11-21升级正式alpha.8，见[两端升级与实测](15-implementation-status.md#evidence-alpha8-upgrade-20261121)。默认预算下6次resolve（0.594–4.938秒）、端口目标拒绝恢复、浏览器输入/5次显式重连/接管/暂存文件功能通过；浏览器一次状态超时经手动Refresh恢复，临时转发后续端口重绑定原因未定。默认`/bin/sh`方向键尚未修复，长稳/网络专项/Claude登录/物理重启仍开放。
+**alpha.9已公开：** 本页下载命令指向alpha.9；固定源`0b4847d`的发布前CI57/57通过，[发行流水线](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44929424103)成功并公开23资产。修复内容见[alpha.9说明](releases/v0.0.1-alpha.9.md)，资产核验和两端升级结果见[15](15-implementation-status.md)。两端已升级正式签名alpha.9，7插件ready、work运行于browse；原配置、Token/auth、密钥环、profile及daemon身份保持，VPS的Chrome158.0.8127.36和x11-utils7.7+5已核对，见[升级证据](15-implementation-status.md#evidence-alpha9-upgrade-20261122)。12次CLI成功（0.180–0.211秒）只证明短时健康，新版浏览器交互及Cloudflare人工验证尚未执行，不把历史alpha.8功能通过扩大为本版低延迟或稳定性通过。
 
-**版本边界：本页使用 v0.0.1-alpha.8 修复入口，延续 alpha.4–alpha.7 的安装与连接修补，新增同步复合预算/副本保护、端口目标拒绝隔离及浏览器控制竞态修补。发行状态与验证见[15](15-implementation-status.md)。alpha.3 不含 `shiki-install quickstart` 或 `shiki setup`，历史归档不改写；真实完整双机首装、账号授权和物理重启仍按外部门槛登记。**
+**版本边界：本页使用 v0.0.1-alpha.9 修复入口，保留alpha.4–alpha.8的安装、连接、同步和端口修补，新增普通浏览模式、浏览器响应路径优化、画质选项与退出诊断。发行状态与验证见[15](15-implementation-status.md)。alpha.3 不含 `shiki-install quickstart` 或 `shiki setup`，历史归档不改写；真实完整双机首装、账号授权和物理重启仍按外部门槛登记。**
 
-历史alpha.7已纳入alpha.6发布后发现的旧attachment本地清理竞态与已有连接身份复核预算修补；alpha.8继续保留这些修补。历史公开发行和两端部署后验收分别记录，见[29](29-alpha6-installation-followup.md)。连接失败时不要把更换 Token 当作通用恢复步骤。
+历史alpha.7已纳入alpha.6发布后发现的旧attachment本地清理竞态与已有连接身份复核预算修补；alpha.9继续保留这些修补。历史公开发行和两端部署后验收分别记录，见[29](29-alpha6-installation-followup.md)。连接失败时不要把更换 Token 当作通用恢复步骤。
 
 ## 用户入口
 
@@ -22,17 +22,19 @@ Mac 当前登录用户，不加 sudo：
 bash scripts/bootstrap.sh --quickstart --role=client
 ```
 
-直接使用以下 v0.0.1-alpha.8 完整命令。用户无需克隆仓库或另行下载文件：
+升级已有浏览器环境时，先保存页面内容，并在Mac显式停止受管Chrome：`shiki --server my-vps browser stop work --yes`（服务器名与profile按实际替换）。alpha.9需更新Mac、VPS应用及VPS的root管理浏览器runtime，系统支持安装会补齐`x11-utils`；不能仅更新CLI或插件。
+
+直接使用以下 v0.0.1-alpha.9 完整命令。用户无需克隆仓库或另行下载文件：
 
 ```bash
 # VPS
-curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.8/bootstrap.sh | sudo bash -s -- --quickstart --version=v0.0.1-alpha.8
+curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.9/bootstrap.sh | sudo bash -s -- --quickstart --version=v0.0.1-alpha.9
 
 # Mac
-curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.8/bootstrap.sh | bash -s -- --quickstart --role=client --version=v0.0.1-alpha.8
+curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.9/bootstrap.sh | bash -s -- --quickstart --role=client --version=v0.0.1-alpha.9
 ```
 
-同一版本 Release 的 `bootstrap.sh` 也支持管道执行，交互通过 `/dev/tty`，不从脚本输入流读取回答。预发布必须使用明确的 Release/tag 下载 URL，不以 stable-only `latest/download` 推断预发布。加 `--version=v0.0.1-alpha.8` 可固定归档；省略时选择最近公开 Release，旧版本没有向导时明确失败，不退回半套安装冒充完成。脚本应从可信发布/源码取得，归档仍先验证固定发行身份和 Ed25519 签名，再执行包内代码。
+同一版本 Release 的 `bootstrap.sh` 也支持管道执行，交互通过 `/dev/tty`，不从脚本输入流读取回答。预发布必须使用明确的 Release/tag 下载 URL，不以 stable-only `latest/download` 推断预发布。加 `--version=v0.0.1-alpha.9` 可固定归档；省略时选择最近公开 Release，旧版本没有向导时明确失败，不退回半套安装冒充完成。脚本应从可信发布/源码取得，归档仍先验证固定发行身份和 Ed25519 签名，再执行包内代码。
 
 默认安装全部四种插件的支持；只需终端、同步和转发时加 `--components=core`。`--user=<普通用户>` 可覆盖 VPS 默认专用账号 `shiki`。向导不接受自定义布局或 `--non-interactive`，高级/无人值守部署继续使用原安装参数契约。
 
