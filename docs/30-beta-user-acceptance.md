@@ -1,10 +1,10 @@
 # alpha.9 修复复验与 beta.1：实机测试执行手册
 
-**当前两端：已升级正式签名alpha.9（2026-11-22），浏览器交互复验尚未执行。** 固定源`0b4847d`的[发布前CI](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44924752906)57/57通过，[Release44929424103](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44929424103)成功并公开23资产；[28](28-quickstart.md)安装入口已切换alpha.9。两端7插件ready、work为running/browse，原配置、Token/auth、密钥环、profile及daemon身份保持；Chrome158.0.8127.36和x11-utils7.7+5已核对。12次CLI成功（0.180–0.211秒）只证明短时健康，见[升级证据](15-implementation-status.md#evidence-alpha9-upgrade-20261122)。历史alpha.8已执行的功能测试保留原版本，不能扩大为alpha.9通过。
+**当前两端：正式签名alpha.9（2026-11-22），短时浏览器交互与本次人工进入Claude登录页已通过，账号授权待验。** 固定源`0b4847d`的[发布前CI](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44924752906)57/57通过，[Release44929424103](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44929424103)成功并公开23资产；[28](28-quickstart.md)安装入口已切换alpha.9。两端7插件ready、work为running/browse，原配置、Token/auth、密钥环、profile及daemon身份保持；Chrome158.0.8127.36和x11-utils7.7+5已核对。12次CLI成功（0.180–0.211秒）只证明短时健康，见[升级证据](15-implementation-status.md#evidence-alpha9-upgrade-20261122)。本轮正式alpha.9已另行完成自有data:页面点击/输入/滚动和5次显式重连回只读后接管；Balanced/Smooth各5次计时含工具开销，不能严格比较前版不同夹具或证明全局流畅。用户人工验证后已进入claude.ai/login，助手截图确认Google/Apple/email正常登录表单，未输入账号；本轮viewer/TaskSpace/10个临时文件已清理，远端Chrome登录页明确保留，见[alpha.9查看器证据](15-implementation-status.md#evidence-alpha9-viewer-20261122)。历史alpha.8记录保持原版本，不自动扩大为本版其它功能通过。
 
 当前执行方式：用户已授权助手自动执行命令与可自动化项目；账号登录和主观体验单独交接。历史alpha.7已完成冲突恢复、同步功能、终端保活/配置快照、端口与浏览器自动化实测，当时端口恢复及间歇超时失败且后续修补尚未部署；resolve使用显式2分钟预算，原默认超时门槛不因此关闭。当前alpha.9已部署，这些历史功能记录仍不能替代新版复验。
 
-本轮已完成两端升级、版本/连接/插件基线、同步默认调用路径功能、端口后端拒绝恢复、浏览器控制/5次重连/IME/剪贴板/文件，以及终端保活和配置快照回归。测试产物已清理，现有验收项目、映射、terminal-check和jp-auth-check保留。默认shell、偶发状态超时和长期稳定性仍开放；同步部分提交故障注入没有在实机重做。网络专项暂跳，Claude账号授权继续暂停。
+历史alpha.8已完成当时两端升级、版本/连接/插件基线、同步默认调用路径功能、端口后端拒绝恢复、浏览器控制/5次重连/IME/剪贴板/文件，以及终端保活和配置快照回归。当时测试产物已清理、验收项目/映射/terminal-check/jp-auth-check保留；这些旧验收资源后来已按2026-11-22新授权删除，不应继续复用。默认shell、偶发状态超时和长期稳定性仍开放；同步部分提交故障注入没有在实机重做。网络专项暂跳，Claude账号授权继续暂停。
 
 热点复测补充（2026-11-19）：一次显式connect恢复后18次远端查询全部成功，新空shell创建0.485秒；相同画面8次点击更新0.904–2.122秒，较原网络改善但仍有迟滞。有限测试不替代B06/B09长稳，Claude登录继续暂停；切网耗尽重连后可使用`shiki connect "$SHIKI_SERVER"`显式恢复，无须重新配对。
 
@@ -41,22 +41,22 @@ alpha.7 已完成公开签名验证和 VPS Debian12/amd64、Mac arm64 升级，7
 
 以下为2026-11-20之前的历史alpha.7自动化记录，当时正式两端保持alpha.7。该批已实际使用shiki完成同步恢复与功能子项、真实attach/保活、配置快照恢复、loopback HTTP转发、浏览器输入/IME/显式剪贴板/暂存文件及双查看器接管。每项实现和现场失败详见08/15/16顶部同名记录。B04的显式2分钟resolve预算仅用于功能核验；B05后端重启后转发未恢复、B06状态/接管超时、收尾会话列表一次5秒超时均保留。同步最终还出现REMOTE_RETRY_EXHAUSTED，显式恢复和数据核验结果见同记录。源码隔离回归通过不能代替候选部署后的默认体验。
 
-上述历史功能命令无需整套重跑。Claude真实账号授权继续暂停，主观长用体验及切网/睡眠/物理重启仍需用户参与。当前alpha.9浏览器交互复验按下节恢复验证工作区后继续；首装环境/新节点登录仍有独立前置条件，不以现有安装上的功能测试代替。beta尚不具备本次实机稳定性闭环证据。
+上述历史功能命令无需整套重跑。Claude真实账号授权继续暂停，主观长用体验及切网/睡眠/物理重启仍需用户参与。当前alpha.9已完成下述有限浏览器交互、本次人工进入登录页及临时收尾；长期体验、自然切网与Claude账号授权继续待验；首装环境/新节点登录仍有独立前置条件，不以现有安装上的功能测试代替。beta尚不具备本次实机稳定性闭环证据。
 
 ## 1a. 本轮之后你需要做什么
 
-**2026-11-22：两端alpha.9升级完成，work已为普通browse，交互和Cloudflare复验仍待执行。** 原Ego验证工作区已不可用，待用户确认重建后继续浏览器验证；这不是浏览器交互通过证据，也不据此判定产品故障。源码回归、合成查看器布局与隔离Chrome测试不能替代公网复验，下面旧版记录保留为背景。
+**2026-11-22：两端alpha.9升级完成，work为普通browse；真实viewer短时功能和本次人工进入Claude登录页已通过，临时收尾完成。** 用户已授权新建Ego TaskSpace30。自有页面截图确认Count5/alpha9-test输入及SCROLL_END_OK；5次显式重连均回只读后明确接管，最后截图确认reconnect-5输入，中间输入仅有动作receipt。首次误等自动Controller的15秒等待失败属于验收假设错误，实际Connected/Read-only符合设计。原生只读观察webdriver=false、ja-JP、Asia/Tokyo，未伪造。用户反馈并由助手截图确认claude.ai/login正常登录表单，未登录账号。close-viewer已closed，TaskSpace30已完成，10个临时文件共1,485,466逻辑字节已删除；远端Chrome同实例running/browse、地区revision保持，登录页有意保留。下面旧版失败记录保留为背景，本次成功不保证以后不再挑战。
 
 alpha.9当前状态与后续执行顺序：
 
 1. **已完成：** 两端签名alpha.9、7插件ready、原凭据/work profile保留，Chrome158.0.8127.36和x11-utils7.7+5已核对。旧验收目录、项目、映射、两个已停止测试会话及sync副本已按新授权清理，不能再复用旧ID。
-2. **已完成：** 在用户确认页面已保存后，work已显式启动为普通浏览，status实际返回running/browse，保持原profile、出口和地区配置。恢复验证工作区后重新打开viewer并由操作者Take control；无需仅为重复核对模式再次重启。
-3. 助手先用不含账号的合成页测试点击/输入/滚动、撤销控制、重连、IME、暂存文件，记录同画面尺寸下Balanced与Smooth的点击至画面更新分布。查看器接收KiB/s、本地发送buffer不是RTT或帧呈现延迟，不以它们代替实际延迟证据。
-4. **需要用户：** 在该VPS远端Chrome手动访问claude.ai，正常完成一次挑战。若仍循环，停止重复点击，反馈时间、Ray ID或页面错误码及截图；不要发送Cookie、Token、完整HAR或登录资料。不要求此时完成Claude账号登录。是否允许后续账号授权由用户另行决定。
+2. **已完成：** 在用户确认页面已保存后，work已显式启动为普通浏览，status实际返回running/browse，保持原profile、出口和地区配置。已在新授权工作区打开viewer并明确Take control；无需仅为重复核对模式再次重启。
+3. **本轮已完成的范围：** 自有data:页面点击/输入/滚动和5次显式重连后重新接管；Balanced为924/978/1116/890/1006毫秒，Smooth为939/999/1115/988/907毫秒。观测含Ego dispatch和像素轮询开销，非纯RTT，不能严格对比旧版不同夹具。此次没有补记IME或暂存文件通过；查看器接收KiB/s与本地发送buffer也不等于帧呈现延迟。
+4. **本次已通过：** 用户人工验证后已进入claude.ai/login，助手截图复核正常登录表单；未输入账号或代做挑战。远端登录页保留供后续用户使用，Claude账号授权须另外决定。若仍循环，停止重复点击，反馈时间、Ray ID或页面错误码及截图；不要发送Cookie、Token、完整HAR或登录资料。不要求此时完成Claude账号登录。是否允许后续账号授权由用户另行决定。
 5. 若仍失败，先结合新模式结果与原网络证据再决定下一项诊断；可能需要站点/Cloudflare支持或机房处理出口信誉，不能保证源码可强制放行。原生浏览器诊断需显式`--diagnostics --replace-running --yes`重启，采样后再显式回browse；此操作不会在用户手动挑战过程中偷偷进行。
 
 
-**最新用户反馈：仍卡顿，claude.ai勾选Cloudflare后循环。浏览器体验/网站可用性未通过，暂停反复验证及Claude授权。用户主动关闭远端Chrome导致后续crashed记录，不能算意外崩溃。已只读核查服务、NTP及有限JS/Cookie设置，根因未定；先前功能通过不覆盖本次失败，详见15顶部。**
+**历史alpha.8用户反馈（本轮alpha.9已人工进入登录页，不覆盖历史失败或长期边界）：仍卡顿，claude.ai勾选Cloudflare后循环。浏览器体验/网站可用性未通过，暂停反复验证及Claude授权。用户主动关闭远端Chrome导致后续crashed记录，不能算意外崩溃。已只读核查服务、NTP及有限JS/Cookie设置，根因未定；先前功能通过不覆盖本次失败，详见15顶部。**
 
 已通过的功能命令不用整套重跑。旧验收目录、项目、同步映射、两个已停止测试会话及sync副本已于2026-11-22按用户授权清理，不能再复用其ID；确需新的终端/同步测试时创建独立临时项目，保留日常work profile与原Token。当前剩余项目：
 

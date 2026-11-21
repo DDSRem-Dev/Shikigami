@@ -1,38 +1,56 @@
 # 开发路线图
 
+<a id="evidence-alpha9-viewer-20261122"></a>
+## alpha.9 查看器短时功能复验（2026-11-22，已进入登录页并完成临时收尾）
+
+用户补充授权新建验证工作区后，在Ego TaskSpace30完成正式Mac/VPS alpha.9的真实viewer复验。work仍为原实例`712be7ec4555dc68c4f91a66d5c9dc76`、running/browse，原网络路由为tailscale-relay；测试使用自有data: HTML页面，没有新增远端测试文件或HTTP服务。没有修改生产源码、正式资产、出口、DNS或代理。
+
+Balanced的5次点击至结果区域canvas变化观测为924、978、1116、890、1006毫秒；Smooth为939、999、1115、988、907毫秒。所有值包含Ego鼠标dispatch与canvas像素轮询工具开销，不是纯RTT。alpha.8前次使用不同夹具，不能严格作版本性能对比，也不能据此推导优化因果或全局流畅。真实截图确认Count5和输入alpha9-test回显；滚动后观察到SCROLL_END_OK。
+
+5次显式Reconnect均成功，新连接均回到只读，再由操作者明确Take control。首次测试错误期待重连后自动成为Controller，导致15秒等待失败；随后实际截图为Connected/Read-only，符合设计，记录为验收假设错误而非连接失败。后4次连接观测为1099、1459、1343、1469毫秒，同样含工具/观察开销。最后截图确认reconnect-5真实输入回显；中间各次输入只取得动作receipt，没有逐次最终截图，不扩大为每次输入均有画面确认。
+
+自有页面的只读原生观察为webdriver=false、ja-JP、Asia/Tokyo，未伪造或修改这些属性。导航claude.ai出现Cloudflare检查后交接用户；用户明确反馈已进入Claude登录页。助手重新接管TaskSpace30后，截图实际观察到claude.ai/login的正常Google、Apple和email登录表单，没有输入账号。本次人工验证后进入登录页通过，不证明以后不再出现挑战，也不等于Claude账号授权成功；助手未代做挑战。交接结束后，CLI close-viewer返回state=closed，TaskSpace30以task.finish({keep:[]})成功收尾一次。远端Chrome登录页有意保留供用户后续使用，没有关闭；最终status仍是同实例712be7ec4555dc68c4f91a66d5c9dc76、running/browse，region revision保持原值。本轮先核对精确名单、普通文件和无symlink后删除9个本机临时文件（8张截图及私有viewer回执，共1,142,073逻辑字节）和精确临时目录，最终确认截图另343,393字节随后删除，合计10文件、1,485,466逻辑字节；这不是实测释放磁盘空间。没有新增VPS文件或服务，未执行账号登录。本轮临时查看器/工作区/截图清理完成，远端登录页属于明确保留的用户使用状态。最后doctor为7插件ready、core HEALTHY、CPU15.9%，terminal/sync/forward均0；这是当次采样，不证明长期稳定。
+
+- [x] 正式alpha.9自有页面点击、输入、滚动，以及5次显式重连回只读后重新接管的有限功能复验。
+- [x] 本次用户人工验证后进入claude.ai/login，助手截图复核正常登录表单。
+- [ ] Claude账号授权、原网络长期使用体验及自然切网；不承诺以后不再出现挑战。
+- [x] 用户handoff结束后关闭本机viewer、完成TaskSpace并删除本轮10个临时文件；远端Chrome登录页有意保留。
+
+本批七类复核与证据范围见[实施记录](15-implementation-status.md#evidence-alpha9-viewer-20261122)和[架构复核](16-architecture-conformance.md#evidence-alpha9-viewer-20261122)。未改生产源码、冻结资产或权限，不用短时功能通过覆盖旧卡顿/挑战失败，beta保持开放。
+
 <a id="evidence-alpha9-observer-fixture-20261122"></a>
 ## 发行后 CI 采样夹具竞态修复（2026-11-22）
 
 文档提交`6106fec8`的[CI 44937051142](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44937051142)最终52项成功、1项失败、2项下游矩阵跳过。唯一失败是Intel Mac的`TestDefaultRotationProcessObserverOwnsAndJoinsSamples`：异步观察器启动40毫秒后测试就结束子进程，首次探测已看到进程不存在，导致LastPresent为空。日志不能区分调度延迟与系统探测耗时；这不是产品超时的证据。
 
-夹具改为等待真实身份探测返回首次alive，再结束其拥有的子进程；等待有截止、探测失败仍失败，原2秒退出join及非空/有序时间戳、正采样间隔断言保持。仅修改测试，不更改生产观察器、产品、协议、安装或已发布alpha.9资产。Mac arm64的两项相关测试以`-race -count=20 -p=1`通过，共40次顶层执行、1.821秒，覆盖自有进程退出与未知错误/取消负例；未生成持久测试bin，自有sleep进程均Wait回收。后续完整CI以本修复提交的GitHub检查结果为准，不将旧失败或下游skip计为通过。新版本浏览器交互、Cloudflare人工验证及其他外部门槛保持开放。
+夹具改为等待真实身份探测返回首次alive，再结束其拥有的子进程；等待有截止、探测失败仍失败，原2秒退出join及非空/有序时间戳、正采样间隔断言保持。仅修改测试，不更改生产观察器、产品、协议、安装或已发布alpha.9资产。Mac arm64的两项相关测试以`-race -count=20 -p=1`通过，共40次顶层执行、1.821秒，覆盖自有进程退出与未知错误/取消负例；未生成持久测试bin，自有sleep进程均Wait回收。后续完整CI以本修复提交的GitHub检查结果为准，不将旧失败或下游skip计为通过。新版本短时查看器实测另列；本次Cloudflare人工进入登录页已另有证据，长期体验、自然切网及账号授权等外部门槛保持开放。
 
 
 <a id="evidence-alpha9-upgrade-20261122"></a>
-## alpha.9 两端升级完成（2026-11-22，交互及网站验收待验）
+## alpha.9 两端升级完成（2026-11-22，后续交互与本次登录页验证另记）
 
-已将Debian12/amd64 VPS与Mac arm64从公开签名alpha.8升级为alpha.9，固定来源`0b4847d879d10bd2a79b9df348857ab27dafa848`。先经CLI显式停止work，再复用两端完整原receipt Plan执行安装；VPS setup复用原dedicated加密凭据并更新root管理的runtime/helper，没有重新签发或输出设备Token。升级与健康检查已完成，浏览器交互A/B、人工Cloudflare与Claude验收尚未完成，不能宣称卡顿或挑战循环已解决。
+已将Debian12/amd64 VPS与Mac arm64从公开签名alpha.8升级为alpha.9，固定来源`0b4847d879d10bd2a79b9df348857ab27dafa848`。先经CLI显式停止work，再复用两端完整原receipt Plan执行安装；VPS setup复用原dedicated加密凭据并更新root管理的runtime/helper，没有重新签发或输出设备Token。升级与健康检查已完成；其后浏览器短时功能实测见[交互记录](15-implementation-status.md#evidence-alpha9-viewer-20261122)，本次人工验证进入Claude登录页已通过；严格版本性能A/B、长期稳定及Claude账号授权仍未完成，不能宣称卡顿或挑战循环永久解决。
 
 VPS的SHA256SUMS清单19项、Mac清单15项全部匹配已验签bundle（均包含release.json），VPS两项root支持二进制另外核对一致。两端安装首次均退出3、报告node_uninitialized；后续实际节点online，原daemon_id及100.71.151.36保持。随后正式doctor报告alpha.9、core healthy、7个插件ready，插件配置revision全部保持。首次pending没有被计作ready；安装器本地探测与后续真实远端RPC健康分别记录。
 
-work新实例`712be7ec4555dc68c4f91a66d5c9dc76`为running/browse；原身份、凭据、配置revision、profile与地区revision保持。12次真实RPC均成功0.180–0.211秒，升级前0.179–0.241秒；不据此宣称画面卡顿改善。升级后Ego TaskSpace消失，等待新建许可，交互A/B与人工网站验证未完成；未使用viewer已关闭。
+work新实例`712be7ec4555dc68c4f91a66d5c9dc76`为running/browse；原身份、凭据、配置revision、profile与地区revision保持。12次真实RPC均成功0.180–0.211秒，升级前0.179–0.241秒；不据此宣称画面卡顿改善。升级完成时Ego TaskSpace消失，当时等待新建许可、尚未做交互复验，未使用viewer已关闭；后续获授权的实际viewer证据见[本轮交互记录](15-implementation-status.md#evidence-alpha9-viewer-20261122)。
 
-VPS旧测试sync历史19文件11,906字节已在原state.lock排他锁及精确无symlink结构校验后清理，本轮VPS安装staging和loopback夹具已移除；projects/sync projects均空、3正式服务active。本机本轮暂存目录已在关闭SSH复用连接后删除，共74个文件、976,054,591逻辑文件字节（不是实测释放磁盘空间）。临时目录复扫12,874条，仅剩保留的正式tmux socket；56个macOS系统保护目录仍不可访问，未绕过权限。正式安装、alpha.5–9、升级备份、凭据、浏览器profile与agent-remote保留。升级前点击基线、完整保留hash范围及七类复核见[两端升级证据](15-implementation-status.md#evidence-alpha9-upgrade-20261122)和[架构复核](16-architecture-conformance.md#evidence-alpha9-upgrade-20261122)；不扩大为全盘无残留、Cloudflare通过或长稳完成。
+VPS旧测试sync历史19文件11,906字节已在原state.lock排他锁及精确无symlink结构校验后清理，本轮VPS安装staging和loopback夹具已移除；projects/sync projects均空、3正式服务active。本机本轮暂存目录已在关闭SSH复用连接后删除，共74个文件、976,054,591逻辑文件字节（不是实测释放磁盘空间）。临时目录复扫12,874条，仅剩保留的正式tmux socket；56个macOS系统保护目录仍不可访问，未绕过权限。正式安装、alpha.5–9、升级备份、凭据、浏览器profile与agent-remote保留。升级前点击基线、完整保留hash范围及七类复核见[两端升级证据](15-implementation-status.md#evidence-alpha9-upgrade-20261122)和[架构复核](16-architecture-conformance.md#evidence-alpha9-upgrade-20261122)；该清理及升级记录不扩大为全盘无残留或长稳完成；本次人工进入Claude登录页另有顶部独立证据。
 
 <a id="evidence-public-alpha9-release-20261122"></a>
 ## alpha.9 公开发行（2026-11-22，部署与人工验收另记）
 
-固定标签`v0.0.1-alpha.9`指向`0b4847d879d10bd2a79b9df348857ab27dafa848`。[发布前CI 44924752906](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44924752906) attempt1最终57/57成功；[发行流水线44929424103](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44929424103) attempt1最终60项成功、1项条件Homebrew检查跳过，跳过不计通过。[Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.9)于UTC2026-11-21T18:13:58Z公开，共23个资产。两端正式升级已完成，独立部署证据见[alpha.9升级记录](15-implementation-status.md#evidence-alpha9-upgrade-20261122)；原网络交互体验、用户人工Cloudflare验证、真实账号与物理重启继续开放。
+固定标签`v0.0.1-alpha.9`指向`0b4847d879d10bd2a79b9df348857ab27dafa848`。[发布前CI 44924752906](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44924752906) attempt1最终57/57成功；[发行流水线44929424103](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44929424103) attempt1最终60项成功、1项条件Homebrew检查跳过，跳过不计通过。[Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.9)于UTC2026-11-21T18:13:58Z公开，共23个资产。两端正式升级已完成，独立部署证据见[alpha.9升级记录](15-implementation-status.md#evidence-alpha9-upgrade-20261122)；本次人工进入登录页已独立验证；原网络长期体验、自然切网、真实账号与物理重启继续开放。
 
 独立验证23资产精确清单、GitHub元数据size/digest、四目标Ed25519签名与完整payload hash、PROVENANCE/tag/run/source、公钥及固定源码bootstrap一致。34个二进制只读核验实际GOOS/GOARCH和Go1.26.11；四目标`shiki`另从ELF/Mach-O真实Go字符串符号读取Version/Commit/BuiltAt，分别一致为alpha.9、上述完整源码和2026-11-21T17:19:42Z。其余30个二进制不宣称均保留这些字符串；未执行下载的跨平台二进制。
 
 Homebrew公式已自动推进，bot提交[`e0888009cc634de8c6e09b0962b44934498f2f7b`](https://github.com/DDSRem-Dev/Shikigami/commit/e0888009cc634de8c6e09b0962b44934498f2f7b)；从认证资产重新渲染与已下载公式逐字节一致，公式SHA-256为`7c57e9bbdc86922edccb677d4a9b2929d703d6e4c19777267847b7202b534ddb`。这不是新版本真实tap安装/重装或受管服务升级验收。
 
-完整四目标hash/pin、审计脚本错误假设与修正、证据摘要见[公开发行证据](15-implementation-status.md#evidence-public-alpha9-release-20261122)。本批仅补充实际发行记录，生产/协议/权限/持久状态/进程/限额均不变，架构范围见[七类复核](16-architecture-conformance.md#evidence-public-alpha9-release-20261122)；原Phase0–5清单不变，正式部署另有证据，不将人工Cloudflare复验提前勾选。
+完整四目标hash/pin、审计脚本错误假设与修正、证据摘要见[公开发行证据](15-implementation-status.md#evidence-public-alpha9-release-20261122)。本批仅补充实际发行记录，生产/协议/权限/持久状态/进程/限额均不变，架构范围见[七类复核](16-architecture-conformance.md#evidence-public-alpha9-release-20261122)；原Phase0–5清单不变，正式部署及本次人工进入登录页各有独立证据，不扩大为长期免挑战或账号授权。
 
-## alpha.9 发行、两端升级与本轮清理完成，交互及外部验收待验（2026-11-22）
+## alpha.9 发行、部署、短时交互与本次登录页验证完成（2026-11-22）
 
-固定源码`0b4847d879d10bd2a79b9df348857ab27dafa848`的完整CI、alpha.9签名公开发行和独立资产验证已完成，见[发行证据](15-implementation-status.md#evidence-public-alpha9-release-20261122)。两端正式升级和RPC健康检查已完成，见[升级证据](15-implementation-status.md#evidence-alpha9-upgrade-20261122)；本机临时材料收尾已完成，浏览器交互/公网人工验收待验，此记录批次不修改冻结生产源码。
+固定源码`0b4847d879d10bd2a79b9df348857ab27dafa848`的完整CI、alpha.9签名公开发行和独立资产验证已完成，见[发行证据](15-implementation-status.md#evidence-public-alpha9-release-20261122)。两端正式升级和RPC健康检查已完成，见[升级证据](15-implementation-status.md#evidence-alpha9-upgrade-20261122)；本机临时材料收尾、短时浏览器交互及本次人工进入Claude登录页均已完成，见[交互与网站证据](15-implementation-status.md#evidence-alpha9-viewer-20261122)；长期体验、自然切网和Claude账号授权仍待验，此记录批次不修改冻结生产源码。
 
 - [x] 用户授权alpha.9公开发行、升级两端及重启Chrome，页面已保存。
 - [x] 固定提交完整CI通过后创建不可变tag，完成签名发行及独立公开资产验证。
@@ -40,7 +58,9 @@ Homebrew公式已自动推进，bot提交[`e0888009cc634de8c6e09b0962b44934498f2
 - [x] 完成本轮两端有明确范围的元数据扫描；经既有API暂停并移除旧验收映射，删除两个已停止测试会话、测试项目及两端原验收目录。
 - [x] 升级worker释放锁后，以原state.lock和精确结构校验清理VPS旧测试sync历史及本轮VPS安装staging/loopback夹具。
 - [x] 完成本机`/tmp/shiki-alpha9.gGYgWZ`临时材料收尾及SSH连接关闭；保留agent-remote、正式安装/历史发行/升级备份、正式归档记录和真实用户数据，不宣称全盘无残留。
-- [ ] 新版本原网络交互复验及用户人工Cloudflare验证；账号登录仍不代做。
+- [x] 新版本原网络自有页面短时点击/输入/滚动与显式重连复验，范围及计时限制见本轮交互记录。
+- [x] 本次用户人工验证后进入Claude登录页，助手截图复核并完成查看器/临时文件收尾。
+- [ ] 长期体验、自然切网及Claude账号授权；不承诺以后不再出现挑战。
 
 以下保留升级前清理快照；后续VPS清理完成见上方升级证据。清理顺序和拒绝保护均已核验：未暂停的unmap返回`MAPPING_MUST_BE_PAUSED`且未修改；pause取得revision后unmap成功。删除原三个测试文件组成的两端`beta-accept-20261118-235852`目录，各55字节；Mac空父目录一并移除，VPS projects根保留。首次文件名白名单抄录错误触发拒绝、未删除，重新核对名称和hash后才成功。临时目录递归补扫另确认并删除90个旧测试tmux socket：均为本UID所有、连接ECONNREFUSED且删除前inode未变，0个活动socket。复扫12,881条，56个macOS受保护TemporaryItems访问拒绝如实保留。收尾正式doctor仍为alpha.8、7插件ready，work仍running，身份/凭据未变。扫描覆盖、排除和七类复核见[实施证据](15-implementation-status.md#evidence-alpha9-cleanup-20261122)与[架构复核](16-architecture-conformance.md#conformance-alpha9-cleanup-20261122)；不替代发行、升级和公网使用验收。
 
@@ -78,7 +98,7 @@ Homebrew公式已自动推进，bot提交[`e0888009cc634de8c6e09b0962b44934498f2
 七类最终源码复核：业务仍在browser插件、共享单记录读取在SDK状态包、宿主只负责授权/路由，架构检查通过；RPC只增加模式字段及逐层Start能力门槛，既有权限和当前控制revision不放宽。profiles旧shape与launch新代次分离，atomic发布、request_id去重及内存失败恢复均有回归。Chrome独立进程归属、断线不结束浏览器和显式重启保持，正常退出/依赖异常/取消分列。RFB不丢字节不重放、mutating输入保持授权线性化，队列/超时有界；文件与终端行为不扩展。CLI显式诊断及模式切换确认、x11-utils安装依赖与新旧端报错已同步；查看器模式unknown不冒充browse。实现/本地回归、隔离Chrome、正式发行/部署及公网人工验收分别记账，08/15/16/27/30一致，beta未推进。
 
 - [x] 候选组合回归、七类架构复核与隔离Chrome两模式启动验证完成（范围和失败历史见上文）。
-- [ ] 正式新版本发行/两端升级后，用户远端人工Cloudflare复验通过。
+- [x] 正式alpha.9两端升级后，本次用户人工验证进入Claude登录页且助手截图复核；仅限本次，不代表账号授权或长期免挑战。
 - [ ] 原网络真实使用延迟与稳定性达到可接受水平；beta门槛仍开放。
 
 
