@@ -35,7 +35,7 @@ agent 是本机唯一的连接、同步及端口转发管理者。关闭 CLI 窗
 
 ## 技术栈
 
-Go ≥ 1.27.3、Connect-Go v2.0.2/protobuf、Tailscale tsnet、HashiCorp go-plugin、tmux；CLI/TUI 使用 Cobra/Bubble Tea。远端通信、本地 IPC 和 CoreAPI 回调使用 Connect 协议；仅 go-plugin 要求的宿主→插件通道保留原生 gRPC。依赖与生成器基线见 07/09/14，GUI 框架版本后续确认。
+Go ≥ 1.26.5、Connect-Go v2.0.2/protobuf、Tailscale tsnet、HashiCorp go-plugin、tmux；CLI/TUI 使用 Cobra/Bubble Tea。远端通信、本地 IPC 和 CoreAPI 回调使用 Connect 协议；仅 go-plugin 要求的宿主→插件通道保留原生 gRPC。依赖与生成器基线见 07/09/14，GUI 框架版本后续确认。
 
 ## 功能边界
 

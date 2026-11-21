@@ -1,9 +1,23 @@
 # 开发路线图
 
-<a id="evidence-tsnet104-candidate-20261122"></a>
-## 后续网络栈候选迁移（2026-11-22，尚未发布部署）
+<a id="evidence-tsnet104-deferred-20261122"></a>
+## 丢包模拟与候选暂缓（2026-11-22）
 
-- [ ] 原网络严重卡顿/冻结与真实公网吞吐门槛继续开放。此批从ce85e60创建隔离worktree，不调用用户已安装Shiki、不连接外部Tailscale账号，不把本地回归当作实机改善。正式两端及冻结alpha.9资产保持原版本。
+当前产品源码已恢复Tailscale1.98.10、原gVisor及Go1.26.11，保留ce85e60的noVNC1.7、默认Smooth与Fence测试。此前1.104.2/Go1.27.4在隔离环境通过兼容测试，但没有现场性能收益证据；受控模拟反而出现低带宽丢包下吞吐下降，因此不作为本次卡顿修复发布。研究分支`fix/browser-latency-tsnet104`的固定eb4478c CI继续运行，不取消/改写原检查；它不代表当前恢复后的发布候选，也不表示已部署。正式两端一直是alpha.9。
+
+- [x] 完成11个内存双gVisor实验，均完整传输2MiB、SHA256匹配、exit0；固定Go1.27.4、MTU1280、双向各55ms传播/5Mbps串行链路，单向仅数据包0或1%独立丢弃，seed901/902，ACK不丢。无丢包两版约4.48Mbps；1%旧Reno/RACKoff为3.174/2.614Mbps，新CUBIC/default为0.967/0.681Mbps。同新版seed901控制：Reno/off2.657、CUBIC/off0.941、Reno/default3.005Mbps，不支持单独归因RACK。一个控制样本投递调度迟到20.480ms，其余约2–4ms；恢复到达追踪有未匹配重分段/冗余包，不能当完整TCP恢复状态。
+- [x] 原始输入、依赖锁定、源码、11份结果及校验清单保存为只读用途文本[实验材料](evidence/netstack-simulation-20261122/README.md)；无测试二进制进入仓库，原临时目录已清理。模型不包含真实WireGuard/DERP、HTTP/2、浏览器或Tailscale自定义缓冲配置，不能用1%模拟反推原网络丢包率，也不能宣称新SDK现场必定退化。
+- [ ] 保留用户最新反馈：正式alpha.9在Smooth并暂停背景视频后整体操作可用，滚动仍低帧率；调整实际远端分辨率的对照尚未回报，长期冻结/断线恢复和beta体验门槛仍开放。默认Smooth及图像资源释放的源码改进尚未部署。
+
+本批只撤回本任务未发布的候选改动，并补充实验记录；原tailnet-only拨号/peer admission、代理边界、RPC权限、持久状态/去重、进程归属、CLI/安装及工具链恢复到已验证基线。生产差异逐文件对照ce85e60，不把未采用SDK的217项测试或研究CI算作当前发布性能验收；08/15/16保持同一结论。
+
+
+**后续滚动审计（静态/隔离，不是实机结论）：** noVNC1.7 `_handleWheel` 使用50px累积门槛、每事件每轴最多一步且到阈值清零；执行原函数的隔离输入中，`[150]`产生1步、`[50,50,50]`产生3步、`[30,30,30,30,30]`产生2步余30、`[49,-50]`没有步进。这证明事件分批/残量会影响滚动步进，不证明用户卡顿只有这一原因。FBU可在同一JS任务连续flip，不能把flip计数宣传为屏幕实际FPS。默认远端1440×900，CSS缩放不减少远端像素；需要控制者显式勾选resize才请求远端尺寸变化。数据队列16×64KiB是容量上限，不能当作实测积压。下一步保持Smooth和同一静态长页，对照显式resize前后及滚轮/Page Down；尚未收到结果，不改vendor输入、不自动重启或调整用户分辨率。
+
+<a id="evidence-tsnet104-candidate-20261122"></a>
+## 网络栈隔离迁移实验（2026-11-22，已暂缓采用）
+
+- [ ] 原网络严重卡顿/冻结与真实公网吞吐门槛继续开放。此处记录未采用候选的历史测试范围；实验从ce85e60创建隔离worktree，不调用用户已安装Shiki、不连接外部Tailscale账号，不把本地回归当作实机改善。正式两端及冻结alpha.9资产保持原版本。
 - [x] 官方Tailscale1.104.2与gVisor `v0.0.0-20260915211658-a6f909f08a72`候选接入，最低Go1.27.3、工具链固定官方稳定1.27.4。上游启用CUBIC及新版默认SACK/RACK，注入路径改为三个有界队列；不是一行参数回补。依赖134→145项、62版本变化/13新增/2移除，必须覆盖文件监视、WebSocket、CLI/TUI及跨平台，不能继承旧SDK验收。来源：[发行](https://github.com/tailscale/tailscale/releases/tag/v1.104.2)、[netstack](https://github.com/tailscale/tailscale/blob/v1.104.2/wgengine/netstack/netstack.go)。
 - [x] 初轮真实编译发现Engine.PeerForIP删除及cellbuf/ansi不兼容，完整失败保留为迁移原因。SDK适配改用裸IP WhoIs(port0)，只认live节点精确/32或/128地址、预期公钥、非自身、未Expired；握手前后分别查询、≤5秒且更早context优先，失败关闭已握手连接，继续走userspace netstack并绑定原generation/authorization/peer撤销机制。没有Server.Dial/SystemDial回退。旧新检查均是live peer-map观察，不冒充原子WireGuard路由租约；真实移除测试只替换已删除API的观测点为ErrPeerNotFound，不把任意LocalAPI错误当删除成功。
 - [x] 修补新版useproxy feature可由环境禁用导致hook缺失的兼容风险：五个实际proxy hooks缺失时节点初始化失败，不能SetProxyFunc表面成功却绕过系统代理。子进程在真实init阶段测试禁用环境；不修改用户环境或打印原环境内容。TUI使用官方cellbuf0.0.15兼容MVS选择的ansi0.11.8，不降低SDK依赖或删除功能。

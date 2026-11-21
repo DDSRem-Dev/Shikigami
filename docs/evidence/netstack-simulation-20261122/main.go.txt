@@ -1,0 +1,76 @@
+package main
+
+import (
+ "bytes"
+ "context"
+ "crypto/sha256"
+ "encoding/binary"
+ "encoding/hex"
+ "encoding/json"
+ "flag"
+ "fmt"
+ "io"
+ "math/rand"
+ "net"
+ "os"
+ "sync"
+ "time"
+ "gvisor.dev/gvisor/pkg/buffer"
+ "gvisor.dev/gvisor/pkg/tcpip"
+ "gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
+ "gvisor.dev/gvisor/pkg/tcpip/header"
+ "gvisor.dev/gvisor/pkg/tcpip/link/channel"
+ "gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
+ "gvisor.dev/gvisor/pkg/tcpip/stack"
+ "gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
+)
+const bytesToSend=2<<20
+const rate=5_000_000
+const latency=55*time.Millisecond
+
+type scheduled struct { data []byte; at time.Time; seq uint32; length int }
+type lost struct{ n int; at time.Time }
+type metrics struct { sync.Mutex; Packets int; DataPackets int; Dropped int; WireBytes int; MaxQueued int; MaxLatenessMS float64; Recovered int; RecoveryMS []float64; outstanding map[uint32]lost }
+func packetData(b []byte)(uint32,int) { if len(b)<40{return 0,0}; ip:=int(b[0]&15)*4; if len(b)<ip+20{return 0,0}; off:=int(b[ip+12]>>4)*4; return binary.BigEndian.Uint32(b[ip+4:ip+8]),len(b)-ip-off }
+func bridge(ctx context.Context,wg *sync.WaitGroup,src,dst *channel.Endpoint,loss float64,seed int64,m *metrics){
+ q:=make(chan scheduled,4096)
+ wg.Add(2)
+ go func(){defer wg.Done();defer close(q); rng:=rand.New(rand.NewSource(seed)); var last time.Time
+  for { pkt:=src.ReadContext(ctx); if pkt==nil{return}; view:=pkt.ToView(); raw:=append([]byte(nil),view.AsSlice()...);view.Release();pkt.DecRef(); now:=time.Now(); if last.Before(now){last=now}; last=last.Add(time.Duration(int64(len(raw))*8*int64(time.Second)/rate)); seq,n:=packetData(raw)
+   m.Lock();m.Packets++;m.WireBytes+=len(raw);if n>0{m.DataPackets++}; drop:=n>0&&rng.Float64()<loss
+   if drop{m.Dropped++;if _,ok:=m.outstanding[seq];!ok{m.outstanding[seq]=lost{n,last.Add(latency)}}};m.Unlock();if drop{continue}
+   select{case q<-scheduled{raw,last.Add(latency),seq,n}:m.Lock();if len(q)>m.MaxQueued{m.MaxQueued=len(q)};m.Unlock();case <-ctx.Done():return}
+  }
+ }()
+ go func(){defer wg.Done();for {select{case <-ctx.Done():return;case p,ok:=<-q:if !ok{return};delay:=time.Until(p.at);if delay>0{timer:=time.NewTimer(delay);select{case <-timer.C:case <-ctx.Done():timer.Stop();return}}
+  now:=time.Now();m.Lock();late:=float64(now.Sub(p.at))/float64(time.Millisecond);if late>m.MaxLatenessMS{m.MaxLatenessMS=late};if p.length>0{for seq,l:=range m.outstanding{if int32(p.seq-seq)<=0&&int32(p.seq+uint32(p.length)-seq-uint32(l.n))>=0{m.Recovered++;m.RecoveryMS=append(m.RecoveryMS,float64(now.Sub(l.at))/float64(time.Millisecond));delete(m.outstanding,seq)}}};m.Unlock()
+  pkt:=stack.NewPacketBuffer(stack.PacketBufferOptions{Payload:buffer.MakeWithData(p.data)});dst.InjectInbound(ipv4.ProtocolNumber,pkt);pkt.DecRef()
+ }}}()
+}
+func newStack(ip [4]byte,cc string,rack bool)(*stack.Stack,*channel.Endpoint){
+ s:=stack.New(stack.Options{NetworkProtocols:[]stack.NetworkProtocolFactory{ipv4.NewProtocol},TransportProtocols:[]stack.TransportProtocolFactory{tcp.NewProtocol}})
+ opt:=tcpip.CongestionControlOption(cc);if e:=s.SetTransportProtocolOption(tcp.ProtocolNumber,&opt);e!=nil{panic(e)}
+ sack:=tcpip.TCPSACKEnabled(true);if e:=s.SetTransportProtocolOption(tcp.ProtocolNumber,&sack);e!=nil{panic(e)}
+ if !rack{r:=tcpip.TCPRecovery(0);if e:=s.SetTransportProtocolOption(tcp.ProtocolNumber,&r);e!=nil{panic(e)}}
+ ep:=channel.New(4096,1280,"");if e:=s.CreateNIC(1,ep);e!=nil{panic(e)}
+ if e:=s.AddProtocolAddress(1,tcpip.ProtocolAddress{Protocol:ipv4.ProtocolNumber,AddressWithPrefix:tcpip.AddrFrom4(ip).WithPrefix()},stack.AddressProperties{});e!=nil{panic(e)}
+ s.SetRouteTable([]tcpip.Route{{Destination:header.IPv4EmptySubnet,NIC:1}});return s,ep
+}
+func main(){cc:=flag.String("cc","reno","");rack:=flag.Bool("rack",false,"");loss:=flag.Float64("loss",0,"");seed:=flag.Int64("seed",901,"");flag.Parse()
+ ctx,cancel:=context.WithTimeout(context.Background(),35*time.Second);defer cancel()
+ a,ae:=newStack([4]byte{10,0,0,1},*cc,*rack);b,be:=newStack([4]byte{10,0,0,2},*cc,*rack)
+ var wg sync.WaitGroup;m:=&metrics{outstanding:map[uint32]lost{}};back:=&metrics{outstanding:map[uint32]lost{}}
+ bridge(ctx,&wg,ae,be,*loss,*seed,m);bridge(ctx,&wg,be,ae,0,*seed+1,back)
+ defer func(){cancel();wg.Wait();a.Close();b.Close();a.Wait();b.Wait();ae.Close();be.Close()}()
+ listener,err:=gonet.ListenTCP(b,tcpip.FullAddress{NIC:1,Addr:tcpip.AddrFrom4([4]byte{10,0,0,2}),Port:9000},ipv4.ProtocolNumber);if err!=nil{panic(err)};defer listener.Close()
+ type result struct{N int64;Hash string;Err error;End time.Time};done:=make(chan result,1)
+ go func(){conn,e:=listener.Accept();if e!=nil{done<-result{Err:e};return};defer conn.Close();conn.SetDeadline(time.Now().Add(34*time.Second));var ping [1]byte;if _,e=io.ReadFull(conn,ping[:]);e!=nil{done<-result{Err:e};return};if _,e=conn.Write(ping[:]);e!=nil{done<-result{Err:e};return};h:=sha256.New();n,e:=io.CopyN(h,conn,bytesToSend);done<-result{n,hex.EncodeToString(h.Sum(nil)),e,time.Now()}}()
+ conn,err:=gonet.DialContextTCP(ctx,a,tcpip.FullAddress{NIC:1,Addr:tcpip.AddrFrom4([4]byte{10,0,0,2}),Port:9000},ipv4.ProtocolNumber);if err!=nil{panic(err)};defer conn.Close();conn.SetDeadline(time.Now().Add(34*time.Second));startPing:=time.Now();conn.Write([]byte{7});var ping [1]byte;if _,err=io.ReadFull(conn,ping[:]);err!=nil{panic(err)};rtt:=time.Since(startPing)
+ data:=bytes.Repeat([]byte{0x7f,0x80,0,0xff},bytesToSend/4);want:=sha256.Sum256(data);start:=time.Now();sent,writeErr:=conn.Write(data)
+ var got result;select{case got=<-done:case <-ctx.Done():got=result{Err:ctx.Err(),End:time.Now()}}
+ elapsed:=got.End.Sub(start);stats:=a.Stats().TCP
+ m.Lock();report:=map[string]any{"cc":*cc,"rack":*rack,"loss":*loss,"seed":*seed,"bytes_sent":sent,"bytes_received":got.N,"seconds":elapsed.Seconds(),"mbps":float64(got.N)*8/elapsed.Seconds()/1e6,"ping_rtt_ms":float64(rtt)/float64(time.Millisecond),"hash_ok":got.Hash==hex.EncodeToString(want[:]),"retransmits":stats.Retransmits.Value(),"rto":stats.Timeouts.Value(),"sack_recovery":stats.SACKRecovery.Value(),"forward_packets":m.Packets,"data_packets":m.DataPackets,"dropped":m.Dropped,"recovered_drops":m.Recovered,"unrecovered_drops":len(m.outstanding),"recovery_delivery_ms":m.RecoveryMS,"max_delivery_late_ms":m.MaxLatenessMS,"max_scheduled_queue":m.MaxQueued};m.Unlock()
+ if writeErr!=nil{report["write_error"]=writeErr.Error()};if got.Err!=nil{report["read_error"]=got.Err.Error()};json.NewEncoder(os.Stdout).Encode(report)
+ if got.Err!=nil||writeErr!=nil||got.Hash!=hex.EncodeToString(want[:]){fmt.Fprintln(os.Stderr,"transfer failed");os.Exit(1)}
+ _=net.ErrClosed
+}

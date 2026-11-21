@@ -24,11 +24,11 @@ func TestPeerAdmissionRejectsStaleSuccessfulHandshake(t *testing.T) {
 				node := &tailcfg.Node{Key: expected}
 				peer := wgengine.PeerForIP{Node: node.View(), Route: netip.PrefixFrom(target, target.BitLen())}
 				present := true
-				admission := peerAdmission{target: target, expected: expected, lookup: func(ip netip.Addr) (wgengine.PeerForIP, bool, error) {
+				admission := peerAdmission{target: target, expected: expected, lookup: func(ip netip.Addr) (wgengine.PeerForIP, bool) {
 					if ip != target {
 						t.Fatalf("lookup target changed: %v", ip)
 					}
-					return peer, present, nil
+					return peer, present
 				}}
 				if err := admission.check(); err != nil {
 					t.Fatal(err)

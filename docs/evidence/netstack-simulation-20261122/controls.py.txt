@@ -1,0 +1,13 @@
+import json, os, subprocess, time
+from pathlib import Path
+root=Path(__file__).resolve().parent
+rows=[]
+for cc,rack in [('reno',False),('cubic',False),('reno',True)]:
+    started=time.monotonic()
+    p=subprocess.run([str(root/'new'),'-cc='+cc,'-rack='+str(rack).lower(),'-loss=0.01','-seed=901'],cwd=root,env={**os.environ,'GOMAXPROCS':'2'},capture_output=True,text=True,timeout=40)
+    row=json.loads(p.stdout) if p.stdout.strip() else {}
+    row.update(version='new',exit_code=p.returncode,wall_seconds=time.monotonic()-started,control=True)
+    if p.stderr:row['stderr']=p.stderr
+    rows.append(row)
+    (root/'controls-results.json').write_text(json.dumps(rows,indent=2))
+    print(json.dumps(row),flush=True)

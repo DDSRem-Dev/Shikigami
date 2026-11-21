@@ -95,7 +95,7 @@ HTTPS 限制覆盖每次重定向，下载/解包有大小、数量、时间和�
 
 本地 NodeControl、固定 SDK 的测试控制面登录/身份保持、真实 tsnet/UDS/TLS 传输和普通用户宿主崩溃恢复已有运行证据，详见 15/16。真实 systemd PID1 容器的服务保活和普通用户 user-agent、原生 macOS 当前 GUI 登录域的 LaunchAgent 生命周期已有下述证据；官方Mac/原生VPS登录、key首用/复用拒绝、进程重启身份保持和P2P/DERP已验证，见[23](23-tsnet-external-acceptance.md)；独立未使用key撤销、最终agent节点撤销恢复及审批待批/移除/批准已有后续证据；独立未使用key自然到期拒绝现已通过，见[终态记录](23-tsnet-external-acceptance.md#unused-auth-key-expiry-final-20261031)；官方URL有效期、审批拒绝结果及原因未知回退的完整对照、服务恢复替代验收仍待验；真实Claude登录/推理依[当前范围](#claude-acceptance-scope-20261031)不再作为关闭条件；实际设备重启/重新登录保留为未实测范围，见[替代验收](#no-host-reboot-acceptance-20261031)。原型必须记录 SDK/OS 版本、步骤和输出，不记录 auth key 或登录 URL；只有相应门槛通过后才可宣称该安装流程已验收。
 
-运行预构建产物不要求用户安装 Go/protoc；源码构建要求 Go ≥ 1.27.3，并锁定 Connect-Go 运行库与生成器 v2.0.2。安装器检查发行清单中的核心/插件应用协议能力；不能把 Connect 库版本当作 Shiki 协议 major。
+运行预构建产物不要求用户安装 Go/protoc；源码构建要求 Go ≥ 1.26.5，并锁定 Connect-Go 运行库与生成器 v2.0.2。安装器检查发行清单中的核心/插件应用协议能力；不能把 Connect 库版本当作 Shiki 协议 major。
 
 ## 安装流程
 

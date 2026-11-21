@@ -1,0 +1,20 @@
+import json, os, subprocess, time
+from pathlib import Path
+root=Path(__file__).resolve().parent
+results=[]
+for loss in (0,0.01):
+    for seed in (901,902):
+        order=('old','new') if seed==901 else ('new','old')
+        for version in order:
+            cmd=[str(root/version),'-cc='+('reno' if version=='old' else 'cubic'),'-rack='+('false' if version=='old' else 'true'),'-loss='+str(loss),'-seed='+str(seed)]
+            started=time.monotonic()
+            try:
+                p=subprocess.run(cmd,cwd=root,env={**os.environ,'GOMAXPROCS':'2'},capture_output=True,text=True,timeout=40)
+                row=json.loads(p.stdout) if p.stdout.strip() else {}
+                row.update(version=version,exit_code=p.returncode,wall_seconds=time.monotonic()-started)
+                if p.stderr: row['stderr']=p.stderr
+            except Exception as e:
+                row={'version':version,'loss':loss,'seed':seed,'error':str(e)}
+            results.append(row)
+            (root/'results.json').write_text(json.dumps(results,indent=2))
+            print(json.dumps(row),flush=True)

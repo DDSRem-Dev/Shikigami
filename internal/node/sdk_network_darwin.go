@@ -20,10 +20,6 @@ var sdkProxyError error
 // embedded nodes; restarting Shiki is required to read changed proxy settings.
 func configureSDKNetworking() error {
 	sdkProxyOnce.Do(func() {
-		if err := requireSDKProxyHooks(); err != nil {
-			sdkProxyError = err
-			return
-		}
 		resolver, err := systemProxyResolver(httpproxy.FromEnvironment(), func() ([]byte, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()

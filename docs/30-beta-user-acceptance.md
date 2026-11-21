@@ -2,6 +2,9 @@
 
 2026-11-22最新反馈：正式alpha.9选择Smooth且暂停Claude登录背景视频后，用户报告整体操作可用，但滚动低帧率仍明显。网络库候选仍未部署，不能归功于候选；滚动及长期稳定验收继续开放。可控制查看器须显式`browser open work --read-only=false --launch`并在窗口Take control，默认只读不变。
 
+本轮只需一次滚动对照：保持Smooth，暂停背景视频，确认Controller；在同一普通长页面滚动约10秒，再勾选“Resize remote screen to this window”并缩小窗口、等画面重新排版后重复。单纯缩小窗口而不勾选只做本地缩放，不能代表降低远端分辨率。最后点击页面正文后按一次Page Down（Mac可用Fn+↓），对比是否仍长时间等待或整页冻结。请报告“缩小后明显改善/略改善/无变化”和“触控板或鼠标滚轮、Page Down是否同样延迟”。这是区分输入步进与画面更新的对照，不是要求账号登录，也不以短测代替长期验收。
+
+
 **最新用户反馈：alpha.9仍严重卡顿，Ego和日常查看器都难以使用；体验验收未通过。** 本次已进入Claude登录页仍成立，账号授权暂停；继续定位见[后续记录](15-implementation-status.md#evidence-alpha9-latency-followup-20261122)。
 
 **当前两端：正式签名alpha.9（2026-11-22），短时浏览器交互与本次人工进入Claude登录页已通过，账号授权待验。** 固定源`0b4847d`的[发布前CI](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44924752906)57/57通过，[Release44929424103](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44929424103)成功并公开23资产；[28](28-quickstart.md)安装入口已切换alpha.9。两端7插件ready、work为running/browse，原配置、Token/auth、密钥环、profile及daemon身份保持；Chrome158.0.8127.36和x11-utils7.7+5已核对。12次CLI成功（0.180–0.211秒）只证明短时健康，见[升级证据](15-implementation-status.md#evidence-alpha9-upgrade-20261122)。本轮正式alpha.9已另行完成自有data:页面点击/输入/滚动和5次显式重连回只读后接管；Balanced/Smooth各5次计时含工具开销，不能严格比较前版不同夹具或证明全局流畅。用户人工验证后已进入claude.ai/login，助手截图确认Google/Apple/email正常登录表单，未输入账号；本轮viewer/TaskSpace/10个临时文件已清理，远端Chrome登录页明确保留，见[alpha.9查看器证据](15-implementation-status.md#evidence-alpha9-viewer-20261122)。历史alpha.8记录保持原版本，不自动扩大为本版其它功能通过。
