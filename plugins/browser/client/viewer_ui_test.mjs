@@ -319,7 +319,7 @@ test('transport display counts binary screen bytes and only the current local se
     v.sockets[0].onmessage({data: new ArrayBuffer(2048)});
     v.sockets[0].bufferedAmount = 1024;
     v.tick();
-    assert.equal(v.element('transport-status').textContent, 'Received screen data: 2.0 KiB/s · Local send buffer: 1.0 KiB');
+    assert.equal(v.element('transport-status').textContent, 'Screen data: 2.0 KiB/s · 1.0 binary msg/s · max gap 0 ms · last data 1000 ms ago · send buffer 1.0 KiB');
     v.tick();
     assert.match(v.element('transport-status').textContent, /0.0 KiB\/s/);
     const old = [...v.intervals.values()].find(entry => entry.ms === 1000).callback;
@@ -329,7 +329,7 @@ test('transport display counts binary screen bytes and only the current local se
     old();
     assert.equal(v.element('transport-status').textContent, 'Screen transport inactive.');
     v.tick(2000);
-    assert.equal(v.element('transport-status').textContent, 'Received screen data: 0.3 KiB/s · Local send buffer: 0.0 KiB');
+    assert.equal(v.element('transport-status').textContent, 'Screen data: 0.3 KiB/s · 0.5 binary msg/s · max gap 0 ms · last data 2000 ms ago · send buffer 0.0 KiB');
     v.rfbs[1].channel.onEvent({type: 'error', message: 'Screen ended'});
     assert.equal([...v.intervals.values()].filter(entry => entry.ms === 1000).length, 0);
     assert.equal(v.element('transport-status').textContent, 'Screen transport inactive.');

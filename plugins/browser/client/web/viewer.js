@@ -35,8 +35,14 @@ function updateTransport(channel) {
     const elapsed = now - channel.sampleTime;
     if (elapsed <= 0) return;
     const rate = (channel.receivedBytes - channel.sampleBytes) * 1000 / elapsed / 1024;
-    byId("transport-status").textContent = `Received screen data: ${rate.toFixed(1)} KiB/s · Local send buffer: ${(channel.socket.bufferedAmount / 1024).toFixed(1)} KiB`;
+    const messages = channel.receivedMessages - channel.sampleMessages;
+    const messageRate = messages * 1000 / elapsed;
+    const lastMessageAge = channel.lastMessageAt === null ? null : Math.max(0, now - channel.lastMessageAt);
+    const lastMessage = lastMessageAge === null ? "no data" : `last data ${lastMessageAge.toFixed(0)} ms ago`;
+    byId("transport-status").textContent = `Screen data: ${rate.toFixed(1)} KiB/s · ${messageRate.toFixed(1)} binary msg/s · max gap ${channel.sampleMaxGap.toFixed(0)} ms · ${lastMessage} · send buffer ${(channel.socket.bufferedAmount / 1024).toFixed(1)} KiB`;
     channel.sampleBytes = channel.receivedBytes;
+    channel.sampleMessages = channel.receivedMessages;
+    channel.sampleMaxGap = 0;
     channel.sampleTime = now;
 }
 
@@ -143,6 +149,9 @@ class ViewerChannel {
         this.readyState = WebSocket.CONNECTING;
         this.onEvent = onEvent;
         this.receivedBytes = this.sampleBytes = 0;
+        this.receivedMessages = this.sampleMessages = 0;
+        this.lastMessageAt = null;
+        this.sampleMaxGap = 0;
         this.sampleTime = performance.now();
         this.closed = new Promise((resolve) => { this.resolveClosed = resolve; });
         this.socket = new WebSocket(url, [protocol, `csrf.${csrf}`]);
@@ -170,7 +179,11 @@ class ViewerChannel {
                 this.fail("The remote screen exceeded the viewer's bounded frame limit.");
                 return;
             }
+            const now = performance.now();
+            if (this.lastMessageAt !== null) this.sampleMaxGap = Math.max(this.sampleMaxGap, now - this.lastMessageAt);
+            this.lastMessageAt = now;
             this.receivedBytes += event.data.byteLength;
+            this.receivedMessages++;
             this.onmessage?.(event);
         };
         this.socket.onerror = (event) => {

@@ -1,6 +1,22 @@
 # 架构与文档一致性检查
 
 
+<a id="evidence-viewer-transport-diagnostics-20261123"></a>
+## 查看器传输诊断（2026-11-23）
+
+| 复核类别 | 结果 |
+|---|---|
+| 目录与依赖归属 | 仅修改 `plugins/browser/client` 的 viewer 资源、UI 测试和文档；没有 plugin 业务导入 host `internal/`，没有新增依赖。 |
+| RPC、准入、授权与能力 | 未修改 RPC、能力声明、权限白名单、控制 revision 或身份校验；诊断只读取本地 WebSocket 事件。 |
+| 持久状态、原子性与去重 | 未修改任何持久 schema、revision、事务、请求去重或安装 receipt。 |
+| 进程、取消与恢复 | 未修改 Chrome、TigerVNC、daemon、连接关闭或重连生命周期；只在 viewer channel 内维护采样计数并随连接初始化。 |
+| 文件、终端、网络与 RFB 语义 | 不新增文件/终端权限，不改变网络路由或超时，不丢弃/重排 RFB 字节；发送缓冲区仅展示浏览器已有 `bufferedAmount`。 |
+| CLI、配置、安装与发布 | CLI、配置、安装器和正式 alpha.9 资产未变；alpha.10 仍是未发布草案。 |
+| 验证与边界 | 24 项 Node UI 测试、viewer JS 语法检查及 browser client/server/runtime race 通过；这些检查不能替代真实公网帧率、滚动、断线恢复或长期验收。 |
+
+现网基线采样只创建短期 read-only viewer，未取得控制权、未访问账号页面、未写入远端项目或浏览器 profile。采样走既有 `tailscale-relay`，结束后关闭 viewer 并删除本地临时 URL/JSON；正式 Chrome、凭据、密钥环、agent-remote 和现有服务保持不变。
+
+
 <a id="evidence-tigervnc-cleanup-20261123"></a>
 ## TigerVNC 对照测试环境清理（2026-11-23）
 

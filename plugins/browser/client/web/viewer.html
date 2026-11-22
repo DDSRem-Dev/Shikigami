@@ -35,7 +35,7 @@
         <summary>Viewer help</summary>
         <div class="panel-content">
           <p id="quality-description" class="hint"></p>
-          <p id="transport-description" class="hint">Receive rate measures screen bytes arriving at this local viewer. The send buffer is local WebSocket data awaiting transmission; neither measures remote latency or rendered frames.</p>
+          <p id="transport-description" class="hint">Screen data is the local WebSocket receive rate. Binary msg/s counts transport chunks, max gap is the largest arrival gap in the last sample, and the send buffer is local WebSocket data awaiting transmission. These values do not measure remote latency, RFB frames, decoder time, or rendered frames.</p>
           <p class="hint">Chrome and the Chinese/Japanese IME run on the server; candidate windows appear in the remote screen. Use your local English keyboard layout and the remote IME switch shortcut. Closing this viewer does not stop Chrome.</p>
           <a href="/assets/novnc/UPSTREAM.json" target="_blank" rel="noreferrer">Pinned noVNC source provenance</a>
           <span> · </span><a href="/assets/novnc/LICENSE.txt" target="_blank" rel="noreferrer">Upstream licenses</a>

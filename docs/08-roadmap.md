@@ -1,6 +1,19 @@
 # 开发路线图
 
 
+<a id="evidence-viewer-transport-diagnostics-20261123"></a>
+## 查看器传输诊断（2026-11-23，未发布）
+
+- [x] 查看器在本地显示屏幕数据速率、二进制传输块速率、最近采样最大到达间隔、最近数据年龄和本地 WebSocket 发送缓冲区；指标文案明确它们不代表远端 RTT、RFB 帧率、解码耗时或实际呈现帧率。
+- [x] 更新对应 viewer UI 回归断言并通过 Node 语法检查；本批只改本地观测，不改变 RFB 字节顺序、队列容量、输入控制、权限、RPC、持久状态、浏览器进程或安装布局。
+- [x] 受影响的 client/server/runtime race 与 architecture 检查通过；完整受影响命令和 `git diff --check` 作为本批验证记录保留。
+- [ ] 真实 alpha.9 查看器采样、滚动体验、长期稳定性和公网链路归因仍未完成；本批源码尚未发布或部署，不把诊断指标或局部回归当成卡顿修复。
+
+现网基线采样（alpha.9，2026-11-23）：正式 `work` viewer 经 `tailscale-relay` 打开，约2.5秒后保持 Connected/Read-only；旧版状态栏显示本地接收约12.2 KiB/s、发送缓冲0 KiB。该单次短样本不代表远端帧率、滚动流畅度、RTT或长期稳定性；采样结束后viewer与临时凭据文件已关闭并删除。
+
+本批架构复核结论：变更仅位于 browser client 的本地 viewer 静态资源及其 UI 测试；没有跨越 plugin/host/SDK 边界，没有新增 RPC 能力或权限，没有修改持久化格式、revision、去重、进程生命周期、网络策略或正式用户数据。
+
+
 <a id="evidence-tigervnc-cleanup-20261123"></a>
 ## TigerVNC 对照测试环境清理（2026-11-23）
 
