@@ -1,0 +1,30 @@
+{
+  "patched": {
+    "bytes_per_pixel": 4,
+    "duration_s": 9.573,
+    "errors": [],
+    "fps": 0.418,
+    "height": 360,
+    "max_update_gap_s": 2.4,
+    "mean_update_gap_s": 2.393,
+    "p95_update_gap_s": 2.394,
+    "raw_bytes": 3686400,
+    "server_version": "RFB 003.008",
+    "updates": 4,
+    "width": 640
+  },
+  "stock": {
+    "bytes_per_pixel": 4,
+    "duration_s": 9.547,
+    "errors": [],
+    "fps": 0.419,
+    "height": 360,
+    "max_update_gap_s": 2.398,
+    "mean_update_gap_s": 2.387,
+    "p95_update_gap_s": 2.395,
+    "raw_bytes": 3686400,
+    "server_version": "RFB 003.008",
+    "updates": 4,
+    "width": 640
+  }
+}

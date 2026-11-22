@@ -1,6 +1,16 @@
 # 实施与验收记录
 
 
+<a id="evidence-tigervnc-cleanup-20261123"></a>
+## TigerVNC 对照测试环境清理（2026-11-23）
+
+- [x] 删除本机退出的 `shiki-rfb-framerate-20261122` 临时 Debian 12 容器及其未被其他容器使用的 `debian:12-slim` 镜像；本机无 `shiki-tigervnc`/`shiki-rfb` 容器、镜像、测试脚本、测试进程或临时目录残留。
+- [x] 只读扫描 VPS 的 `/tmp`、`/var/tmp`、`/root`、`/home/shiki`、Shikigami 状态目录和 Docker 资源；没有发现命名测试文件或 Shikigami 开发包。清理了 5 组已无进程引用的旧浏览器运行时 JSON 及对应的 `/run/user/1000` 临时目录。
+- [x] 保留当前运行的 `work` 浏览器实例、正式 daemon/keyring/region 服务、正式配置/凭据/项目，以及 `agent-remote` 和其他用户 Docker 服务；未执行全局 Docker prune，未删除用户缓存或账号数据。
+- [x] 清理后复核：VPS 三项 Shikigami 服务为 `active`，仅当前浏览器运行时文件保留；VPS Docker 仅保留原有 `agent-remote`/RustDesk 服务；本机测试资源扫描为空。
+
+
+
 
 <a id="evidence-tigervnc-congestion-20261122"></a>
 ## TigerVNC 拥塞窗口核查（2026-11-22）
@@ -9,7 +19,7 @@
 - [x] 按上游`895a86cff25b3d410af043098740d425cdad2bdc`的精确逻辑复现无符号窗口绕回：`baseRTT=100ms`、`minRTT=201ms`、初始4KiB窗口时，旧逻辑比例缩窗后再减4KiB并绕回，最终被4MiB上限钳制；补丁逻辑保留4KiB下限。原始补丁、脚本、结果和SHA见[隔离证据](evidence/tigervnc-congestion-20261122/README.md)。
 - [x] 核对该补丁尚未进入上游`v1.16.2`稳定标签，当前上游`master`已包含；“直接升级最新稳定版”不能作为现成修复。
 - [x] 在一次性Debian 12容器中应用原始上游补丁并成功编译`rfb`公共库目标；这只证明补丁可编译，不是完整`Xtigervnc`运行时或帧率验收，结果见隔离证据。
-- [ ] 尚未证明用户live连接触发该窗口序列，尚未在VPS替换系统包，也尚未完成带补丁VNC运行时的画面/滚动对照。当前不改变安装器、系统包或正式alpha.9。
+- [x] 在一次性Debian 12容器中完成stock与patched `Xtigervnc`对照：640x360/24-bit、33ms全屏动画、625,000 B/s与双向55ms代理、raw RFB客户端；两组均4次更新，约0.419/0.418 FPS，均值间隔2.387/2.393s，原始字节与错误数一致。完整结果见[隔离证据](evidence/tigervnc-congestion-20261122/README.md#isolated-runtime-ab-comparison-2026-11-22)。这是合成raw传输样本，不代表Tight/JPEG、noVNC、Tailscale或真实滚动体验。
 
 该发现与低帧率/追赶症状有关，但不能单独解释触控板步进、网页滚动条略好或所有冻结。要纳入产品必须有可审计签名runtime artifact或发行版含补丁包，并完成升级/回滚、进程归属、依赖、实际滚动及长期稳定验收。
 
@@ -19,7 +29,7 @@
 - [ ] 正式alpha.9用户补充：使用触控板，按指导resize缩小后没有明显变化，拖动远端网页滚动条稍好；Fn+↓在该机器触发音量，不能计为Page Down测试。尚未独立记录这次实际framebuffer尺寸，不把主观对照扩大为排除带宽或已定位根因。整体操作可用的反馈保留，滚动流畅度、长期冻结与beta体验门槛仍开放；无需用户反复重做相同resize。
 - [x] noVNC1.7/Smooth固定源ce85e60的[CI44949686567](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44949686567)于2026-11-21T21:54:33Z完成，attempt1，57/57成功，无失败、取消或跳过。暂缓采用的网络库候选eb4478c的[CI44951709516](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44951709516)于22:18:38Z同样57/57成功；它证明该候选检查通过，不是性能收益或当前恢复代码的完整CI。两轮均等待原运行结束，没有为新修改取消检查。
 - [x] 本地提交0bdb51f恢复后的全部非docs文件与ce85e60逐文件相同，工作树当时干净，实验文本哈希全部通过；后续提交若只补文档不能冒称其独立完整CI已通过。正式环境保持alpha.9，未发布或部署alpha.10。
-- [ ] 正在以一次性本地容器进行TigerVNC更新上限对照，完成前不建议降低正式帧率、不改vendor滚轮语义。现有noVNC公开API没有sendWheel或滚轮灵敏度配置；增加合成事件可能提高位移准确性，也可能加重画面负荷。未来输入候选必须独立验证撤权/重连/失焦、方向与余量、突发及修饰键，不伪装成官方API或已提高实际FPS。
+- [x] 一次性本地容器TigerVNC更新上限对照已完成，结果与限制已记录；未降低正式帧率、未改vendor滚轮语义。现有noVNC公开API没有sendWheel或滚轮灵敏度配置；增加合成事件可能提高位移准确性，也可能加重画面负荷。未来输入候选必须独立验证撤权/重连/失焦、方向与余量、突发及修饰键，不伪装成官方API或已提高实际FPS。
 
 本批先同步实际用户反馈与固定源CI证据；目录/依赖边界、RPC/能力/权限、持久化/revision/去重、进程归属/取消恢复、RFB字节顺序及文件网络边界、CLI/安装布局均未改变。验证不跨越源码、平台与实机效果边界，08/15/16保持一致。
 
