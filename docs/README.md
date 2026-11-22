@@ -2,9 +2,11 @@
 
 **当前体验与优化：** 用户在正式alpha.9选择Smooth并暂停背景视频后反馈整体操作可用，但滚动低帧率仍未通过。后续源码保留noVNC1.7及Smooth默认；网络库升级候选因缺乏收益证据且模拟出现退化已暂缓，产品仍用原网络栈与Go1.26.11。见[实验结论与剩余门槛](15-implementation-status.md#evidence-tsnet104-deferred-20261122)。
 
-**当前性能诊断批次（2026-11-23）：** 查看器新增本地屏幕数据速率、二进制传输块速率、最近采样最大到达间隔、最近数据年龄和本地发送缓冲区；指标明确不冒充远端 RTT、RFB 帧率或实际呈现帧率。24 项 viewer UI 回归及 browser client/server/runtime race 已通过；真实 alpha.9 当前路由为 `tailscale-relay`，doctor 的部分远端探测仍会超时，VPS 资源采样正常。诊断源码尚未发布或部署，真实滚动体验仍开放。
+**alpha.10 已发布并完成两端升级（2026-11-23）：** 固定源 `c2ac206` 的发布流水线已通过，23 个签名资产公开。Mac arm64 和 Debian 12 amd64 VPS 均运行 alpha.10；viewer smoke 已显示新的屏幕数据速率、二进制消息速率、最大到达间隔、最近数据年龄和本地发送缓冲区指标。指标不代表远端 RTT、RFB 帧率或实际呈现帧率；真实滚动体验和长期稳定性仍开放。
 
-**此前严重卡顿的调查记录：** 用户确认5Mbps套餐；已完成分段与同页画质对照，源码已纳入noVNC1.7和Smooth默认，但尚未发布部署。最新体验以上方反馈为准，不能以此前短时功能通过代替滚动及长期性能通过。见[延迟归因与改进](15-implementation-status.md#evidence-viewer-memory-latency-batch-20261122)。
+**此前严重卡顿的调查记录：** 用户确认5Mbps套餐；已完成分段与同页画质对照，源码已随 alpha.10 发布部署并保留 noVNC1.7 与 Smooth 默认。最新体验以上方反馈为准，不能以此前短时功能通过代替滚动及长期性能通过。见[延迟归因与改进](15-implementation-status.md#evidence-viewer-memory-latency-batch-20261122)。
+
+**alpha.10 发布与部署证据：** [发布流水线](https://github.com/DDSRem-Dev/Shikigami/actions/runs/45056120246)、[实施记录](15-implementation-status.md#evidence-viewer-transport-diagnostics-20261123)和[架构复核](16-architecture-conformance.md#evidence-viewer-transport-diagnostics-20261123)记录签名来源、两端升级、插件健康和临时资源清理。当前版本仍是 alpha，不是 beta 或稳定版。
 
 **alpha.9已发布（记录日期2026-11-22）：** 固定源`0b4847d`的[发布前CI](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44924752906)57/57通过，[发行流水线](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44929424103)已成功，23资产于`2026-11-21T18:13:58Z`公开。现行下载入口为alpha.9，见[说明](releases/v0.0.1-alpha.9.md)与[实施记录](15-implementation-status.md)。用户两端已升级正式签名alpha.9，7插件ready、work为running/browse；原配置、Token/auth、密钥环、profile及daemon身份保持，见[两端升级证据](15-implementation-status.md#evidence-alpha9-upgrade-20261122)。12次CLI成功（0.180–0.211秒）仅为短时健康；新版真实viewer已完成自有页面点击/输入/滚动及5次显式重连回只读后接管；Balanced/Smooth各5次观测包含工具开销，不能严格对比旧夹具或证明卡顿已解决。用户人工验证后已进入claude.ai/login，助手截图复核正常登录表单；没有登录账号。本轮本机viewer、TaskSpace及10个临时文件已清理，远端Chrome登录页有意保留；这不承诺长期免挑战，见[alpha.9交互证据](15-implementation-status.md#evidence-alpha9-viewer-20261122)。历史alpha.8失败保留，beta门槛保持开放。
 

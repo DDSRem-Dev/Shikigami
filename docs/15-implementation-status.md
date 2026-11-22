@@ -2,7 +2,7 @@
 
 
 <a id="evidence-viewer-transport-diagnostics-20261123"></a>
-## 查看器传输诊断（2026-11-23，未发布）
+## alpha.10 查看器诊断发布与两端升级（2026-11-23）
 
 已在 browser viewer 增加本地传输观测：屏幕数据 KiB/s、二进制消息/s、最近采样最大到达间隔、最近数据年龄和 WebSocket 发送缓冲区。显示文案说明这些值只描述本机 WebSocket 到达与发送状态，不冒充远端 RTT、RFB 帧率、解码时间或实际屏幕呈现帧率。实现没有丢弃、重排或合并 RFB 字节，也没有调整画质、分辨率、控制权或重连语义。
 
@@ -10,9 +10,12 @@
 - [x] `node --check plugins/browser/client/web/viewer.js` 通过。
 - [x] `go test -race ./plugins/browser/client ./plugins/browser/server ./plugins/browser/runtime` 通过。
 - [x] 变更范围复核：仅 `plugins/browser/client` 静态资源、测试和对应文档；无 host 业务依赖、RPC/权限/持久状态/进程策略变更。
-- [ ] 真实公网查看器采样、滚动低帧率、断线恢复和长期体验仍待验；alpha.10 仍为草案，未发布或部署。
+- [x] alpha.10 标签固定到 `c2ac2068df1794e71c555051a9c5d307df7b994f`；发布流水线 [45056120246](https://github.com/DDSRem-Dev/Shikigami/actions/runs/45056120246) 全部成功，Release 公开 23 个签名资产。
+- [x] Mac arm64 与 VPS linux/amd64 已升级到 alpha.10；doctor 为 core HEALTHY、7 个插件 ready，远端 daemon 报告 alpha.10，VPS 三项正式 systemd 服务 active。
+- [x] alpha.10 viewer smoke 在正式 work profile 上显示新增传输指标，Connected/Read-only 状态正常；关闭 viewer 后本地临时 URL/JSON 已删除，work Chrome profile 保持 running/browse。
+- [ ] 滚动低帧率、断线恢复、公网链路归因和长期体验仍待验；本次 smoke 不宣称实际呈现帧率改善。
 
-现网基线（alpha.9，2026-11-23）：正式 `work` viewer 走 `tailscale-relay`，约2.5秒观察后保持 Connected/Read-only；旧版 viewer 显示本地接收约12.2 KiB/s、发送缓冲0 KiB。该样本没有控制、账号或页面写入，也没有改变远端 Chrome；viewer关闭后短期 URL/JSON 文件已删除。因为查看器尚未部署本批诊断代码，这只能作为旧版链路基线，不能解释真实帧率或宣称卡顿修复。
+现网 alpha.9 基线与 alpha.10 smoke 均没有取得控制权、访问账号或写入页面；alpha.10 smoke 只确认新指标在正式 viewer 中可见。该样本不能解释真实帧率或宣称卡顿修复。
 
 本批没有新建持久测试项目、远端文件、测试服务或开发二进制。短时真实查看器采样若执行，必须在关闭查看器后复核临时资源并删除；正式 work profile、登录页、密钥环、agent-remote 与历史发行备份保持不变。
 
