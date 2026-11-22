@@ -1,0 +1,32 @@
+From 895a86cff25b3d410af043098740d425cdad2bdc Mon Sep 17 00:00:00 2001
+From: Tobias <tobfa@cendio.se>
+Date: Thu, 22 Oct 2026 12:23:01 +0200
+Subject: [PATCH] Fix congestion window wrap-around on latency spike
+
+Since da8904cb0 a latency spike (diff > 100) both scales the congestion
+window proportionally and always subtracts an additional 4 KiB. This
+could have the unintended effect that the unsigned congWindow,
+potentially below 4 KiB at the point of the subtraction, wraps around
+and gets clamped to MAXIMUM_WINDOW.
+
+This fix avoids the wrap around and makes the spike handling and
+congestion avoidance mutually exclusive.
+---
+ common/rfb/Congestion.cxx | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/common/rfb/Congestion.cxx b/common/rfb/Congestion.cxx
+index 46bae00da4..3e0dabc68e 100644
+--- a/common/rfb/Congestion.cxx
++++ b/common/rfb/Congestion.cxx
+@@ -442,9 +442,7 @@ void Congestion::updateCongestion()
+ #endif
+     congWindow = congWindow * baseRTT / minRTT;
+     inSlowStart = false;
+-  }
+-
+-  if (inSlowStart) {
++  } else if (inSlowStart) {
+     // Slow start. Aggressive growth until we see congestion.
+ 
+     if (diff > 25) {

@@ -1,0 +1,32 @@
+{
+  "constants": {
+    "minimum_window": 4096,
+    "maximum_window": 4194304
+  },
+  "cases": [
+    {
+      "initial_window": 4096,
+      "base_rtt_ms": 100,
+      "min_rtt_ms": 201,
+      "latency_diff_ms": 101,
+      "old_v1_12_window": 4194304,
+      "patched_window": 4096
+    },
+    {
+      "initial_window": 8192,
+      "base_rtt_ms": 100,
+      "min_rtt_ms": 201,
+      "latency_diff_ms": 101,
+      "old_v1_12_window": 4194304,
+      "patched_window": 4096
+    },
+    {
+      "initial_window": 16384,
+      "base_rtt_ms": 100,
+      "min_rtt_ms": 201,
+      "latency_diff_ms": 101,
+      "old_v1_12_window": 4096,
+      "patched_window": 8151
+    }
+  ]
+}
