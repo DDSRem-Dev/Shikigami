@@ -8,6 +8,7 @@
 - [x] 核对 Debian 12 bookworm 的`tigervnc-standalone-server_1.12.0+dfsg-8`源码与当前runtime调用的`/usr/bin/Xtigervnc`；Debian源文件仍保留延迟尖峰后独立拥塞分支。
 - [x] 按上游`895a86cff25b3d410af043098740d425cdad2bdc`的精确逻辑复现无符号窗口绕回：`baseRTT=100ms`、`minRTT=201ms`、初始4KiB窗口时，旧逻辑比例缩窗后再减4KiB并绕回，最终被4MiB上限钳制；补丁逻辑保留4KiB下限。原始补丁、脚本、结果和SHA见[隔离证据](evidence/tigervnc-congestion-20261122/README.md)。
 - [x] 核对该补丁尚未进入上游`v1.16.2`稳定标签，当前上游`master`已包含；“直接升级最新稳定版”不能作为现成修复。
+- [x] 在一次性Debian 12容器中应用原始上游补丁并成功编译`rfb`公共库目标；这只证明补丁可编译，不是完整`Xtigervnc`运行时或帧率验收，结果见隔离证据。
 - [ ] 尚未证明用户live连接触发该窗口序列，尚未在VPS替换系统包，也尚未完成带补丁VNC运行时的画面/滚动对照。当前不改变安装器、系统包或正式alpha.9。
 
 该发现与低帧率/追赶症状有关，但不能单独解释触控板步进、网页滚动条略好或所有冻结。要纳入产品必须有可审计签名runtime artifact或发行版含补丁包，并完成升级/回滚、进程归属、依赖、实际滚动及长期稳定验收。

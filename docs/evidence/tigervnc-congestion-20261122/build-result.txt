@@ -1,0 +1,9 @@
+Isolated disposable Debian 12 container build
+
+Source: TigerVNC upstream 1.12-branch
+Patch: 895a86cff25b3d410af043098740d425cdad2bdc
+Configuration: BUILD_VIEWER=OFF, BUILD_JAVA=OFF, ENABLE_NLS=OFF, ENABLE_GNUTLS=OFF, INSTALL_SYSTEMD_UNITS=OFF
+Target: rfb
+Result: patched-tigervnc-rfb-build=success
+Patched common/rfb/Congestion.cxx SHA256: 9def82863d36572f144fe6c30bc7fde7b1104889651d78c8090c50425f26217c
+Scope: compile proof for the common VNC library only; no Xtigervnc binary, package, service, Chrome, VPS or user data was changed.
