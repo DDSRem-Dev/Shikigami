@@ -1,6 +1,20 @@
 # 架构与文档一致性检查
 
 
+<a id="evidence-default-shell-alpha10-precheck-20261124"></a>
+## 默认交互 shell 修复、alpha.10 实机自动化复验与文档同步（2026-11-24）
+
+| 复核类别 | 结果 |
+|---|---|
+| 目录与依赖归属 | 生产变更仅位于 `internal/server/tmux` 与 `internal/server/session`；`plugins/*` 未导入 `internal/*`，宿主未内嵌插件业务，`go.mod` 无新增依赖，`./test/architecture/...` 通过。 |
+| RPC、准入、授权与能力 | 未修改 `proto/*.proto`、生成代码、Connect/gRPC 准入、能力声明或权限映射；`09` 与 `13` 的协议词法一致性测试通过。 |
+| 持久状态、原子性与去重 | 未修改持久存储 schema、revision 或 request_id 去重规则；`StopClaude` 仅通过本地存储快照读取已保存的 `LaunchEnvironment`，不在停止路径触发远端或插件状态写入。 |
+| 进程、取消与恢复 | 继续复用同一 `tmux -L shiki-<uid>` socket 与进程回收语义；`InteractiveShell()` 采用纯 Go 有界文件读取（上限 1 MiB），兼容 `CGO_ENABLED=0` 静态/交叉构建；`Respawn`/`RespawnDead` 通过既有 `/bin/sh -c` 位置参数包装器导出 `CLAUDE_CODE_NO_FLICKER=1`（保留显式环境变量覆盖），不增加额外 `tmux` 子进程调用或改变 `RespawnDead` 原子拒杀活窗格保证。 |
+| 文件、终端、网络与 RFB 语义 | 严格校验登录 shell 为常规可执行文件且属于受信白名单/`/etc/shells`，拒绝相对路径、`nologin`/`false`；保留显式配置的 `zsh`/`fish`，仅在默认 `/bin/sh` 或 `/bin/dash` 时升级至可用 `/bin/bash`。默认启用 `CLAUDE_CODE_NO_FLICKER=1` 使远端 Claude Code 直接进入 `alt=1` 全屏无闪烁 TUI 并透传鼠标事件。未放宽 5 秒短 unary 超时预算掩盖网络抖动。 |
+| CLI、配置、安装与发布 | `README.md` 与 `docs/README.md`、`11`、`18`、`22`、`27`、`28`、`30` 已同步，新增 `docs/releases/v0.0.1-beta.1.md` 冻结发布说明；正式 Mac/VPS 保持签名 `alpha.10` 直至 `v0.0.1-beta.1` 签名资产公开。 |
+| 验证与边界 | 本地 macOS、Node viewer、Python 工具、16 项 VT 终端语义、集成/故障注入与 Debian 12 容器 race 测试全部通过；`alpha.10` 实机 `B01`–`B09`（自动化与用户确认，含 `B03` 真实 Claude 登录与任务）闭环并完成零残留清理。首轮测试失败与现网偶发 5 秒超时均如实记录；`B10` 全新双机首装与 `B11` 物理重启保留为未实测边界，发布时门禁待 `v0.0.1-beta.1` CI/签名发布与独立验签完成后勾选，`08`/`15`/`16` 结论一致。 |
+
+
 <a id="evidence-viewer-transport-diagnostics-20261123"></a>
 ## alpha.10 查看器诊断发布与两端升级（2026-11-23）
 

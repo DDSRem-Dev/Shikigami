@@ -26,6 +26,7 @@ var (
 type Client struct {
 	binary string
 	socket string
+	shell  string
 }
 
 type Pane struct {
@@ -55,7 +56,16 @@ func New(binary string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("tmux dependency: %w", err)
 	}
-	return &Client{binary: path, socket: "shiki-" + strconv.Itoa(os.Getuid())}, nil
+	return &Client{binary: path, socket: "shiki-" + strconv.Itoa(os.Getuid()), shell: InteractiveShell()}, nil
+}
+
+// Shell returns the resolved interactive shell executable for empty-shell
+// sessions and StopClaude fallbacks.
+func (c *Client) Shell() string {
+	if c != nil && c.shell != "" {
+		return c.shell
+	}
+	return InteractiveShell()
 }
 
 func Name(id string) (string, error) {
@@ -102,6 +112,13 @@ func (c *Client) run(ctx context.Context, args ...string) ([]byte, error) {
 	return out, nil
 }
 
+func claudeNoFlickerValue() string {
+	if value, ok := os.LookupEnv("CLAUDE_CODE_NO_FLICKER"); ok && value != "" && !strings.ContainsRune(value, '\x00') {
+		return value
+	}
+	return "1"
+}
+
 // Create starts a detached session, sets pane retention before launching the
 // requested argv, and never evaluates caller strings as a shell command.
 // Empty argv leaves a plain interactive shell for auto_start_claude=false.
@@ -116,7 +133,7 @@ func (c *Client) Create(ctx context.Context, id, dir string, argv []string) (Pan
 	if len(argv) > 0 && !strings.HasPrefix(argv[0], "/") {
 		return Pane{}, errors.New("executable must be resolved to an absolute path")
 	}
-	_, err = c.run(ctx, "new-session", "-d", "-s", name, "-c", dir, "-x", "80", "-y", "24", "/bin/sh")
+	_, err = c.run(ctx, "new-session", "-d", "-s", name, "-c", dir, "-x", "80", "-y", "24", "-e", "CLAUDE_CODE_NO_FLICKER="+claudeNoFlickerValue(), c.Shell())
 	if err != nil {
 		return Pane{}, err
 	}
@@ -304,9 +321,9 @@ func (c *Client) Respawn(ctx context.Context, id string, argv []string) error {
 		return err
 	}
 	// Passing more than one command argument uses tmux's exec argv form.
-	// For a single executable use an explicit exec wrapper with positional args
-	// so characters in a binary path are never interpreted by a shell.
-	args := []string{"respawn-pane", "-k", "-t", p.PaneID, "/bin/sh", "-c", `exec "$@"`, "shiki"}
+	// Export CLAUDE_CODE_NO_FLICKER from a positional argument and exec "$@"
+	// so characters in a binary path or argument are never interpreted by a shell.
+	args := []string{"respawn-pane", "-k", "-t", p.PaneID, "/bin/sh", "-c", `CLAUDE_CODE_NO_FLICKER="$1"; export CLAUDE_CODE_NO_FLICKER; shift; exec "$@"`, "shiki", claudeNoFlickerValue()}
 	_, err = c.run(ctx, append(args, argv...)...)
 	return err
 }
@@ -324,15 +341,15 @@ func (c *Client) RespawnDead(ctx context.Context, id, expectedPane string, argv 
 	if p.PaneID != expectedPane || !p.AbnormalExit() {
 		return errors.New("automatic restart requires the same abnormally exited pane")
 	}
-	args := []string{"respawn-pane", "-t", p.PaneID, "/bin/sh", "-c", `exec "$@"`, "shiki"}
+	args := []string{"respawn-pane", "-t", p.PaneID, "/bin/sh", "-c", `CLAUDE_CODE_NO_FLICKER="$1"; export CLAUDE_CODE_NO_FLICKER; shift; exec "$@"`, "shiki", claudeNoFlickerValue()}
 	_, err = c.run(ctx, append(args, argv...)...)
 	return err
 }
 
-// Stop returns the pane to a shell, using tmux's current pane identity rather
-// than signaling a PID recovered from an old state file.
+// Stop returns the pane to an interactive shell, using tmux's current pane
+// identity rather than signaling a PID recovered from an old state file.
 func (c *Client) Stop(ctx context.Context, id string) error {
-	return c.Respawn(ctx, id, []string{"/bin/sh"})
+	return c.Respawn(ctx, id, []string{c.Shell()})
 }
 
 func (c *Client) Delete(ctx context.Context, id string) error {

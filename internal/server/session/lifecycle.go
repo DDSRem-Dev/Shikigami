@@ -157,12 +157,13 @@ func (m *Manager) processActionLocked(ctx context.Context, request *pb.SessionAc
 			return nil, rpcError(connect.CodeResourceExhausted, "Claude process quota reached")
 		}
 	}
-	command := m.opts.ClaudeCommand
+	var command []string
 	if restart {
-		command, err = m.launchCommand(ctx, value.Id, command, !automatic)
-		if err != nil {
-			return nil, err
-		}
+		command = m.opts.ClaudeCommand
+	}
+	command, err = m.launchCommand(ctx, value.Id, command, restart && !automatic)
+	if err != nil {
+		return nil, err
 	}
 	// Persist intent before the external process operation. A crash leaves an
 	// honest unknown/starting state for reconciliation, never a stale PID signal.
@@ -185,6 +186,8 @@ func (m *Manager) processActionLocked(ctx context.Context, request *pb.SessionAc
 		if errors.Is(err, tmux.ErrNotFound) && !automatic {
 			_, err = m.tmux.Create(ctx, value.Id, value.WorkingDir, command)
 		}
+	} else if len(command) > 0 {
+		err = m.tmux.Respawn(ctx, value.Id, command)
 	} else {
 		err = m.tmux.Stop(ctx, value.Id)
 	}

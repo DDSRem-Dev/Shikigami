@@ -1,13 +1,17 @@
 package session
 
 import (
+	"bytes"
 	"context"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/DDSRem-Dev/Shikigami/internal/server/storage"
+	pb "github.com/DDSRem-Dev/Shikigami/pkg/protocol"
 )
 
 func TestLaunchEnvironmentUsesObservedSnapshotWithoutGlobalTmuxMutation(t *testing.T) {
@@ -61,4 +65,103 @@ func TestLaunchEnvironmentRejectsUnrelatedProcessSettings(t *testing.T) {
 	if _, err := manager.launchCommand(t.Context(), "sess_environment", []string{"/bin/true"}, true); err == nil {
 		t.Fatal("region callback expanded into arbitrary process environment")
 	}
+}
+
+func TestEmptyShellAndStopClaudeUseInteractiveShellWithRegionEnvironment(t *testing.T) {
+	if _, err := os.Stat("/bin/bash"); err != nil {
+		if _, zshErr := os.Stat("/bin/zsh"); zshErr != nil {
+			t.Skip("neither /bin/bash nor /bin/zsh installed for interactive shell check")
+		}
+	}
+	t.Setenv("HOME", t.TempDir())
+	m, _ := managerFixture(t, 4)
+	regionCalls := 0
+	m.operations.Lock()
+	m.opts.Environment = func(context.Context) (*LaunchEnvironment, error) {
+		regionCalls++
+		return &LaunchEnvironment{
+			Revision: "rev-jp",
+			Values:   map[string]string{"TZ": "Asia/Tokyo"},
+		}, nil
+	}
+	m.operations.Unlock()
+
+	noClaude := false
+	emptyShell, err := m.Create(t.Context(), &pb.CreateSessionRequest{
+		ProjectId:       "proj_fixture",
+		Name:            "empty-shell",
+		RequestId:       "empty-shell-region",
+		AutoStartClaude: &noClaude,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSessionShellArrowEditAndTZ(t, m, emptyShell.Id, "EMPTY", "Asia/Tokyo")
+
+	withClaude, err := m.Create(t.Context(), &pb.CreateSessionRequest{
+		ProjectId: "proj_fixture",
+		Name:      "claude-then-stop",
+		RequestId: "claude-then-stop-region",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	callsBeforeStop := regionCalls
+	stopped, err := m.StopClaude(t.Context(), &pb.SessionActionRequest{SessionId: withClaude.Id})
+	if err != nil || stopped.ClaudeStatus != "stopped" {
+		t.Fatalf("StopClaude failed: %+v %v", stopped, err)
+	}
+	if regionCalls != callsBeforeStop {
+		t.Fatalf("StopClaude unexpectedly queried live region worker: calls %d -> %d", callsBeforeStop, regionCalls)
+	}
+	assertSessionShellArrowEditAndTZ(t, m, withClaude.Id, "STOPPED", "Asia/Tokyo")
+}
+
+func assertSessionShellArrowEditAndTZ(t *testing.T, m *Manager, sessionID, tag, wantTZ string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+	defer cancel()
+	att, err := m.tmux.Attach(ctx, sessionID, 24, 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer att.Close()
+
+	waitOutput := func(needle string) {
+		t.Helper()
+		done := make(chan []byte, 1)
+		go func() {
+			var acc []byte
+			buf := make([]byte, 4096)
+			for {
+				n, readErr := att.Read(buf)
+				acc = append(acc, buf[:n]...)
+				if bytes.Contains(acc, []byte(needle)) || readErr != nil {
+					done <- acc
+					return
+				}
+			}
+		}()
+		select {
+		case got := <-done:
+			if !bytes.Contains(got, []byte(needle)) {
+				t.Fatalf("missing %q in terminal output %q", needle, got)
+			}
+		case <-time.After(5 * time.Second):
+			_ = att.Close()
+			got := <-done
+			t.Fatalf("timed out waiting for %q in %q", needle, got)
+		}
+	}
+
+	if _, err := att.Write([]byte("printf 'READY_%s_%s\\n' '" + tag + "' 'OK'\r")); err != nil {
+		t.Fatal(err)
+	}
+	waitOutput("READY_" + tag + "_OK")
+
+	// Use Left arrow (\x1b[D) to insert 'b' between 'a' and 'c' while printing $TZ.
+	if _, err := att.Write([]byte("SHIKI_EDIT=ac\x1b[Db; printf 'RESULT_%s:%s:%s\\n' '" + tag + "' \"$TZ\" \"$SHIKI_EDIT\"\r")); err != nil {
+		t.Fatal(err)
+	}
+	waitOutput("RESULT_" + tag + ":" + wantTZ + ":abc")
 }

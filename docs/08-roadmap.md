@@ -1,6 +1,16 @@
 # 开发路线图
 
 
+<a id="evidence-default-shell-alpha10-precheck-20261124"></a>
+## 默认交互 shell 修复、alpha.10 实机自动化复验与文档同步（2026-11-24）
+
+- [x] 修复 `B02` 默认 `/bin/sh`（`dash`）方向键缺陷与 `B03` 远端 Claude Code 全屏无闪烁 TUI 模式（`CLAUDE_CODE_NO_FLICKER=1`）：新增 `internal/server/tmux/shell.go`（纯 Go 有界读取 `/etc/passwd` 与 `/etc/shells`，兼容 `CGO_ENABLED=0` 发行构建；校验常规可执行文件并拒绝 `nologin`/`false`/非白名单路径；保留用户显式配置的 `zsh`/`fish` 等交互 shell，将最小 `/bin/sh` 或 `/bin/dash` 默认升级为可用的 `/bin/bash`，缺失时回退 `/bin/sh`），同步接入 `tmux.Create`、`tmux.Stop`、`session.launchCommand`（`--no-claude`）及 `StopClaude`（仅读取本地持久化的 `LaunchEnvironment`，不在停止路径调用 `region` worker RPC）；同时针对 `B03` 实测发现 `tmux` 内 Claude Code 默认采用内联渲染（`alt=0`，输入框停在第 23 行未贴底）的问题，在 `tmux.Create`（`new-session -e`）及 `Respawn`/`RespawnDead`（POSIX 位置参数包装器导出 `CLAUDE_CODE_NO_FLICKER` 后 `exec "$@"`，保留管理员显式环境覆盖，无额外 `tmux` 子进程调用）默认注入 `CLAUDE_CODE_NO_FLICKER=1`，VPS 实测确认 `178x57` 窗格进入 `alt=1`、`mouse_any=1` 并将输入框固定至底行（第 55–57 行）。首轮 `Respawn` 使用独立 `set-environment` 调用触发 `session` 预算测试假 `tmux` 观察脚本拒绝的失败已如实保留并改用单次 `respawn-pane` 包装器解决。
+- [x] 完成候选源码本地与 Debian 12 容器全量验证：`make fmt && make lint && make build`、`make test-tools`（112 项）、`make test-viewer`（28 项）、macOS `darwin/arm64` 全包 `go test -race`、`scripts/test-terminal-state.sh` 16/16 VT 语义检查点，以及 Debian 12 容器 `./scripts/test-linux.sh`（覆盖默认 `/bin/sh` -> `dash` 环境下真实 PTY 左方向键 `\x1b[D` 编辑及 `CLAUDE_CODE_NO_FLICKER` 默认/覆盖回归）。
+- [x] 完成已部署正式签名 `v0.0.1-alpha.10`（Mac `darwin/arm64` + Debian 12 VPS `linux/amd64`）自动化与用户实机验收闭环：验证跨日空闲 `RECONNECT_EXHAUSTED` 后 `shiki connect` `6788.7 ms` 恢复（`tailscale-direct`）；自动化通过 `B02`、`B04`（含 `6213.9 ms` 与 `11924.4 ms` 跨越旧 5 秒限制的多步 `resolve`）、`B05`（远端 `3000` 转发本地 `56102` 后端拒绝不重绑并恢复）、`B06` 文件与状态子集、`B07` 及 `20/20` RPC 采样；用户实测通过 **`B03`（经远程 `work` Chrome 完成官方 `claude auth login`，`loggedIn=true`，受管 `claude-check` 会话创建 `beta-check.txt` 内容 `SHIKI_BETA_OK` 及 detach/reattach 保活核验通过）**、**`B06`（浏览器日常使用体验正常）** 与 **`B08 + B09`（断网/睡眠恢复与持续使用正常，按用户确认登记）**。全部临时测试目录、项目、会话、映射、转发及暂存文件已清理归零，`work` 实例（`014ec66bfbef6a55488b14117be101d7`）与 Claude 登录状态保留。
+- [x] 同步公开入口、支持声明与 `docs/releases/v0.0.1-beta.1.md` 发布说明草稿，完成七类架构一致性复核并保持 `08`/`15`/`16` 一致。
+- [ ] 发布时与保留外部边界：现网偶发 5 秒短 unary `deadline_exceeded` 尖峰如实保留；全新双机首装（`B10`）与物理主机重启（`B11`）保留为明确未实测边界；候选提交远端 57 项 CI、`v0.0.1-beta.1` 不可变标签签名发行及公开资产独立验签在下一步执行完成后再勾选。
+
+
 <a id="evidence-viewer-transport-diagnostics-20261123"></a>
 ## alpha.10 查看器诊断发布与两端升级（2026-11-23）
 

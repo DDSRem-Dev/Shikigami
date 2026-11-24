@@ -64,7 +64,7 @@ agent继续持有连接和scope；CLI不得启动插件或拥有loopback listene
 
 alpha.9响应路径：每帧仍实时核查本机服务器记录及撤销上下文，只复制单条记录而非整个状态；只读RFB协商/更新请求仅写自身socket，不占用全局控制锁。修改桌面的按键/鼠标/剪贴板/resize仍在控制revision及权限检查后、同锁内发送，不能让旧控制者输入越过接管边界。READY始终先于控制通知和图像；CONTROL独立有界队列在发送边界优先，DATA保持全部字节顺序，不能丢帧/重排RFB块。已阻塞的transport Send不能被抢占，控制队列耗尽只取消该慢attachment。状态查询释放worker锁等待runtime/region，返回前验证完整状态/配置/实例版本，发生漂移返回Aborted供显式刷新。
 
-当前后续源码的新查看器默认Smooth（公开alpha.9仍默认Balanced），采用quality=3/compression=6，Balanced保持原quality=6/compression=2，Clear采用quality=8/compression=2；只使用noVNC公开API。更强压缩可减少流量但增加服务端CPU成本，必须实际比较，不自动改变分辨率或取得控制权。屏幕接收速率和本地WebSocket发送buffer不等于RTT、远端队列或最终显示延迟。模式显示仅由status报告的browse/diagnostic映射，缺失/未知值显示unknown；状态查询失败时历史模式仅留在明确标记为旧快照的Details中。
+公开 alpha.10 及当前源码的新查看器默认 Smooth（历史公开 alpha.9 默认 Balanced），采用quality=3/compression=6，Balanced保持原quality=6/compression=2，Clear采用quality=8/compression=2；只使用noVNC公开API。更强压缩可减少流量但增加服务端CPU成本，必须实际比较，不自动改变分辨率或取得控制权。屏幕接收速率、二进制块速率、到达间隔、最近数据年龄和本地WebSocket发送buffer不等于RTT、远端队列或最终显示延迟。模式显示仅由status报告的browse/diagnostic映射，缺失/未知值显示unknown；状态查询失败时历史模式仅留在明确标记为旧快照的Details中。
 
 状态持久化原子写与revision/request_id去重；runtime连接、PID、listener不当作持久真相。配置生效版本和进程启动版本分开。stop/disable与正常宿主shutdown须区分，避免重启误杀浏览器。
 
@@ -78,7 +78,7 @@ Linux Chrome固定使用GTK3及发行版`fcitx5-frontend-gtk3`，不使用XIM或
 
 ## 当前源码命令流程
 
-以下命令自公开alpha.3提供，当前安装入口为alpha.9，不适用于alpha.2；系统支持安装及平台验收状态以08/15/16为准。先按[11](11-automated-installation.md)完成可信bundle安装、管理员依赖/策略/密钥环配置，再通过既有连接命令登记服务器。
+以下命令自公开alpha.3提供，当前安装入口为alpha.10，不适用于alpha.2；系统支持安装及平台验收状态以08/15/16为准。先按[11](11-automated-installation.md)完成可信bundle安装、管理员依赖/策略/密钥环配置，再通过既有连接命令登记服务器。
 
 ```sh
 shiki --server my-vps plugins --side remote enable region

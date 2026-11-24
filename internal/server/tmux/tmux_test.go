@@ -338,3 +338,89 @@ func TestExactTargetsDoNotMatchSessionNamePrefixes(t *testing.T) {
 		t.Fatal("exact delete affected longer name", err)
 	}
 }
+
+func TestClaudeFullscreenEnvironmentDefaultAndOverride(t *testing.T) {
+	c := testClient(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	dir := t.TempDir()
+
+	// Start the independent tmux server before CLAUDE_CODE_NO_FLICKER is set,
+	// matching a daemon upgrade where an older tmux server is already running.
+	t.Setenv("CLAUDE_CODE_NO_FLICKER", "")
+	if _, err := c.run(ctx, "start-server"); err != nil {
+		t.Fatal(err)
+	}
+
+	outDefault := filepath.Join(dir, "default.env")
+	pane, err := c.Create(ctx, "sess_noflicker_default", dir, []string{"/bin/sh", "-c", `printf '%s' "$CLAUDE_CODE_NO_FLICKER" > "$1"`, "shiki-test", outDefault})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitForDeadPane(t, ctx, c, pane.SessionID)
+	gotDefault, err := os.ReadFile(outDefault)
+	if err != nil || string(gotDefault) != "1" {
+		t.Fatalf("expected default CLAUDE_CODE_NO_FLICKER=1, got %q (%v)", gotDefault, err)
+	}
+
+	// Simulate an older pre-existing session missing the session variable, then Respawn.
+	if _, err := c.run(ctx, "set-environment", "-t", pane.TmuxSessionID, "-u", "CLAUDE_CODE_NO_FLICKER"); err != nil {
+		t.Fatal(err)
+	}
+	outRespawn := filepath.Join(dir, "respawn.env")
+	if err := c.Respawn(ctx, pane.SessionID, []string{"/bin/sh", "-c", `printf '%s' "$CLAUDE_CODE_NO_FLICKER" > "$1"`, "shiki-test", outRespawn}); err != nil {
+		t.Fatal(err)
+	}
+	waitForDeadPane(t, ctx, c, pane.SessionID)
+	gotRespawn, err := os.ReadFile(outRespawn)
+	if err != nil || string(gotRespawn) != "1" {
+		t.Fatalf("expected Respawn CLAUDE_CODE_NO_FLICKER=1, got %q (%v)", gotRespawn, err)
+	}
+
+	// Explicit administrator override (e.g. "0") must be preserved.
+	t.Setenv("CLAUDE_CODE_NO_FLICKER", "0")
+	outOverride := filepath.Join(dir, "override.env")
+	paneOverride, err := c.Create(ctx, "sess_noflicker_override", dir, []string{"/bin/sh", "-c", `printf '%s' "$CLAUDE_CODE_NO_FLICKER" > "$1"`, "shiki-test", outOverride})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitForDeadPane(t, ctx, c, paneOverride.SessionID)
+	gotOverride, err := os.ReadFile(outOverride)
+	if err != nil || string(gotOverride) != "0" {
+		t.Fatalf("expected override CLAUDE_CODE_NO_FLICKER=0, got %q (%v)", gotOverride, err)
+	}
+
+	// Shell-only session (argv == nil) must also inherit CLAUDE_CODE_NO_FLICKER=1.
+	t.Setenv("CLAUDE_CODE_NO_FLICKER", "")
+	shellPane, err := c.Create(ctx, "sess_noflicker_shell", dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	att, err := c.Attach(ctx, shellPane.SessionID, 24, 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer att.Close()
+	if _, err := att.Write([]byte("printf 'NF_SHELL=%s\\n' \"$CLAUDE_CODE_NO_FLICKER\"\r")); err != nil {
+		t.Fatal(err)
+	}
+	readUntil(t, att, []byte("NF_SHELL=1"))
+}
+
+func waitForDeadPane(t *testing.T, ctx context.Context, c *Client, sessionID string) {
+	t.Helper()
+	for {
+		p, err := c.Inspect(ctx, sessionID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.Dead && p.ExitStatus != nil {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}

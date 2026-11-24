@@ -8,7 +8,12 @@ import (
 	"strings"
 
 	"github.com/DDSRem-Dev/Shikigami/internal/server/storage"
+	"github.com/DDSRem-Dev/Shikigami/internal/server/tmux"
 )
+
+func defaultInteractiveShell() string {
+	return tmux.InteractiveShell()
+}
 
 const environmentBucket = "session.environment"
 
@@ -117,9 +122,19 @@ func (m *Manager) launchCommand(ctx context.Context, id string, argv []string, r
 		command = append(command, name+"="+environment.Values[name])
 	}
 	if len(argv) == 0 {
-		command = append(command, "/bin/sh")
+		command = append(command, m.interactiveShell())
 	} else {
 		command = append(command, argv...)
 	}
 	return command, nil
+}
+
+func (m *Manager) interactiveShell() string {
+	if m != nil && m.tmux != nil {
+		return m.tmux.Shell()
+	}
+	if m != nil {
+		return defaultInteractiveShell()
+	}
+	return "/bin/sh"
 }
