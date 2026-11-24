@@ -1,6 +1,8 @@
 # 首版预发布、自动发布流程与交付门槛
 
-alpha.10 已公开（记录日期 2026-11-23）：固定源码 `c2ac2068df1794e71c555051a9c5d307df7b994f` 的 [Release 45056120246](https://github.com/DDSRem-Dev/Shikigami/actions/runs/45056120246) 完成同源检查、四目标构建、真实签名与公开发布，23 个签名资产已公开，Homebrew 公式自动更新。当前安装入口为 [v0.0.1-alpha.10](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.10)，见[发行说明](releases/v0.0.1-alpha.10.md)。Mac arm64 与 Debian 12 amd64 VPS 均已升级正式签名 alpha.10，7 插件 ready、work 为 running/browse；原配置、Token/auth、密钥环、profile 及 daemon 身份保持，见[升级证据](15-implementation-status.md#evidence-viewer-transport-diagnostics-20261123)。当前工作树源码另已修复默认交互 shell 在 `/bin/sh`（`dash`）下的方向键行编辑缺陷并通过本地与 Debian 12 容器验证，待随下一版签名包发布。滚动流畅度、断网/睡眠恢复、长期使用、Claude 登录与物理重启仍保留验收边界。
+首个公开 Beta 已发布（记录日期 2026-11-24）：固定源码 `f234a090d42ebdb57c1f23e9ff317b6d43770f80` 的[发布前 CI 45404108766](https://github.com/DDSRem-Dev/Shikigami/actions/runs/45404108766) 经同源补跑完成 57/57 成功；[Release 45420481374](https://github.com/DDSRem-Dev/Shikigami/actions/runs/45420481374) 于 Attempt 4 完成 60 项成功、1 项条件跳过（不计通过），于 `2026-11-24T17:11:45Z` 公开 [v0.0.1-beta.1](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-beta.1)（`draft=false`、`prerelease=true`），23 个签名资产已公开，Homebrew 公式自动更新（bot 提交 `9d5c0c1167e7cf45b3bc8389b42f41c8cd344d68`）。当前公开安装入口为 [v0.0.1-beta.1](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-beta.1)，见[发行说明](releases/v0.0.1-beta.1.md)与[独立验证证据](15-implementation-status.md#evidence-public-beta1-release-20261124)：23 资产、四目标 Ed25519 验签、篡改签名拒绝、公开 `bootstrap.sh` 暂存、隔离 `systemd` `alpha.10 -> beta.1 -> rollback -> uninstall` 生命周期，以及隔离 Linux `Homebrew` 远端公开 tap 安装/测试/重装均已核验通过；历史 `alpha.1`/`alpha.2` 维持 22 资产未改。用户现网 Mac arm64 与 Debian 12 amd64 VPS 已在正式签名 `alpha.10` 完成 `B01`–`B09`（含 `B03` 远程 Chrome 官方 Claude 授权与受管会话任务、`B06` 默认 Smooth 浏览器体验、`B08/B09` 断网/睡眠恢复与日常使用），现网两端尚未切换至 `beta.1`；全新双机首装（`B10`）与物理主机重启（`B11`）仍保留未实测边界。
+
+历史 alpha.10 公开记录（2026-11-23）：固定源码 `c2ac2068df1794e71c555051a9c5d307df7b994f` 的 [Release 45056120246](https://github.com/DDSRem-Dev/Shikigami/actions/runs/45056120246) 完成同源检查、四目标构建、真实签名与公开发布，23 个签名资产公开，Homebrew 公式自动更新（bot 提交 `3af9ef9afc1650dbd0df8d526c72de941ce0028f`），见[发行说明](releases/v0.0.1-alpha.10.md)与[升级证据](15-implementation-status.md#evidence-viewer-transport-diagnostics-20261123)。
 
 历史 alpha.9 公开记录（2026-11-22）：固定源码`0b4847d`的[CI44924752906](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44924752906)57/57通过；[Release44929424103](https://github.com/DDSRem-Dev/Shikigami/actions/runs/44929424103)已completed/success，23资产于`2026-11-21T18:13:58Z`公开，见[发行说明](releases/v0.0.1-alpha.9.md)与[升级证据](15-implementation-status.md#evidence-alpha9-upgrade-20261122)。
 
@@ -17,16 +19,16 @@ alpha.6 发布后的 CI 及实机跟进另发现浏览器本地 attachment 清�
 <a id="current-support"></a>
 ## 当前支持声明（2026-11-24）
 
-本节是当前支持范围的统一入口。路线图Phase0–5的原42项已完成验收登记与声明核对；alpha.10已完成公开发行，不是beta或稳定版；用户两端已升级正式alpha.10，当前ready和browse状态已核对，旧实机功能证据不扩大为本版交互/稳定性通过。下文按日期保留的候选、失败、平台待办仅代表当时范围，不能覆盖本节。
+本节是当前支持范围的统一入口。路线图Phase0–5的原42项已完成验收登记与声明核对；首个公开 Beta `v0.0.1-beta.1` 已完成签名公开发行与独立包/渠道核验（属 `0.0.x` Beta 预发布，非 `1.0` 稳定版）；用户现网两端在正式 `alpha.10` 完成 `B01`–`B09` 验收后暂保持 `alpha.10` 运行，旧实机证据与公开包隔离验收严格按实际版本绑定记录。下文按日期保留的候选、失败、平台待办仅代表当时范围，不能覆盖本节。
 
 ### 版本与证据来源
 
 | 对象 | 当前结论 | 来源与限制 |
 |---|---|---|
-| 当前源码 | 在 alpha.10（noVNC 1.7.0、默认 Smooth 画质、本地 WebSocket 传输诊断）基础上修复默认交互 shell 在 `/bin/sh`（`dash`）下的方向键行编辑缺陷，并为受管 `tmux` 会话默认启用 `CLAUDE_CODE_NO_FLICKER=1` 全屏无闪烁 TUI 模式；沿用既有安装与插件边界 | alpha.10 固定源 `c2ac2068df1794e71c555051a9c5d307df7b994f` 已完成两端签名升级，用户实测确认 `B03`（远程 Chrome 完成 Claude 官方登录与受管会话任务）、`B06`（浏览器使用体验正常）及 `B08/B09`（断网/睡眠恢复与日常使用正常）；两项终端修复已通过本机 macOS 与 Debian 12 容器回归，准备随 `v0.0.1-beta.1` 发布 |
+| 当前源码与公开 Beta | `v0.0.1-beta.1`（固定源 `f234a090d42ebdb57c1f23e9ff317b6d43770f80`）在 alpha.10（noVNC 1.7.0、默认 Smooth 画质、本地 WebSocket 传输诊断）基础上修复默认交互 shell `/bin/sh`（`dash`）方向键行编辑缺陷，并为受管 `tmux` 会话默认启用 `CLAUDE_CODE_NO_FLICKER=1` 全屏无闪烁 TUI 模式；沿用既有安装与插件边界 | [CI 45404108766](https://github.com/DDSRem-Dev/Shikigami/actions/runs/45404108766) 57/57 通过，[Release 45420481374](https://github.com/DDSRem-Dev/Shikigami/actions/runs/45420481374) 公开 23 签名资产；用户在已部署签名 `alpha.10` 实测确认 `B03`（远程 Chrome 完成 Claude 官方登录与受管会话任务）、`B06`（浏览器使用体验正常）及 `B08/B09`（断网/睡眠恢复与日常使用正常），现网两端尚未执行 `beta.1` 切换 |
 | 认证生命周期、长稳/资源/性能 | 2026-11-01按用户确认测试通过关闭 | 既有实测证据分别见23、20；用户确认与独立实测分别记录，不补造官方URL到期现场或生产heap/object归因结果 |
-| 公开安装包 | 安装入口为`v0.0.1-alpha.10`，固定源`c2ac2068df1794e71c555051a9c5d307df7b994f` | 23资产已公开；正式签名两端升级、7插件ready及原数据保持见[15](15-implementation-status.md#evidence-viewer-transport-diagnostics-20261123)；Homebrew公式已自动更新至 alpha.10，真实tap新安装未测 |
-| 版本性质 | alpha.10 按用户要求供浏览器滚动与稳定性复验，未发布beta | [发行说明](releases/v0.0.1-alpha.10.md)与08/15/16保留真实账号、公网、物理重启和新增原生体验边界；下方beta记录保持历史含义 |
+| 公开安装包与渠道 | 安装入口为 `v0.0.1-beta.1`，固定源 `f234a090d42ebdb57c1f23e9ff317b6d43770f80` | 23资产四目标离线验签、公开 `bootstrap.sh` 暂存、隔离 `systemd` `alpha.10 -> beta.1 -> rollback -> uninstall` 及隔离 Linux `Homebrew` 远端 tap（提交 `9d5c0c1167e7cf45b3bc8389b42f41c8cd344d68`）安装/测试/重装均已通过，见[15](15-implementation-status.md#evidence-public-beta1-release-20261124)；用户本机 macOS 27 Xcode/CLT `brew install` 前置限制保持原状 |
+| 版本性质 | 首个公开 Beta 预发布（`v0.0.1-beta.1`），非 `1.0` 稳定版 | [发行说明](releases/v0.0.1-beta.1.md)与08/15/16保留全新双机首装（`B10`）、物理主机重启（`B11`）、偶发短查询超时及未支持平台边界 |
 
 2026-11-21，VPS与Mac已升级到正式alpha.8。默认预算下6次resolve成功（0.594–4.938秒），端口目标拒绝后的恢复、浏览器输入、5次显式重连、接管及暂存文件功能通过；浏览器仍有一次状态查询超时，经手动Refresh恢复，临时转发后续发生端口重绑定，原因未定。默认`/bin/sh`方向键尚未修复；长稳、网络专项、Claude登录和物理重启继续开放。详情见[两端升级与实测](15-implementation-status.md#evidence-alpha8-upgrade-20261121)。这6次resolve均未超过旧5秒截止，不能据此宣称实机已覆盖完整长传输预算；历史受控回归另记。
 
@@ -75,12 +77,12 @@ GUI、插件状态槽/dashboard/设置表单渲染、WSS、文件级快照/workt
 
 - [x] bootstrap 有效真实签名成功安装、错误签名拒绝、安装失败保留退出码且清理完成；发布/重跑/Homebrew 使用同一严格资产集合。Linux 真实 systemd 安装/卸载通过；macOS 下载取消缺陷修复后，四平台 preflight 全部通过，外部 peer 仍 pending。
 - [x] 真实 CLI/agent/SDK 插件完成签名安装、显式启用、manifest 命令、更新/失败回滚、宿主重启恢复和卸载；降级、身份/发行者替换与不可信下载拒绝，不破坏当前可用版本。接受前 schema 拒绝和丢失响应恢复均已回归。
-- [x] 固定候选源码的本地相关回归、架构依赖检查、发行工具检查及完整远端 CI 成功；`a5032c1` 的 CI 43484685340 为57/57，原生 Linux/macOS 与 WSL2 结果可追溯，macOS 生命周期及活动上传/下载升级全部通过。
+- [x] 固定候选源码的本地相关回归、架构依赖检查、发行工具检查及完整远端 CI 成功；最终候选 `f234a090d42ebdb57c1f23e9ff317b6d43770f80` 的 [CI 45404108766](https://github.com/DDSRem-Dev/Shikigami/actions/runs/45404108766) 为 57/57（历史 `a5032c1` 的 CI 43484685340 同为 57/57），原生 Linux/macOS 与 WSL2 结果可追溯，macOS 生命周期及活动上传/下载升级全部通过。
 
 **发布时（需要实际 tag/Release，未执行不能预先勾选）：**
 
-- [ ] 从通过验收的固定源码创建不可变 beta tag；同源 CI、四目标构建、真实发行签名、草稿资产检查、公开发布与 Homebrew 更新全部成功。
-- [ ] 下载新公开资产并独立验签，验证 bootstrap、安装/升级/回滚及 Formula 版本/摘要/渠道；新版本说明绑定实际来源与平台证据。alpha.1/alpha.2 保持原22资产，新版本使用含 bootstrap 的23资产契约，不修改旧包。
+- [x] 从通过验收的固定源码 `f234a090d42ebdb57c1f23e9ff317b6d43770f80` 创建不可变 `v0.0.1-beta.1` tag；[Release 45420481374](https://github.com/DDSRem-Dev/Shikigami/actions/runs/45420481374) 同源 CI、四目标构建、真实发行签名、草稿资产检查、公开发布（`2026-11-24T17:11:45Z`，`draft=false`、`prerelease=true`）与 Homebrew 更新（提交 `9d5c0c1167e7cf45b3bc8389b42f41c8cd344d68`）全部成功（60 项成功、1 项标签 `homebrew` 条件跳过不计通过；中间托管 runner 未分配与外部模块下载超时重试如实记录于 [15](15-implementation-status.md#evidence-public-beta1-release-20261124)）。
+- [x] 下载新公开 23 资产并独立验签（四目标 `release-trust verify` 及篡改签名拒绝通过），验证公开 `bootstrap.sh` 实网下载验签暂存、隔离 `systemd` `v0.0.1-alpha.10` → `v0.0.1-beta.1` 安装/活动升级/回滚/卸载，以及 `Formula/shikigami.rb` 版本/摘要逐字节重建与隔离 Linux 远端 tap 安装/测试/重装渠道；[新版本说明](releases/v0.0.1-beta.1.md)绑定实际来源与平台证据。`alpha.1`/`alpha.2` 经核对保持原 22 资产，新版本使用含 `bootstrap.sh` 的 23 资产契约，未修改旧包。
 
 本地隔离签名与模拟 GitHub API 能验证产品/发布工具行为，但不冒充真实发行密钥、公网上传、账号登录或物理主机重启。完成前三项可作出“候选可进入 beta 发布流程”的结论；完成后两项才可声称该 beta 已发布并通过公开包验收。
 

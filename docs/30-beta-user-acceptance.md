@@ -6,7 +6,7 @@
 - **alpha.10 非破坏性自动化功能复验与零残留收尾通过：** 独立临时项目完成 `B02`（PTY detach/reattach 同 PID 与文件内容保持、配置快照恢复新 PID、`stats`）、`B04`（初始冲突 `show-diff`/`keep-local`/`keep-remote`、已有基线双向自动上传/下载、`pause` 隔离、双端并发修改 `keep-both` 双版本核验、本地重命名收敛与删除传播；完整轮 5 次默认预算 `sync resolve` 全部一次成功，耗时 `2160.0–11924.4 ms`，其中 `6213.9 ms` 与 `11924.4 ms` 实际跨越旧 5 秒上限证明 15 分钟多步文件预算生效）、`B05`（远端 `3000` loopback HTTP 转发成功、后端停止拒绝期间保持同一本地端口 `56102` 与 `listening` 状态不重绑、后端重启后原端口恢复、`ports stop` 回收）、`B06` 自动化子集（`browser status work` 连续 10 次 `0` 失败，中位 `627.5 ms` / 最大 `1188.5 ms`；暂存区文件上传 `939.8 ms` / 列表 / 下载 `2532.5 ms` SHA-256 一致并精确清理）、`B07`（日本配置 `region plan` `0` 变更）及 `20/20` 只读 `projects list` 采样（`0` 失败，最小 `275.8 ms` / 中位 `605.5 ms` / 最大 `2857.2 ms`）。全部临时项目、会话、快照、同步映射、端口转发、远端测试目录及浏览器暂存文件已清理并复核归零。
 - **保留真实瞬时超时记录（不掩盖）：** 多轮调试与复验期间，现网 Tailscale 链路仍观察到偶发 5 秒短 unary `deadline_exceeded` 尖峰（含前序轮一次 `sync resolve` 内部元数据探测 `7659.9 ms` 超时、一次约 10 秒链路停顿导致 `projects create`/`projects list` 连续触发 5 秒截止且复查确认未在服务端半创建、一次 `attach` 前置查询 5 秒超时，以及完整通过轮中一次只读 `sync conflicts` 轮询 `5034.9 ms` 超时后下一拍恢复）。未发生数据损坏、越权或身份变化，但长期稳定性（`B08/B09`）仍待用户日常与切网/睡眠检验。
 - **默认 `/bin/sh`（`dash`）方向键缺陷与 Claude 全屏 TUI 模式（`CLAUDE_CODE_NO_FLICKER=1`）已在当前候选源码修复：** `internal/server/tmux/shell.go` 及 `session` 启动/停止路径已将普通运行用户配置的 `/bin/sh` 或 `/bin/dash` 自动升级为可用的 `/bin/bash`（保留用户显式配置的 `zsh`/`fish` 等交互 shell）；同时针对 `B03` 实测发现远端 Claude Code 在 `tmux` 下默认采用非全屏内联渲染（`alt=0`，输入框悬浮在消息下方且流式重绘易闪烁）的问题，`internal/server/tmux/tmux.go` 在 `Create`、`Respawn` 与 `RespawnDead` 中默认注入 `CLAUDE_CODE_NO_FLICKER=1`（保留管理员显式环境变量覆盖），已在 VPS 实测确认开启后 `178x57` 窗格进入 `alt=1` 全屏模式并将输入框固定至底行（第 55–57 行）。两项修复均已通过本地与 Debian 12 容器回归，随 `v0.0.1-beta.1` 签名包发布。
-- **用户实机验收闭环（2026-11-24）：** 用户已在正式 `alpha.10` 环境确认 **`B06` 远程浏览器日常使用体验正常**、**`B08` + `B09` 断网/睡眠恢复与持续使用正常**（按用户确认记录，未另存本地 CSV），并通过远程 `work` Chrome 完成 **`B03` 官方 `claude auth login`（`loggedIn=true`）与受管 `claude-check` 会话实际文件创建任务（`beta-check.txt` 内容 `SHIKI_BETA_OK` 核验一致、detach/reattach 保活通过）**；`b03-claude-check` 临时测试目录、会话与项目已清理归零，Claude 登录状态与 `work` 浏览器完整保留。`B10` 全新双机首装与 `B11` 物理主机重启按约定保留为明确未实测边界，候选进入 `v0.0.1-beta.1` 发布流程。
+- **用户实机验收与 `v0.0.1-beta.1` 公开发行闭环（2026-11-24）：** 用户已在正式 `alpha.10` 环境确认 **`B06` 远程浏览器日常使用体验正常**、**`B08` + `B09` 断网/睡眠恢复与持续使用正常**（按用户确认记录，未另存本地 CSV），并通过远程 `work` Chrome 完成 **`B03` 官方 `claude auth login`（`loggedIn=true`）与受管 `claude-check` 会话实际文件创建任务（`beta-check.txt` 内容 `SHIKI_BETA_OK` 核验一致、detach/reattach 保活通过）**；`b03-claude-check` 临时测试目录、会话与项目已清理归零，Claude 登录状态与 `work` 浏览器完整保留。随后候选固定源码 `f234a090d42ebdb57c1f23e9ff317b6d43770f80` 通过远端 [CI 45404108766](https://github.com/DDSRem-Dev/Shikigami/actions/runs/45404108766)（57/57），不可变标签 [v0.0.1-beta.1](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-beta.1) 经 [Release 45420481374](https://github.com/DDSRem-Dev/Shikigami/actions/runs/45420481374) 完成 23 个签名资产公开发布与 Homebrew 公式自动更新（`9d5c0c1167e7cf45b3bc8389b42f41c8cd344d68`），并通过四目标离线验签、公开 `bootstrap.sh` 暂存、隔离 `systemd` `alpha.10 -> beta.1 -> rollback -> uninstall` 与隔离 Linux 远端 tap 核验（见[15](15-implementation-status.md#evidence-public-beta1-release-20261124)）。用户现网两端当前仍运行已验收的 `alpha.10`，可随时按 [28](28-quickstart.md) 升级至 `v0.0.1-beta.1`；`B10` 全新双机首装与 `B11` 物理主机重启按约定保留为明确未实测边界。
 
 2026-11-22历史反馈（alpha.9）：正式alpha.9选择Smooth且暂停Claude登录背景视频后，用户报告整体操作可用，但滚动低帧率仍明显。现两端已升级正式 `alpha.10`（默认 `Smooth`、noVNC 1.7.0、新增底部本地传输观测指标），请按下方第 `1a` 节直接体验 `alpha.10` 浏览器滚动并反馈。可控制查看器须显式 `browser open work --read-only=false --launch` 并在窗口 Take control，默认只读不变。
 
@@ -46,7 +46,7 @@ alpha.7 已完成公开签名验证和 VPS Debian12/amd64、Mac arm64 升级，7
 | B09 | 日常工作2小时＋可选隔夜8–12小时 | **按用户确认通过** | 20次短采样 0 失败；用户确认 `B08 + B09` 正常（无独立 CSV 落盘，按用户确认登记） |
 | B10 | 干净环境一键首装、取消后续装 | 独立机器可选门禁 | 现有升级与隔离测试已覆盖签名与向导逻辑；无独立新双机时不擦除现有环境，在发行说明保留首装实机未验边界 |
 | B11 | 实际重启、启动解锁/登录恢复 | 你可选维护窗口，我前后检查 | 可选补验（见第11节）；若暂不安排物理重启窗口，继续按 [11](11-automated-installation.md) 明确保留未实测边界 |
-| B12 | 候选回归、故障注入、升级/回滚、签名发行 | 我负责 | 候选源码本地/容器全套 race、VT 语义、集成与故障测试已全绿；等你反馈 B06/B08/B09 后推送跑远端 57 项 CI 并打 `v0.0.1-beta.1` tag |
+| B12 | 候选回归、故障注入、升级/回滚、签名发行 | **已完成通过** | 候选 `f234a09` 远端 CI `45404108766` 57/57 通过，`v0.0.1-beta.1` Release `45420481374` 公开 23 签名资产并通过四目标离线验签、`systemd` 升级/回滚与公开 tap 验证 |
 
 你不需要手工运行 Go 测试、构建插件、检查签名或学习 CI。你必须亲自完成的是账号授权、主观交互体验，以及你选择进行的断网/睡眠/重启操作。需要额外机器时先明确用途和可用环境；本手册不会要求擦除现有Mac/VPS来模拟首次安装。
 
@@ -450,7 +450,7 @@ PY
 
 我在隔离Linux系统和独立Mac测试环境执行，不卸载当前两端。Mac另一个用户可覆盖新用户安装，但不能称为整机全新环境；整机首装需要独立VM/设备。测试范围：
 
-1. 使用已公开验签的[28](28-quickstart.md)官方alpha.10两条命令，在独立无Shikigami状态环境安装；正确签名通过、错误签名拒绝在隔离测试完成。现有用户两端不为此清空重装。
+1. 使用已公开验签的[28](28-quickstart.md)官方 `v0.0.1-beta.1` 两条命令，在独立无Shikigami状态环境安装；正确签名通过、错误签名拒绝在隔离测试完成。现有用户两端不为此清空重装。
 2. 记录y/yes/n/no、隐藏输入与Enter/Ctrl+C、每10秒等待提示、纯端口误填原地纠正。
 3. 无Claude授权也能交付连接并打开浏览器，最终应用状态仍pending。
 4. 授权阶段正常取消后重跑；已完成步骤复用，既有keyring、地址与Token不重建。

@@ -2,9 +2,9 @@
 
 用户要求（2026-11-16）：普通用户在 VPS 和 Mac 各执行一条命令，由工具完成依赖、服务、登录引导和插件配置，不再手工下载公钥、拼接 bundle/pin、编辑 YAML 或串联管理命令。
 
-**alpha.10 已公开：** 本页下载命令指向 alpha.10；固定源 `c2ac2068df1794e71c555051a9c5d307df7b994f` 的[发行流水线](https://github.com/DDSRem-Dev/Shikigami/actions/runs/45056120246)成功并公开 23 个签名资产。改进内容见[alpha.10 说明](releases/v0.0.1-alpha.10.md)，资产与两端升级结果见[15](15-implementation-status.md#evidence-viewer-transport-diagnostics-20261123)。两端已升级正式签名 alpha.10，7 插件 ready、work 运行于 browse；原配置、Token/auth、密钥环、profile 及 daemon 身份保持，VPS 的 Chrome 158.0.8127.36 和 x11-utils 7.7+5 已核对。历史 [alpha.9 说明](releases/v0.0.1-alpha.9.md)与[升级证据](15-implementation-status.md#evidence-alpha9-upgrade-20261122)保留；真实滚动流畅度、断网/睡眠恢复、长期使用、Claude 账号与物理重启仍保留验收边界。
+**首个公开 Beta `v0.0.1-beta.1` 已公开：** 本页下载命令指向 `v0.0.1-beta.1`；固定源 `f234a090d42ebdb57c1f23e9ff317b6d43770f80` 的[发行流水线](https://github.com/DDSRem-Dev/Shikigami/actions/runs/45420481374)成功并公开 23 个签名资产。改进内容见[beta.1 说明](releases/v0.0.1-beta.1.md)，资产验签、公开 `bootstrap.sh` 暂存与隔离 `systemd` 升级/回滚结果见[15](15-implementation-status.md#evidence-public-beta1-release-20261124)。现网 Mac arm64 与 Debian 12 amd64 VPS 已在正式签名 `alpha.10` 完成 `B01`–`B09`（含远程 `work` Chrome 完成 Claude 官方登录、默认 Smooth 日常体验与断网/睡眠恢复），原配置、Token/auth、密钥环、profile 及 daemon 身份保持，VPS 的 Chrome 158.0.8127.36 和 x11-utils 7.7+5 已核对。历史 [alpha.10 说明](releases/v0.0.1-alpha.10.md)、[alpha.9 说明](releases/v0.0.1-alpha.9.md)与[升级证据](15-implementation-status.md#evidence-viewer-transport-diagnostics-20261123)保留；全新双机首装与物理重启仍保留未实测边界。
 
-**版本边界：本页使用 v0.0.1-alpha.10 入口，保留 alpha.4–alpha.9 的安装、连接、同步、端口、普通浏览模式、响应路径与退出诊断修补，新增官方 noVNC 1.7.0、默认 Smooth 画质与本地 WebSocket 传输诊断。发行状态与验证见[15](15-implementation-status.md)。alpha.3 不含 `shiki-install quickstart` 或 `shiki setup`，历史归档不改写；真实完整双机首装、账号授权和物理重启仍按外部门槛登记。**
+**版本边界：本页使用 v0.0.1-beta.1 入口，汇总 alpha.4–alpha.10 的安装、连接、同步、端口、普通浏览模式、官方 noVNC 1.7.0 默认 Smooth 画质与本地 WebSocket 传输诊断，并新增默认交互 shell `/bin/sh` 方向键修复与 `CLAUDE_CODE_NO_FLICKER=1` 全屏无闪烁 TUI 模式。发行状态与验证见[15](15-implementation-status.md#evidence-public-beta1-release-20261124)。alpha.3 不含 `shiki-install quickstart` 或 `shiki setup`，历史归档不改写；真实完整双机首装和物理重启仍按外部门槛登记。**
 
 历史alpha.7已纳入alpha.6发布后发现的旧attachment本地清理竞态与已有连接身份复核预算修补；alpha.9继续保留这些修补。历史公开发行和两端部署后验收分别记录，见[29](29-alpha6-installation-followup.md)。连接失败时不要把更换 Token 当作通用恢复步骤。
 
@@ -24,17 +24,17 @@ bash scripts/bootstrap.sh --quickstart --role=client
 
 升级已有浏览器环境时，先保存页面内容，并在Mac显式停止受管Chrome：`shiki --server my-vps browser stop work --yes`（服务器名与profile按实际替换）。从 alpha.9 之前升级时需同时更新 Mac、VPS 应用及 VPS 的 root 管理浏览器 runtime，系统支持安装会补齐`x11-utils`；不能仅更新CLI或插件。
 
-直接使用以下 v0.0.1-alpha.10 完整命令。用户无需克隆仓库或另行下载文件：
+直接使用以下 v0.0.1-beta.1 完整命令。用户无需克隆仓库或另行下载文件：
 
 ```bash
 # VPS
-curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.10/bootstrap.sh | sudo bash -s -- --quickstart --version=v0.0.1-alpha.10
+curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-beta.1/bootstrap.sh | sudo bash -s -- --quickstart --version=v0.0.1-beta.1
 
 # Mac
-curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-alpha.10/bootstrap.sh | bash -s -- --quickstart --role=client --version=v0.0.1-alpha.10
+curl --proto '=https' --proto-redir '=https' -fsSL https://github.com/DDSRem-Dev/Shikigami/releases/download/v0.0.1-beta.1/bootstrap.sh | bash -s -- --quickstart --role=client --version=v0.0.1-beta.1
 ```
 
-同一版本 Release 的 `bootstrap.sh` 也支持管道执行，交互通过 `/dev/tty`，不从脚本输入流读取回答。预发布必须使用明确的 Release/tag 下载 URL，不以 stable-only `latest/download` 推断预发布。加 `--version=v0.0.1-alpha.10` 可固定归档；省略时选择最近公开 Release，旧版本没有向导时明确失败，不退回半套安装冒充完成。脚本应从可信发布/源码取得，归档仍先验证固定发行身份和 Ed25519 签名，再执行包内代码。
+同一版本 Release 的 `bootstrap.sh` 也支持管道执行，交互通过 `/dev/tty`，不从脚本输入流读取回答。预发布必须使用明确的 Release/tag 下载 URL，不以 stable-only `latest/download` 推断预发布。加 `--version=v0.0.1-beta.1` 可固定归档；省略时选择最近公开 Release，旧版本没有向导时明确失败，不退回半套安装冒充完成。脚本应从可信发布/源码取得，归档仍先验证固定发行身份和 Ed25519 签名，再执行包内代码。
 
 默认安装全部四种插件的支持；只需终端、同步和转发时加 `--components=core`。`--user=<普通用户>` 可覆盖 VPS 默认专用账号 `shiki`。向导不接受自定义布局或 `--non-interactive`，高级/无人值守部署继续使用原安装参数契约。
 

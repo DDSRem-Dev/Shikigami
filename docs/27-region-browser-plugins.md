@@ -1,6 +1,8 @@
 # 地区环境与远程浏览器插件
 
-2026-11-21更新：用户VPS与Mac已正式升级alpha.8，浏览器输入、5次显式重连、接管与暂存文件功能复验通过；一次状态查询超时经手动Refresh恢复，临时转发后续端口重绑定原因未定。长稳/网络专项、Claude账号及物理重启继续开放，见[两端升级与实测](15-implementation-status.md#evidence-alpha8-upgrade-20261121)。以下早期验收保留原日期与源码范围。
+2026-11-24更新：用户在已部署正式签名 `v0.0.1-alpha.10` 环境确认默认 `Smooth` 远程浏览器日常使用体验正常（`B06`）、断网/睡眠恢复与持续使用正常（`B08/B09`），并通过远程 `work` Chrome（`browse` 模式）人工完成官方 `claude auth login`（`loggedIn=true`）与受管会话实际文件任务（`B03`）；首个公开 Beta [v0.0.1-beta.1](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-beta.1) 随后已发布并通过 23 资产四目标验签与升级/渠道验证，见[发行记录](15-implementation-status.md#evidence-public-beta1-release-20261124)。物理主机重启（`B11`）与全新双机首装（`B10`）仍保留未实测边界。
+
+2026-11-21历史更新：用户VPS与Mac已正式升级alpha.8，浏览器输入、5次显式重连、接管与暂存文件功能复验通过；一次状态查询超时经手动Refresh恢复，临时转发后续端口重绑定原因未定。长稳/网络专项、Claude账号及物理重启继续开放，见[两端升级与实测](15-implementation-status.md#evidence-alpha8-upgrade-20261121)。以下早期验收保留原日期与源码范围。
 
 2026-11-16 后续一键体验：管理员 setup 与客户端插件配置由 [28 首次使用向导](28-quickstart.md)组合，保留本文系统授权、密钥环、实例归属和显式应用边界。该入口已随 alpha.4 发布；真实新向导双机首装、账号和物理重启仍未实测，见[发行证据](15-implementation-status.md#evidence-public-alpha4-release-20261116)。下方细分命令继续用于高级操作，alpha.3 历史证据保持原范围。
 
@@ -78,7 +80,7 @@ Linux Chrome固定使用GTK3及发行版`fcitx5-frontend-gtk3`，不使用XIM或
 
 ## 当前源码命令流程
 
-以下命令自公开alpha.3提供，当前安装入口为alpha.10，不适用于alpha.2；系统支持安装及平台验收状态以08/15/16为准。先按[11](11-automated-installation.md)完成可信bundle安装、管理员依赖/策略/密钥环配置，再通过既有连接命令登记服务器。
+以下命令自公开alpha.3提供，当前安装入口为v0.0.1-beta.1，不适用于alpha.2；系统支持安装及平台验收状态以08/15/16为准。先按[11](11-automated-installation.md)完成可信bundle安装、管理员依赖/策略/密钥环配置，再通过既有连接命令登记服务器。
 
 ```sh
 shiki --server my-vps plugins --side remote enable region

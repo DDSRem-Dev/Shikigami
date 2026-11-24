@@ -1,6 +1,20 @@
 # 架构与文档一致性检查
 
 
+<a id="evidence-public-beta1-release-20261124"></a>
+## v0.0.1-beta.1 公开发行、四目标独立验签与公开包升级/渠道验收（2026-11-24）
+
+| 复核类别 | 结果 |
+|---|---|
+| 目录与依赖归属 | 本批仅含自动生成的 `Formula/shikigami.rb`（提交 `9d5c0c1167e7cf45b3bc8389b42f41c8cd344d68`）与发行收尾文档同步，冻结标签 `v0.0.1-beta.1` 对应的生产源码保持 `f234a090d42ebdb57c1f23e9ff317b6d43770f80` 不变；`./test/architecture/...` 通过。 |
+| RPC、准入、授权与能力 | 未改变任何协议 schema、准入校验、Token 权限或能力协商；跨版本 `v0.0.1-alpha.10` ↔ `v0.0.1-beta.1` 真实服务升级与回滚复用既有握手与能力契约。 |
+| 持久状态、原子性与去重 | 隔离 `systemd` 真实升级、回滚、卸载与重装验证原 `daemon_id`、原设备 Token、配置文件字节、项目文件与状态目录原子保留，不把同 schema 版本切换冒充为 schema 迁移。 |
+| 进程、取消与恢复 | `KillMode=process` 下 `tmux` 会话跨 daemon 停启/SIGKILL/升级/回滚/卸载保持同一窗格 PID，旧宿主与插件 worker 精确回收；验证期间所有临时目录、Docker 容器及临时拉取镜像均已核验清理归零，未绕过 `test-homebrew-channel.py` 的托管 runner 门禁。 |
+| 文件、终端、网络与 RFB 语义 | 未改动任何文件、终端、端口转发或浏览器传输实现；篡改 Ed25519 签名的负例在实际解包前被拒绝。 |
+| CLI、配置、安装与发布 | 公开安装入口（`README.md`、`docs/README.md`、`11`、`18`、`22`、`27`、`28`、`30`）统一推进至 `v0.0.1-beta.1`；历史 `alpha.1`/`alpha.2` 维持 22 资产，新版严格遵循 23 资产与 `GPL-3.0-only` 公式契约，勾选 `18` 的两项 beta 发布时门槛。 |
+| 验证与边界 | 严格区分同源远端 CI（`45404108766`，57/57）、签名发行运行（`45420481374`，60 成功 + 1 条件跳过，跳过不计通过）、公开资产与容器升级/tap 验收、已完成的现网 `alpha.10` `B01`–`B09` 实机验收，以及尚未执行的现网 `beta.1` 升级、`B10` 全新双机首装与 `B11` 物理重启边界；中间 runner 取消、WSL2 `go mod download` 网络超时及本地验证脚本 `umask`/`SIGPIPE` 修正均如实保留，`08`/`15`/`16` 结论一致。 |
+
+
 <a id="evidence-default-shell-alpha10-precheck-20261124"></a>
 ## 默认交互 shell 修复、alpha.10 实机自动化复验与文档同步（2026-11-24）
 
@@ -11,8 +25,8 @@
 | 持久状态、原子性与去重 | 未修改持久存储 schema、revision 或 request_id 去重规则；`StopClaude` 仅通过本地存储快照读取已保存的 `LaunchEnvironment`，不在停止路径触发远端或插件状态写入。 |
 | 进程、取消与恢复 | 继续复用同一 `tmux -L shiki-<uid>` socket 与进程回收语义；`InteractiveShell()` 采用纯 Go 有界文件读取（上限 1 MiB），兼容 `CGO_ENABLED=0` 静态/交叉构建；`Respawn`/`RespawnDead` 通过既有 `/bin/sh -c` 位置参数包装器导出 `CLAUDE_CODE_NO_FLICKER=1`（保留显式环境变量覆盖），不增加额外 `tmux` 子进程调用或改变 `RespawnDead` 原子拒杀活窗格保证。 |
 | 文件、终端、网络与 RFB 语义 | 严格校验登录 shell 为常规可执行文件且属于受信白名单/`/etc/shells`，拒绝相对路径、`nologin`/`false`；保留显式配置的 `zsh`/`fish`，仅在默认 `/bin/sh` 或 `/bin/dash` 时升级至可用 `/bin/bash`。默认启用 `CLAUDE_CODE_NO_FLICKER=1` 使远端 Claude Code 直接进入 `alt=1` 全屏无闪烁 TUI 并透传鼠标事件。未放宽 5 秒短 unary 超时预算掩盖网络抖动。 |
-| CLI、配置、安装与发布 | `README.md` 与 `docs/README.md`、`11`、`18`、`22`、`27`、`28`、`30` 已同步，新增 `docs/releases/v0.0.1-beta.1.md` 冻结发布说明；正式 Mac/VPS 保持签名 `alpha.10` 直至 `v0.0.1-beta.1` 签名资产公开。 |
-| 验证与边界 | 本地 macOS、Node viewer、Python 工具、16 项 VT 终端语义、集成/故障注入与 Debian 12 容器 race 测试全部通过；`alpha.10` 实机 `B01`–`B09`（自动化与用户确认，含 `B03` 真实 Claude 登录与任务）闭环并完成零残留清理。首轮测试失败与现网偶发 5 秒超时均如实记录；`B10` 全新双机首装与 `B11` 物理重启保留为未实测边界，发布时门禁待 `v0.0.1-beta.1` CI/签名发布与独立验签完成后勾选，`08`/`15`/`16` 结论一致。 |
+| CLI、配置、安装与发布 | `README.md` 与 `docs/README.md`、`11`、`18`、`22`、`27`、`28`、`30` 已同步，新增 `docs/releases/v0.0.1-beta.1.md` 冻结发布说明；正式 Mac/VPS 保持签名 `alpha.10`，`v0.0.1-beta.1` 签名资产随后已公开（见上方发行记录）。 |
+| 验证与边界 | 本地 macOS、Node viewer、Python 工具、16 项 VT 终端语义、集成/故障注入与 Debian 12 容器 race 测试全部通过；`alpha.10` 实机 `B01`–`B09`（自动化与用户确认，含 `B03` 真实 Claude 登录与任务）闭环并完成零残留清理。首轮测试失败与现网偶发 5 秒超时均如实记录；`B10` 全新双机首装与 `B11` 物理重启保留为未实测边界，发布时门禁已于上方 `v0.0.1-beta.1` 发行批次完成并勾选，`08`/`15`/`16` 结论一致。 |
 
 
 <a id="evidence-viewer-transport-diagnostics-20261123"></a>

@@ -1,6 +1,8 @@
 # Shikigami 设计文档导航
 
-**当前体验与优化：** 用户在正式alpha.9选择Smooth并暂停背景视频后反馈整体操作可用，但滚动低帧率仍未通过。后续源码保留noVNC1.7及Smooth默认；网络库升级候选因缺乏收益证据且模拟出现退化已暂缓，产品仍用原网络栈与Go1.26.11。见[实验结论与剩余门槛](15-implementation-status.md#evidence-tsnet104-deferred-20261122)。
+**首个公开 Beta 已发布（2026-11-24）：** 固定源 `f234a090d42ebdb57c1f23e9ff317b6d43770f80` 的[发布前 CI 45404108766](https://github.com/DDSRem-Dev/Shikigami/actions/runs/45404108766)（57/57）与[发行流水线 45420481374](https://github.com/DDSRem-Dev/Shikigami/actions/runs/45420481374)（60 项成功、1 项条件跳过）已完成，[v0.0.1-beta.1](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-beta.1) 的 23 个签名资产已公开，Homebrew 公式自动更新（提交 `9d5c0c1167e7cf45b3bc8389b42f41c8cd344d68`）；四目标归档离线验签、公开 `bootstrap.sh` 暂存、隔离 `systemd` `alpha.10 -> beta.1` 升级/回滚/卸载及隔离 Linux `Homebrew` 远端 tap 安装/测试/重装均已核验通过，见[发布说明](releases/v0.0.1-beta.1.md)与[发行验证记录](15-implementation-status.md#evidence-public-beta1-release-20261124)。本版修复默认交互 shell `/bin/sh` 方向键行编辑缺陷并为受管 `tmux` 默认注入 `CLAUDE_CODE_NO_FLICKER=1` 全屏无闪烁 TUI 模式；用户现网 Mac/VPS 已在正式签名 `alpha.10` 完成 `B01`–`B09`（含 `B03` 远程 Chrome 官方 Claude 登录与受管会话任务、`B06` 默认 Smooth 浏览器体验、`B08/B09` 断网/睡眠恢复与日常使用），现网两端尚未切换至 `beta.1`，`B10` 全新双机首装与 `B11` 物理主机重启边界继续保留。
+
+**历史体验与优化记录：** 用户此前在正式alpha.9选择Smooth并暂停背景视频后反馈整体操作可用，但滚动低帧率仍未通过。后续源码保留noVNC1.7及Smooth默认；网络库升级候选因缺乏收益证据且模拟出现退化已暂缓，产品仍用原网络栈与Go1.26.11。见[实验结论与剩余门槛](15-implementation-status.md#evidence-tsnet104-deferred-20261122)。
 
 **alpha.10 已发布并完成两端升级（2026-11-23）：** 固定源 `c2ac206` 的发布流水线已通过，23 个签名资产公开。Mac arm64 和 Debian 12 amd64 VPS 均运行 alpha.10；viewer smoke 已显示新的屏幕数据速率、二进制消息速率、最大到达间隔、最近数据年龄和本地发送缓冲区指标。指标不代表远端 RTT、RFB 帧率或实际呈现帧率；真实滚动体验和长期稳定性仍开放。
 
@@ -18,7 +20,7 @@
 
 **一键体验（2026-11-17）：** alpha.6 汇总安装输入、worker、配对和浏览器连接修复，延续 alpha.5 的控制终端、阶段进度和公共目录权限修复；VPS/Mac 命令、配置和插件说明见 [28 一键安装与首次使用](28-quickstart.md)，当前发行验证状态见[15](15-implementation-status.md)。公开发行与两端部署、账号和物理重启验收分别记录。
 
-**状态：当前源码 Phase 0–5 验收清单已闭环（42/42）。** [当前支持声明](18-release-readiness.md#current-support)统一功能、平台、证据和未支持范围；[08 路线图](08-roadmap.md)、[15 实施记录](15-implementation-status.md)与[16 架构复核](16-architecture-conformance.md)记录关闭依据。认证生命周期和长稳、资源与性能按用户确认通过；真实 Claude 登录/推理、物理主机重启及生产 heap/object 归因仍保留未实测边界。当前公开安装入口为 v0.0.1-alpha.10，不是beta或稳定版。00–14保留设计契约，不能仅凭示例认定功能已通过所有平台验收。
+**状态：当前源码 Phase 0–5 验收清单已闭环（42/42），首个公开 Beta `v0.0.1-beta.1` 已发布。** [当前支持声明](18-release-readiness.md#current-support)统一功能、平台、证据和未支持范围；[08 路线图](08-roadmap.md)、[15 实施记录](15-implementation-status.md)与[16 架构复核](16-architecture-conformance.md)记录关闭依据。认证生命周期和长稳、资源与性能按用户确认通过；物理主机重启、全新双机首装及生产 heap/object 归因仍保留未实测边界。当前公开安装入口为 v0.0.1-beta.1（`0.0.x` Beta 预发布，非 `1.0` 稳定版）。00–14保留设计契约，不能仅凭示例认定功能已通过所有平台验收。
 
 历史alpha.7固定源`cbf3cdf`的发布前CI57/57通过；公开资产与签名验证见[alpha.7公开证据](15-implementation-status.md#evidence-public-alpha7-release-20261117)，两端部署另行记录。历史alpha.6固定源CI57/57通过，发行工作流60项成功、1项条件跳过（不计通过），自动发行及Homebrew更新完成；23公开资产、四目标验签/来源和公式的独立验证见[公开证据](15-implementation-status.md#evidence-public-alpha6-release-20261117)。[alpha.3历史证据](15-implementation-status.md#evidence-public-alpha3-release-20261115)、[beta候选证据](15-implementation-status.md#evidence-first-beta-candidate)及[beta发布门槛](18-release-readiness.md#beta-readiness)保留，不表示发布了beta。
 
@@ -89,4 +91,4 @@
 
 09 是远端与插件消息形状的唯一来源，13 是本地 agent IPC 的来源；02/03/04/10 规定行为。修改接口时必须同步相关行为、UX 和验收。09 的代码块可用于协议语法验证，但未表示服务已经实现。待实现能力必须列在路线图，不能通过界面示例宣称完成。
 
-实际 module 为 `github.com/DDSRem-Dev/Shikigami`，当前根目录采用[GPL-3.0-only](../LICENSE)，从v0.0.1-alpha.2起随发行包分发；已公开alpha.1及其冻结源码保留原MIT许可证。当前发行源为 [v0.0.1-alpha.10 GitHub Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-alpha.10)，公开问题反馈入口为 [GitHub Issues](https://github.com/DDSRem-Dev/Shikigami/issues)，不承诺响应时限；来源及下载验证结果见[公开发行及部署记录](./15-implementation-status.md)。文档中的 `yourusername`、`shiki.dev`、其余示例版本/下载地址、未关联22的Homebrew示例包名和邮箱仍是占位示例；真实Homebrew安装命令和平台边界见[22分发与安装](22-homebrew-distribution.md)，其余占位地址不得当作实际安装源。
+实际 module 为 `github.com/DDSRem-Dev/Shikigami`，当前根目录采用[GPL-3.0-only](../LICENSE)，从v0.0.1-alpha.2起随发行包分发；已公开alpha.1及其冻结源码保留原MIT许可证。当前发行源为 [v0.0.1-beta.1 GitHub Release](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-beta.1)，公开问题反馈入口为 [GitHub Issues](https://github.com/DDSRem-Dev/Shikigami/issues)，不承诺响应时限；来源及下载验证结果见[公开发行及部署记录](./15-implementation-status.md)。文档中的 `yourusername`、`shiki.dev`、其余示例版本/下载地址、未关联22的Homebrew示例包名和邮箱仍是占位示例；真实Homebrew安装命令和平台边界见[22分发与安装](22-homebrew-distribution.md)，其余占位地址不得当作实际安装源。

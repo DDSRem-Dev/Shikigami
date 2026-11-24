@@ -1,14 +1,24 @@
 # 开发路线图
 
 
+<a id="evidence-public-beta1-release-20261124"></a>
+## v0.0.1-beta.1 公开发行、四目标独立验签与公开包升级/渠道验收（2026-11-24）
+
+- [x] 候选固定源码 `f234a090d42ebdb57c1f23e9ff317b6d43770f80` 发布前远端 [CI 45404108766](https://github.com/DDSRem-Dev/Shikigami/actions/runs/45404108766) 于 Attempt 3 完成 `57/57` 全部通过（`non_success=[]`）；如实保留 Attempt 1（`unit-plugins (darwin, arm64)` 在仓库测试前的 `actions/checkout@v7.0.1` 5 秒异常退出、`e2e (darwin, arm64)` 未分配 runner 取消）及 Attempt 2（两项 `macos-15` ARM 任务 `steps=0` 未分配 runner 取消）的托管基础设施重试记录，未把取消计为通过。
+- [x] 基于 `f234a090d42ebdb57c1f23e9ff317b6d43770f80` 创建并推送不可变标签 `v0.0.1-beta.1`，[Release 45420481374](https://github.com/DDSRem-Dev/Shikigami/actions/runs/45420481374) 于 Attempt 4 完成 `60` 项成功、`1` 项 `homebrew` 按标签策略条件跳过（跳过不计通过）：于 `2026-11-24T17:11:45Z` 公开 [v0.0.1-beta.1](https://github.com/DDSRem-Dev/Shikigami/releases/tag/v0.0.1-beta.1)（`draft=false`、`prerelease=true`，精确 `23` 个签名资产），并由 `github-actions[bot]` 自动更新 `Formula/shikigami.rb`（提交 `9d5c0c1167e7cf45b3bc8389b42f41c8cd344d68`）。如实保留 Attempt 1（WSL2 在产品/E2E/终端测试全通后于 `systemd-modules` `go mod download` 触发 60.8 秒外部网络超时，及 4 项 `macos-15` ARM `steps=0` 取消）、Attempt 2（2 项 `macos-15` ARM `steps=0` 取消）与 Attempt 3（1 项 `terminal (darwin, arm64)` `steps=0` 取消）记录。历史 `v0.0.1-alpha.1` / `v0.0.1-alpha.2` 核验仍保持原 `22` 个资产未变。
+- [x] 完成 `v0.0.1-beta.1` 全部 23 个公开资产独立下载、可信公钥（`e21f6dd671ea5042c43c492b759b933dda73985f89a823b43c651ff7c787c17d`）四目标 `release-trust verify` 离线验签、篡改签名拒绝负例、`PROVENANCE.json` / `bootstrap.sh` / `SHA256SUMS` pin / `GPL-3.0-only` 核对、原生 `darwin/arm64` `shiki version` 与公开 `bootstrap.sh` 实网下载验签 `--stage-only` 暂存。
+- [x] 完成公开签名包升级回滚与 Homebrew 公开 tap 渠道验证：隔离 `systemd 252.39` PID 1 容器（`scripts/test-systemd.py --bundles`）使用已验签公开 `v0.0.1-alpha.10` 与 `v0.0.1-beta.1` `linux-arm64` 归档通过 13 项服务生命周期、4 项活动传输升级/回滚边界、卸载数据保留与 `systemctl poweroff` 正常退出（保留首轮外层脚本 `umask 077` 导致只读挂载目录缺执行位的修正记录）；从已认证资产重生成的公式与 `Formula/shikigami.rb`（SHA-256 `96956b630e714bc2023e99f025ebb0c4ba6f351802d1b57218a5311b7b863497`）逐字节一致并通过 `ruby -c`，隔离 `homebrew/brew` Linux `arm64` 容器通过真实公开 `brew tap` -> `install` -> `test` -> `reinstall` -> `test` -> `uninstall` -> `untap` 及镜像/容器清理（保留首轮 `brew --version | head -n 1` `SIGPIPE 141` 脚本修正记录与 Linux arm64 Tier 2 提示）。据此勾选 [18 的两项 beta 发布时门槛](18-release-readiness.md#beta-readiness)。
+- [ ] 保留外部与现网边界：用户现网 Mac/VPS 当前仍运行已验收的正式签名 `v0.0.1-alpha.10`（尚未切换至 `v0.0.1-beta.1`）；现网偶发 5 秒短 unary `deadline_exceeded` 尖峰、`B10` 全新双机从零首装与 `B11` 物理主机重启仍作为明确未实测/保留边界单列，不因 `beta.1` 发布完成而宣称关闭。
+
+
 <a id="evidence-default-shell-alpha10-precheck-20261124"></a>
 ## 默认交互 shell 修复、alpha.10 实机自动化复验与文档同步（2026-11-24）
 
 - [x] 修复 `B02` 默认 `/bin/sh`（`dash`）方向键缺陷与 `B03` 远端 Claude Code 全屏无闪烁 TUI 模式（`CLAUDE_CODE_NO_FLICKER=1`）：新增 `internal/server/tmux/shell.go`（纯 Go 有界读取 `/etc/passwd` 与 `/etc/shells`，兼容 `CGO_ENABLED=0` 发行构建；校验常规可执行文件并拒绝 `nologin`/`false`/非白名单路径；保留用户显式配置的 `zsh`/`fish` 等交互 shell，将最小 `/bin/sh` 或 `/bin/dash` 默认升级为可用的 `/bin/bash`，缺失时回退 `/bin/sh`），同步接入 `tmux.Create`、`tmux.Stop`、`session.launchCommand`（`--no-claude`）及 `StopClaude`（仅读取本地持久化的 `LaunchEnvironment`，不在停止路径调用 `region` worker RPC）；同时针对 `B03` 实测发现 `tmux` 内 Claude Code 默认采用内联渲染（`alt=0`，输入框停在第 23 行未贴底）的问题，在 `tmux.Create`（`new-session -e`）及 `Respawn`/`RespawnDead`（POSIX 位置参数包装器导出 `CLAUDE_CODE_NO_FLICKER` 后 `exec "$@"`，保留管理员显式环境覆盖，无额外 `tmux` 子进程调用）默认注入 `CLAUDE_CODE_NO_FLICKER=1`，VPS 实测确认 `178x57` 窗格进入 `alt=1`、`mouse_any=1` 并将输入框固定至底行（第 55–57 行）。首轮 `Respawn` 使用独立 `set-environment` 调用触发 `session` 预算测试假 `tmux` 观察脚本拒绝的失败已如实保留并改用单次 `respawn-pane` 包装器解决。
 - [x] 完成候选源码本地与 Debian 12 容器全量验证：`make fmt && make lint && make build`、`make test-tools`（112 项）、`make test-viewer`（28 项）、macOS `darwin/arm64` 全包 `go test -race`、`scripts/test-terminal-state.sh` 16/16 VT 语义检查点，以及 Debian 12 容器 `./scripts/test-linux.sh`（覆盖默认 `/bin/sh` -> `dash` 环境下真实 PTY 左方向键 `\x1b[D` 编辑及 `CLAUDE_CODE_NO_FLICKER` 默认/覆盖回归）。
 - [x] 完成已部署正式签名 `v0.0.1-alpha.10`（Mac `darwin/arm64` + Debian 12 VPS `linux/amd64`）自动化与用户实机验收闭环：验证跨日空闲 `RECONNECT_EXHAUSTED` 后 `shiki connect` `6788.7 ms` 恢复（`tailscale-direct`）；自动化通过 `B02`、`B04`（含 `6213.9 ms` 与 `11924.4 ms` 跨越旧 5 秒限制的多步 `resolve`）、`B05`（远端 `3000` 转发本地 `56102` 后端拒绝不重绑并恢复）、`B06` 文件与状态子集、`B07` 及 `20/20` RPC 采样；用户实测通过 **`B03`（经远程 `work` Chrome 完成官方 `claude auth login`，`loggedIn=true`，受管 `claude-check` 会话创建 `beta-check.txt` 内容 `SHIKI_BETA_OK` 及 detach/reattach 保活核验通过）**、**`B06`（浏览器日常使用体验正常）** 与 **`B08 + B09`（断网/睡眠恢复与持续使用正常，按用户确认登记）**。全部临时测试目录、项目、会话、映射、转发及暂存文件已清理归零，`work` 实例（`014ec66bfbef6a55488b14117be101d7`）与 Claude 登录状态保留。
-- [x] 同步公开入口、支持声明与 `docs/releases/v0.0.1-beta.1.md` 发布说明草稿，完成七类架构一致性复核并保持 `08`/`15`/`16` 一致。
-- [ ] 发布时与保留外部边界：现网偶发 5 秒短 unary `deadline_exceeded` 尖峰如实保留；全新双机首装（`B10`）与物理主机重启（`B11`）保留为明确未实测边界；候选提交远端 57 项 CI、`v0.0.1-beta.1` 不可变标签签名发行及公开资产独立验签在下一步执行完成后再勾选。
+- [x] 同步公开入口、支持声明与 `docs/releases/v0.0.1-beta.1.md` 发布说明草稿，完成七类架构一致性复核并保持 `08`/`15`/`16` 一致；候选远端 57 项 CI 与 `v0.0.1-beta.1` 签名发布及公开资产验签已于上方批次闭环。
+- [ ] 保留外部边界：现网偶发 5 秒短 unary `deadline_exceeded` 尖峰如实保留；全新双机首装（`B10`）与物理主机重启（`B11`）保留为明确未实测边界。
 
 
 <a id="evidence-viewer-transport-diagnostics-20261123"></a>
